@@ -11,8 +11,9 @@ history, or line-editing library.
 ## Decision
 
 Implement Tab completion inside the shell. Command completion matches built-in
-command names. Path completion is available for `cd`, `ls`, and `dir` through
-the existing read-only filesystem listing contract.
+command names. Path completion is available for path-oriented commands such as
+`cd`, `ls`, `dir`, and `cat` through the existing read-only filesystem listing
+contract.
 
 The shell completes a unique match inline. If multiple matches exist and no
 longer common prefix can be inserted, it prints candidates and redraws the

@@ -20,15 +20,33 @@ struct arwill_fs_listing {
     size_t count;
 };
 
+enum arwill_fs_file_type {
+    arwill_fs_file_text,
+    arwill_fs_file_binary
+};
+
+struct arwill_fs_file {
+    enum arwill_fs_file_type type;
+    const char *contents;
+    uint64_t size_bytes;
+};
+
 struct arwill_filesystem {
     void *context;
     int (*list)(void *context, const char *path, struct arwill_fs_listing *listing);
+    int (*read_file)(void *context, const char *path, struct arwill_fs_file *file);
 };
 
 int arwill_filesystem_list(
     const struct arwill_filesystem *filesystem,
     const char *path,
     struct arwill_fs_listing *listing
+);
+
+int arwill_filesystem_read_file(
+    const struct arwill_filesystem *filesystem,
+    const char *path,
+    struct arwill_fs_file *file
 );
 
 #endif

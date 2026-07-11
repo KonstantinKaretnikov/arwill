@@ -55,7 +55,7 @@ rm -f "$serial_log"
     wait_for_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_log_count "Arwill 0.0.4" 2
+    wait_for_log_count "Arwill 0.0.5" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_log_count "Arwill:/> " 4
@@ -78,8 +78,17 @@ rm -f "$serial_log"
     printf 'l\t\r'
     wait_for_log "limine.conf"
     sleep 0.1
+    printf 'cat limine.c\t\r'
+    wait_for_log "protocol: limine"
+    sleep 0.1
     printf 'cd ..\r'
     wait_for_log_count "Arwill:/boot> " 4
+    sleep 0.1
+    printf 'cat kernel.elf\r'
+    wait_for_log "cat: cannot display binary file: /boot/kernel.elf"
+    sleep 0.1
+    printf 'cat /system/i\t\r'
+    wait_for_log "version: 0.0.5"
     sleep 0.1
     printf 'ha\t\r'
 ) | "$qemu" -M q35 -m 128M -cdrom "$iso" -boot d \
@@ -128,7 +137,7 @@ check_line() {
     fi
 }
 
-check_line "Arwill 0.0.4"
+check_line "Arwill 0.0.5"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -137,7 +146,7 @@ check_line "shell: ready"
 check_line "filesystem: static boot catalog"
 check_line "status: kernel initialized"
 check_line "commands:"
-check_line "Arwill 0.0.4"
+check_line "Arwill 0.0.5"
 check_line "Tab        complete"
 check_line "boot/"
 check_line "system/"
@@ -145,6 +154,10 @@ check_line "/boot"
 check_line "kernel.elf"
 check_line "limine/"
 check_line "limine.conf"
+check_line "protocol: limine"
+check_line "cat: cannot display binary file: /boot/kernel.elf"
+check_line "name: Arwill"
+check_line "version: 0.0.5"
 check_line "Arwill:/boot/limine> "
 check_line "status: shell halted"
 

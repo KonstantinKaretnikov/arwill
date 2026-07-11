@@ -15,7 +15,7 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.0.4`
+Version: `0.0.5`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
@@ -81,6 +81,7 @@ pwd
 cd [path]
 ls [path]
 dir [path]
+cat [path]
 halt
 ```
 
@@ -88,6 +89,10 @@ halt
 filesystem. The first supported paths are `/`, `/boot`, `/boot/limine`, and
 `/system`. `cd` changes the shell's current directory and supports absolute
 paths, relative paths, `.`, and `..`.
+
+`cat` displays text files from the static catalog, such as `/system/identity`
+and `/boot/limine/limine.conf`. Binary boot artifacts are visible in listings,
+but their contents are not displayed yet.
 
 Press `Tab` to complete command names and paths. If there are multiple matches,
 the shell lists candidates and redraws the current prompt.
@@ -103,7 +108,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.0.4
+Arwill 0.0.5
 architecture: x86_64
 platform: qemu
 console: serial

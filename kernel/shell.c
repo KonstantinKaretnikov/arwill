@@ -30,6 +30,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "cd", .accepts_path = 1 },
     { .name = "ls", .accepts_path = 1 },
     { .name = "dir", .accepts_path = 1 },
+    { .name = "cat", .accepts_path = 1 },
     { .name = "halt", .accepts_path = 0 },
 };
 
@@ -167,6 +168,27 @@ static int copy_sized_string(
     }
 
     destination[source_length] = '\0';
+    return 1;
+}
+
+static int copy_first_argument(char *destination, size_t capacity, const char *argument) {
+    size_t length = 0;
+
+    if (capacity == 0) {
+        return 0;
+    }
+
+    while (argument[length] != '\0' && argument[length] != ' ') {
+        if (length >= capacity - 1U) {
+            destination[0] = '\0';
+            return 0;
+        }
+
+        destination[length] = argument[length];
+        length++;
+    }
+
+    destination[length] = '\0';
     return 1;
 }
 
@@ -311,6 +333,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  ls [path]  list the read-only boot catalog");
     arwill_console_write_line(console, "  dir [path] alias for ls");
+    arwill_console_write_line(console, "  cat [path] show text file contents");
     arwill_console_write_line(console, "  Tab        complete commands and paths");
     arwill_console_write_line(console, "  halt       enter the CPU idle loop");
 }
@@ -327,9 +350,15 @@ static void print_listing(
     const char *current_directory,
     const char *path
 ) {
+    char path_argument[shell_path_capacity];
     char resolved_path[shell_path_capacity];
 
-    if (!resolve_path(current_directory, path, resolved_path, sizeof(resolved_path))) {
+    if (!copy_first_argument(path_argument, sizeof(path_argument), path)) {
+        arwill_console_write_line(console, "ls: path too long");
+        return;
+    }
+
+    if (!resolve_path(current_directory, path_argument, resolved_path, sizeof(resolved_path))) {
         arwill_console_write_line(console, "ls: path too long");
         return;
     }
@@ -359,14 +388,19 @@ static void change_directory(
     char *current_directory,
     const char *path
 ) {
+    char path_argument[shell_path_capacity];
     char resolved_path[shell_path_capacity];
-    const char *target_path = path;
 
-    if (target_path[0] == '\0') {
-        target_path = "/";
+    if (!copy_first_argument(path_argument, sizeof(path_argument), path)) {
+        arwill_console_write_line(console, "cd: path too long");
+        return;
     }
 
-    if (!resolve_path(current_directory, target_path, resolved_path, sizeof(resolved_path))) {
+    if (path_argument[0] == '\0') {
+        (void)copy_string(path_argument, sizeof(path_argument), "/");
+    }
+
+    if (!resolve_path(current_directory, path_argument, resolved_path, sizeof(resolved_path))) {
         arwill_console_write_line(console, "cd: path too long");
         return;
     }
@@ -381,6 +415,60 @@ static void change_directory(
 
     if (!copy_string(current_directory, shell_path_capacity, resolved_path)) {
         arwill_console_write_line(console, "cd: path too long");
+    }
+}
+
+static void print_file(
+    const struct arwill_console *console,
+    const struct arwill_filesystem *filesystem,
+    const char *current_directory,
+    const char *path
+) {
+    char path_argument[shell_path_capacity];
+    char resolved_path[shell_path_capacity];
+
+    if (!copy_first_argument(path_argument, sizeof(path_argument), path)) {
+        arwill_console_write_line(console, "cat: path too long");
+        return;
+    }
+
+    if (path_argument[0] == '\0') {
+        arwill_console_write_line(console, "cat: missing path");
+        return;
+    }
+
+    if (!resolve_path(current_directory, path_argument, resolved_path, sizeof(resolved_path))) {
+        arwill_console_write_line(console, "cat: path too long");
+        return;
+    }
+
+    struct arwill_fs_file file;
+
+    if (!arwill_filesystem_read_file(filesystem, resolved_path, &file)) {
+        struct arwill_fs_listing listing;
+
+        if (arwill_filesystem_list(filesystem, resolved_path, &listing)) {
+            arwill_console_write(console, "cat: is a directory: ");
+            arwill_console_write_line(console, resolved_path);
+            return;
+        }
+
+        arwill_console_write(console, "cat: no such file: ");
+        arwill_console_write_line(console, resolved_path);
+        return;
+    }
+
+    if (file.type != arwill_fs_file_text || file.contents == 0) {
+        arwill_console_write(console, "cat: cannot display binary file: ");
+        arwill_console_write_line(console, resolved_path);
+        return;
+    }
+
+    arwill_console_write(console, file.contents);
+
+    const size_t contents_length = string_length(file.contents);
+    if (contents_length == 0U || file.contents[contents_length - 1U] != '\n') {
+        arwill_console_write_line(console, "");
     }
 }
 
@@ -754,6 +842,11 @@ static void run_command(
 
     if (string_equals(line, "dir") || starts_with(line, "dir ")) {
         print_listing(console, filesystem, current_directory, argument_after_command(line));
+        return;
+    }
+
+    if (string_equals(line, "cat") || starts_with(line, "cat ")) {
+        print_file(console, filesystem, current_directory, argument_after_command(line));
         return;
     }
 
