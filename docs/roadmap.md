@@ -19,24 +19,26 @@ Status: `0.1.0`.
 
 Arwill already has:
 
-- architecture-first project rules, ADRs, and a pinned Limine boot path;
-- x86-64 plus QEMU as the first target;
-- freestanding C with minimal x86-64 inline assembly for port I/O and CPU idle;
-- a buildable bootable ISO and `make check` with a bounded QEMU serial smoke
+- [x] architecture-first project rules, ADRs, and a pinned Limine boot path;
+- [x] x86-64 plus QEMU as the first target;
+- [x] freestanding C with minimal x86-64 inline assembly for port I/O and CPU
+  idle;
+- [x] a buildable bootable ISO and `make check` with a bounded QEMU serial smoke
   test;
-- QEMU serial console output and blocking serial input;
-- a serial shell with canonical commands only: `help`, `version`, `pwd`, `cd`,
-  `clear`, `ls`, `cat`, `stat`, `meminfo`, `ps`, `run`, `exit`, and `halt`;
-- shell current directory state, path resolution, Tab completion, command
+- [x] QEMU serial console output and blocking serial input;
+- [x] a serial shell with canonical commands only: `help`, `version`, `pwd`,
+  `cd`, `clear`, `ls`, `cat`, `stat`, `meminfo`, `ps`, `run`, `exit`, and
+  `halt`;
+- [x] shell current directory state, path resolution, Tab completion, command
   history, and Russian-layout command-entry normalization;
-- a static read-only boot catalog used by `ls`, `cd`, `cat`, `stat`, and path
-  completion;
-- read-only file contents for selected text files in that static catalog;
-- a Limine memory map snapshot and first bump-only physical page allocator
+- [x] a static read-only boot catalog used by `ls`, `cd`, `cat`, `stat`, and
+  path completion;
+- [x] read-only file contents for selected text files in that static catalog;
+- [x] a Limine memory map snapshot and first bump-only physical page allocator
   counters;
-- QEMU debug-exit poweroff through `exit`;
-- cooperative kernel-managed processes with PID, state, run count, exit code,
-  `run [name]`, and `ps`.
+- [x] QEMU debug-exit poweroff through `exit`;
+- [x] cooperative kernel-managed processes with PID, state, run count, exit
+  code, `run [name]`, and `ps`.
 
 Arwill does not yet have real disk I/O, storage-backed filesystems, interrupts,
 a timer, preemptive scheduling, user-space isolation, syscalls, ELF program
@@ -44,7 +46,7 @@ loading, or writable persistent storage.
 
 ## Milestones
 
-1. Kernel cooperative processes
+1. [x] Kernel cooperative processes
 
    Status: done in `0.1.0`.
 
@@ -55,7 +57,7 @@ loading, or writable persistent storage.
    Verified by: QEMU smoke test for `run hello`, process output, `ps`, and
    successful `exit` poweroff.
 
-2. Block device reads
+2. [ ] Block device reads
 
    Goal: read real sectors from a QEMU-provided disk image through an explicit
    block-device contract.
@@ -84,7 +86,7 @@ loading, or writable persistent storage.
    Definition of done: Arwill can read a known sector from a real QEMU-attached
    image without any filesystem parser involved.
 
-3. Real read-only filesystem
+3. [ ] Real read-only filesystem
 
    Goal: replace the static boot catalog path with a filesystem implementation
    backed by block storage.
@@ -113,7 +115,7 @@ loading, or writable persistent storage.
    Definition of done: the shell's filesystem commands no longer depend on
    hard-coded directory entries for the primary happy path.
 
-4. Interrupts, timer, and scheduler foundation
+4. [ ] Interrupts, timer, and scheduler foundation
 
    Goal: create the execution foundation needed to move beyond
    shell-triggered run-to-completion kernel processes.
@@ -138,7 +140,7 @@ loading, or writable persistent storage.
    Definition of done: Arwill can schedule kernel tasks independently of a
    single shell command running a function to completion.
 
-5. User-space v1
+5. [ ] User-space v1
 
    Goal: run the first isolated user-mode program.
 
@@ -161,7 +163,7 @@ loading, or writable persistent storage.
    Definition of done: Arwill can run a separate user-mode program with a clear
    kernel/user boundary.
 
-6. Writable filesystem
+6. [ ] Writable filesystem
 
    Goal: add controlled persistent write support after read storage, filesystem
    reads, scheduling direction, and user-space basics are established.
