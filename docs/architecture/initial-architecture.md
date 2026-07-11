@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.0.6 has one executable path:
+Arwill 0.0.7 has one executable path:
 
 ```text
 Limine bootloader
@@ -44,6 +44,8 @@ Shell:
 - Owns Tab completion for command names and filesystem paths.
 - Owns a small in-memory command history navigated by Up and Down escape
   sequences.
+- Normalizes standard Russian-layout UTF-8 input back to ASCII key positions;
+  it does not support Cyrillic text entry yet.
 - Depends on console, input, filesystem, memory, and CPU idle contracts.
 
 Memory contract:

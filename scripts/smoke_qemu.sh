@@ -51,11 +51,11 @@ rm -f "$serial_log"
 
     wait_for_log "Arwill:/> "
     sleep 0.1
-    printf 'he\t\r'
+    printf '\321\200\321\203\320\264\t\r'
     wait_for_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_log_count "Arwill 0.0.6" 2
+    wait_for_log_count "Arwill 0.0.7" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_log_count "Arwill:/> " 4
@@ -72,7 +72,7 @@ rm -f "$serial_log"
     printf 'l\t\r'
     wait_for_log "system/"
     sleep 0.1
-    printf 'cd /b\t\r'
+    printf '\321\201\320\262 .\320\270\t\r'
     wait_for_log "Arwill:/boot> "
     sleep 0.1
     printf 'pwd\r'
@@ -97,7 +97,7 @@ rm -f "$serial_log"
     wait_for_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_log "version: 0.0.6"
+    wait_for_log "version: 0.0.7"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_log "type: text file"
@@ -149,7 +149,7 @@ check_line() {
     fi
 }
 
-check_line "Arwill 0.0.6"
+check_line "Arwill 0.0.7"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -160,7 +160,8 @@ check_line "memory: boot memory map"
 check_line "allocator: physical page bump allocator"
 check_line "status: kernel initialized"
 check_line "commands:"
-check_line "Arwill 0.0.6"
+check_line "Arwill:/> help"
+check_line "Arwill 0.0.7"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "meminfo    show memory map and page allocator"
@@ -171,6 +172,7 @@ check_line "physical allocator:"
 check_line "page size: 4096 bytes"
 check_line "boot/"
 check_line "system/"
+check_line "Arwill:/> cd /boot/"
 check_line "/boot"
 check_line "kernel.elf"
 check_line "limine/"
@@ -178,7 +180,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.0.6"
+check_line "version: 0.0.7"
 check_line "type: text file"
 check_line "Arwill:/boot/limine> "
 check_line "status: shell halted"

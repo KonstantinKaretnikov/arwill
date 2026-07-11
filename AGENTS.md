@@ -23,6 +23,8 @@ Rules for future work:
 - Preserve separation between architecture-independent, architecture-specific,
   and platform-specific code.
 - Keep all generated code understandable by a human reviewer.
+- Treat shell Russian-layout input normalization as ASCII command-entry
+  convenience, not as Cyrillic text support.
 - When a durable workflow agreement is made with the project owner, update this
   file or another appropriate document in the same change so future sessions do
   not need to rediscover it.

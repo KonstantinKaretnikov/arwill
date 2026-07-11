@@ -22,6 +22,8 @@ enum {
     ascii_left_bracket = '[',
     ascii_arrow_up = 'A',
     ascii_arrow_down = 'B',
+    utf8_cyrillic_lead_0 = 0xd0,
+    utf8_cyrillic_lead_1 = 0xd1,
 };
 
 struct shell_command {
@@ -53,6 +55,17 @@ enum shell_escape_state {
     shell_escape_none,
     shell_escape_started,
     shell_escape_bracket
+};
+
+enum shell_utf8_state {
+    shell_utf8_none,
+    shell_utf8_cyrillic_continuation
+};
+
+struct shell_input_normalizer {
+    enum shell_utf8_state utf8_state;
+    uint8_t utf8_lead;
+    int russian_layout_active;
 };
 
 static int string_equals(const char *left, const char *right) {
@@ -115,6 +128,187 @@ static size_t common_prefix_length(const char *left, const char *right, size_t l
 
 static int is_printable_ascii(uint8_t byte) {
     return byte >= 0x20 && byte <= 0x7e;
+}
+
+static char ascii_to_uppercase(char value) {
+    if (value >= 'a' && value <= 'z') {
+        return (char)(value - 'a' + 'A');
+    }
+
+    return value;
+}
+
+static int map_russian_layout_codepoint(uint32_t codepoint, char *mapped) {
+    int uppercase = 0;
+
+    if (codepoint >= 0x0410U && codepoint <= 0x042fU) {
+        codepoint += 0x20U;
+        uppercase = 1;
+    } else if (codepoint == 0x0401U) {
+        codepoint = 0x0451U;
+        uppercase = 1;
+    }
+
+    switch (codepoint) {
+        case 0x0439U:
+            *mapped = 'q';
+            break;
+        case 0x0446U:
+            *mapped = 'w';
+            break;
+        case 0x0443U:
+            *mapped = 'e';
+            break;
+        case 0x043aU:
+            *mapped = 'r';
+            break;
+        case 0x0435U:
+            *mapped = 't';
+            break;
+        case 0x043dU:
+            *mapped = 'y';
+            break;
+        case 0x0433U:
+            *mapped = 'u';
+            break;
+        case 0x0448U:
+            *mapped = 'i';
+            break;
+        case 0x0449U:
+            *mapped = 'o';
+            break;
+        case 0x0437U:
+            *mapped = 'p';
+            break;
+        case 0x0445U:
+            *mapped = '[';
+            break;
+        case 0x044aU:
+            *mapped = ']';
+            break;
+        case 0x0444U:
+            *mapped = 'a';
+            break;
+        case 0x044bU:
+            *mapped = 's';
+            break;
+        case 0x0432U:
+            *mapped = 'd';
+            break;
+        case 0x0430U:
+            *mapped = 'f';
+            break;
+        case 0x043fU:
+            *mapped = 'g';
+            break;
+        case 0x0440U:
+            *mapped = 'h';
+            break;
+        case 0x043eU:
+            *mapped = 'j';
+            break;
+        case 0x043bU:
+            *mapped = 'k';
+            break;
+        case 0x0434U:
+            *mapped = 'l';
+            break;
+        case 0x0436U:
+            *mapped = ';';
+            break;
+        case 0x044dU:
+            *mapped = '\'';
+            break;
+        case 0x044fU:
+            *mapped = 'z';
+            break;
+        case 0x0447U:
+            *mapped = 'x';
+            break;
+        case 0x0441U:
+            *mapped = 'c';
+            break;
+        case 0x043cU:
+            *mapped = 'v';
+            break;
+        case 0x0438U:
+            *mapped = 'b';
+            break;
+        case 0x0442U:
+            *mapped = 'n';
+            break;
+        case 0x044cU:
+            *mapped = 'm';
+            break;
+        case 0x0431U:
+            *mapped = ',';
+            break;
+        case 0x044eU:
+            *mapped = '.';
+            break;
+        case 0x0451U:
+            *mapped = '`';
+            break;
+        default:
+            return 0;
+    }
+
+    if (uppercase) {
+        *mapped = ascii_to_uppercase(*mapped);
+    }
+
+    return 1;
+}
+
+static uint32_t decode_two_byte_utf8(uint8_t lead, uint8_t continuation) {
+    return (((uint32_t)lead & 0x1fU) << 6U) | ((uint32_t)continuation & 0x3fU);
+}
+
+static char normalize_russian_layout_ascii(
+    const struct shell_input_normalizer *normalizer,
+    uint8_t byte
+) {
+    if (normalizer->russian_layout_active && byte == '.') {
+        return '/';
+    }
+
+    return (char)byte;
+}
+
+static int normalize_text_input_byte(
+    struct shell_input_normalizer *normalizer,
+    uint8_t byte,
+    char *value
+) {
+    if (normalizer->utf8_state == shell_utf8_cyrillic_continuation) {
+        normalizer->utf8_state = shell_utf8_none;
+
+        if ((byte & 0xc0U) != 0x80U) {
+            return 0;
+        }
+
+        const uint32_t codepoint = decode_two_byte_utf8(normalizer->utf8_lead, byte);
+
+        if (!map_russian_layout_codepoint(codepoint, value)) {
+            return 0;
+        }
+
+        normalizer->russian_layout_active = 1;
+        return 1;
+    }
+
+    if (byte == utf8_cyrillic_lead_0 || byte == utf8_cyrillic_lead_1) {
+        normalizer->utf8_lead = byte;
+        normalizer->utf8_state = shell_utf8_cyrillic_continuation;
+        return 0;
+    }
+
+    if (!is_printable_ascii(byte)) {
+        return 0;
+    }
+
+    *value = normalize_russian_layout_ascii(normalizer, byte);
+    return 1;
 }
 
 static void write_byte_echo(const struct arwill_console *console, uint8_t byte) {
@@ -1200,8 +1394,12 @@ void arwill_shell_run(
     struct shell_history history;
     size_t history_position = 0;
     enum shell_escape_state escape_state = shell_escape_none;
+    struct shell_input_normalizer normalizer;
 
     history.count = 0;
+    normalizer.utf8_state = shell_utf8_none;
+    normalizer.utf8_lead = 0;
+    normalizer.russian_layout_active = 0;
 
     write_prompt(console, current_directory);
 
@@ -1240,6 +1438,8 @@ void arwill_shell_run(
             history_position = history.count;
             run_command(console, filesystem, memory, current_directory, line);
             length = 0;
+            normalizer.utf8_state = shell_utf8_none;
+            normalizer.russian_layout_active = 0;
             write_prompt(console, current_directory);
             continue;
         }
@@ -1248,6 +1448,9 @@ void arwill_shell_run(
             if (length > 0) {
                 length--;
                 arwill_console_write(console, "\b \b");
+                if (length == 0U) {
+                    normalizer.russian_layout_active = 0;
+                }
             }
             continue;
         }
@@ -1257,11 +1460,13 @@ void arwill_shell_run(
             continue;
         }
 
-        if (!is_printable_ascii(byte)) {
+        char input_char;
+
+        if (!normalize_text_input_byte(&normalizer, byte, &input_char)) {
             continue;
         }
 
         history_position = history.count;
-        (void)append_char_to_line(console, line, &length, (char)byte);
+        (void)append_char_to_line(console, line, &length, input_char);
     }
 }

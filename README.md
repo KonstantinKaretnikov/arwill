@@ -15,7 +15,7 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.0.6`
+Version: `0.0.7`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
@@ -107,6 +107,11 @@ Press `Tab` to complete command names and paths. If there are multiple matches,
 the shell lists candidates and redraws the current prompt. Press Up and Down to
 browse the in-memory shell command history.
 
+If the host terminal is left in a Russian keyboard layout, the shell normalizes
+standard Russian-layout UTF-8 input back to ASCII key positions for commands and
+paths. This is an input convenience only; Cyrillic text entry is not supported
+yet.
+
 ## Check
 
 Run all available verification, including the bounded QEMU serial smoke test:
@@ -118,7 +123,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.0.6
+Arwill 0.0.7
 architecture: x86_64
 platform: qemu
 console: serial
