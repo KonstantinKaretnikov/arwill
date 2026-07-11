@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.1.0 has one executable path:
+Arwill 0.2.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -9,9 +9,11 @@ Limine bootloader
   -> physical page allocator initialization
   -> QEMU serial I/O block
   -> architecture-independent kernel startup
+  -> QEMU ATA PIO block-device initialization
   -> cooperative kernel process manager initialization
   -> serial shell
   -> static read-only boot catalog
+  -> deterministic raw disk sector read when blkinfo is requested
   -> cooperative built-in kernel process launch when run is requested
   -> QEMU debug-exit poweroff when exit is requested
   -> x86-64 CPU idle loop when halt is requested
@@ -42,7 +44,7 @@ Shell:
 
 - Lives in `kernel/shell.c`.
 - Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
-  `cat`, `stat`, `meminfo`, `ps`, `run`, `exit`, and `halt`.
+  `cat`, `stat`, `meminfo`, `blkinfo`, `ps`, `run`, `exit`, and `halt`.
 - Keeps one canonical command name per operation; alias commands are not
   accepted.
 - Holds the current working directory as local shell state.
@@ -52,8 +54,17 @@ Shell:
   sequences.
 - Normalizes standard Russian-layout UTF-8 input back to ASCII key positions;
   it does not support Cyrillic text entry yet.
-- Depends on console, input, filesystem, memory, process, power, and CPU idle
-  contracts.
+- Depends on block device, console, input, filesystem, memory, process, power,
+  and CPU idle contracts.
+
+Block device contract:
+
+- Lives in `include/arwill/kernel/block_device.h`.
+- Provides bounded sector reads by LBA.
+- The first block-device implementation is read-only and has no block cache,
+  partition table handling, write support, or filesystem parser.
+- The `blkinfo` shell command reads LBA 1 from the deterministic QEMU test disk
+  image and prints a sample string.
 
 Process manager:
 
@@ -101,6 +112,14 @@ Static boot catalog:
 - Exposes small text payloads for `/system/identity` and
   `/boot/limine/limine.conf`; binary boot artifacts remain non-displayable.
 - It is not a disk filesystem and does not read from storage.
+
+QEMU ATA PIO block device:
+
+- Lives in `platform/qemu/x86_64/ata_pio.c`.
+- Uses legacy ATA PIO ports exposed by the QEMU `pc` machine type.
+- Reads sectors from the raw test disk image attached by the host-side run and
+  smoke commands.
+- It is intentionally a first storage read path, not a general disk subsystem.
 
 QEMU serial I/O:
 

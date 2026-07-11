@@ -1,6 +1,7 @@
 #ifndef ARWILL_KERNEL_SHELL_H
 #define ARWILL_KERNEL_SHELL_H
 
+#include <arwill/kernel/block_device.h>
 #include <arwill/kernel/console.h>
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
@@ -14,7 +15,8 @@ void arwill_shell_run(
     const struct arwill_filesystem *filesystem,
     const struct arwill_memory *memory,
     const struct arwill_power *power,
-    struct arwill_process_manager *processes
+    struct arwill_process_manager *processes,
+    const struct arwill_block_device *block_device
 ) __attribute__((noreturn));
 
 #endif

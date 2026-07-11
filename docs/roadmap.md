@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.1.0`.
+Status: `0.2.0`.
 
 Arwill already has:
 
@@ -34,13 +34,15 @@ Arwill already has:
 - [x] a static read-only boot catalog used by `ls`, `cd`, `cat`, `stat`, and
   path completion;
 - [x] read-only file contents for selected text files in that static catalog;
+- [x] read-only sector access from a QEMU-attached raw test disk through an ATA
+  PIO block-device contract;
 - [x] a Limine memory map snapshot and first bump-only physical page allocator
   counters;
 - [x] QEMU debug-exit poweroff through `exit`;
 - [x] cooperative kernel-managed processes with PID, state, run count, exit
   code, `run [name]`, and `ps`.
 
-Arwill does not yet have real disk I/O, storage-backed filesystems, interrupts,
+Arwill does not yet have storage-backed filesystems, block writes, interrupts,
 a timer, preemptive scheduling, user-space isolation, syscalls, ELF program
 loading, or writable persistent storage.
 
@@ -57,7 +59,9 @@ loading, or writable persistent storage.
    Verified by: QEMU smoke test for `run hello`, process output, `ps`, and
    successful `exit` poweroff.
 
-2. [ ] Block device reads
+2. [x] Block device reads
+
+   Status: done in `0.2.0`.
 
    Goal: read real sectors from a QEMU-provided disk image through an explicit
    block-device contract.
@@ -75,13 +79,13 @@ loading, or writable persistent storage.
    port I/O. Revisit before implementation if virtio-blk becomes the cleaner
    first target.
 
-   Expected tests:
+   Verified by:
 
    - `make check` still boots and powers off;
-   - smoke test observes block device initialization;
-   - smoke test verifies bytes read from a known sector in the test image;
-   - negative path for out-of-range or unavailable reads returns an error
-     instead of hanging.
+   - smoke test observes `block: qemu ata pio`;
+   - smoke test runs `blkinfo`;
+   - smoke test verifies `sample: ARWILL-BLOCK-DEVICE-TEST`, read from LBA 1 of
+     the deterministic raw test image.
 
    Definition of done: Arwill can read a known sector from a real QEMU-attached
    image without any filesystem parser involved.

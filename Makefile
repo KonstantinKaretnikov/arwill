@@ -1,11 +1,12 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.1.0
+PROJECT_VERSION := 0.2.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
 ISO_ROOT := $(BUILD_DIR)/iso-root
 KERNEL := $(BUILD_DIR)/kernel.elf
 ISO := $(BUILD_DIR)/arwill.iso
+TEST_DISK := $(BUILD_DIR)/arwill-test-disk.img
 SERIAL_LOG := $(BUILD_DIR)/serial-smoke.log
 
 BREW_LLVM_PREFIX := $(shell brew --prefix llvm 2>/dev/null)
@@ -14,8 +15,10 @@ CLANG ?= $(if $(BREW_LLVM_PREFIX),$(BREW_LLVM_PREFIX)/bin/clang,clang)
 LD_LLD ?= $(if $(BREW_LLD_PREFIX),$(BREW_LLD_PREFIX)/bin/ld.lld,ld.lld)
 XORRISO ?= xorriso
 QEMU ?= qemu-system-x86_64
+QEMU_MACHINE := pc
 QEMU_POWEROFF_EXIT_STATUS := 33
 QEMU_POWEROFF_ARGS := -device isa-debug-exit,iobase=0xf4,iosize=0x04
+QEMU_STORAGE_ARGS := -drive file=$(TEST_DISK),format=raw,if=ide,index=0,media=disk
 
 CFLAGS := --target=x86_64-elf
 CFLAGS += -std=c11 -ffreestanding -fno-stack-protector -fno-stack-check
@@ -32,6 +35,7 @@ LDFLAGS += -T arch/x86_64/linker.ld
 
 SOURCES := \
 	kernel/boot_catalog.c \
+	kernel/block_device.c \
 	kernel/console.c \
 	kernel/filesystem.c \
 	kernel/input.c \
@@ -43,6 +47,7 @@ SOURCES := \
 	arch/x86_64/boot/entry.c \
 	arch/x86_64/boot/limine_requests.c \
 	arch/x86_64/cpu/idle.c \
+	platform/qemu/x86_64/ata_pio.c \
 	platform/qemu/x86_64/power.c \
 	platform/qemu/x86_64/serial_console.c
 
@@ -55,9 +60,9 @@ setup:
 
 build: check-tools setup $(ISO)
 
-run: build
+run: build $(TEST_DISK)
 	@set +e; \
-	$(QEMU) -M q35 -m 128M -cdrom $(ISO) -boot d -serial stdio -monitor none -display none -no-reboot $(QEMU_POWEROFF_ARGS); \
+	$(QEMU) -M $(QEMU_MACHINE) -m 128M -cdrom $(ISO) -boot d -serial stdio -monitor none -display none -no-reboot $(QEMU_POWEROFF_ARGS) $(QEMU_STORAGE_ARGS); \
 	status=$$?; \
 	if [ "$$status" -eq "$(QEMU_POWEROFF_EXIT_STATUS)" ]; then exit 0; fi; \
 	exit "$$status"
@@ -73,8 +78,8 @@ check-tools:
 check-artifacts: $(ISO)
 	@scripts/check_artifacts.sh "$(KERNEL)" "$(ISO)"
 
-smoke: $(ISO)
-	@scripts/smoke_qemu.sh "$(QEMU)" "$(ISO)" "$(SERIAL_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)"
+smoke: $(ISO) $(TEST_DISK)
+	@scripts/smoke_qemu.sh "$(QEMU)" "$(QEMU_MACHINE)" "$(ISO)" "$(TEST_DISK)" "$(SERIAL_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)"
 
 $(KERNEL): $(OBJECTS) arch/x86_64/linker.ld
 	@mkdir -p $(dir $@)
@@ -101,6 +106,9 @@ $(ISO): $(KERNEL) platform/qemu/limine.conf third_party/limine/limine
 		-efi-boot-part --efi-boot-image --protective-msdos-label \
 		$(ISO_ROOT) -o $(ISO)
 	third_party/limine/limine bios-install $(ISO)
+
+$(TEST_DISK): scripts/create_test_disk.sh
+	@sh scripts/create_test_disk.sh "$@"
 
 third_party/limine/limine:
 	@scripts/setup_limine.sh

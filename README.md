@@ -15,13 +15,14 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.1.0`
+Version: `0.2.0`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
 The shell can read terminal keyboard input through QEMU serial I/O, inspect a
 boot memory map, report the first physical page allocator state, and launch
-small cooperative kernel processes.
+small cooperative kernel processes. Arwill can also read sectors from a
+QEMU-attached raw test disk through a read-only ATA PIO block-device driver.
 
 ## Supported Host and Target
 
@@ -86,6 +87,7 @@ ls [path]
 cat [path]
 stat [path]
 meminfo
+blkinfo
 ps
 run [name]
 exit
@@ -104,6 +106,11 @@ but their contents are not displayed yet.
 `stat` displays directory and file metadata. `meminfo` prints the
 Limine-provided boot memory map and the current physical page allocator
 counters.
+
+`blkinfo` displays the detected QEMU ATA PIO block device, its sector geometry,
+and a sample string read from LBA 1 of the deterministic test disk image. This
+proves sector reads only; shell filesystem commands still use the static boot
+catalog.
 
 `run [name]` launches one of the built-in cooperative kernel processes:
 `hello` or `counter`. `ps` shows the kernel process table with PID, state, run
@@ -134,13 +141,14 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.1.0
+Arwill 0.2.0
 architecture: x86_64
 platform: qemu
 console: serial
 input: serial
 shell: ready
 filesystem: static boot catalog
+block: qemu ata pio
 memory: boot memory map
 allocator: physical page bump allocator
 processes: kernel cooperative

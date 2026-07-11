@@ -8,6 +8,7 @@
 #include <arwill/kernel/cpu.h>
 #include <arwill/kernel/kernel.h>
 #include <arwill/kernel/memory.h>
+#include <arwill/platform/qemu/ata_pio.h>
 #include <arwill/platform/qemu/power.h>
 #include <arwill/platform/qemu/serial_console.h>
 
@@ -86,7 +87,8 @@ void arwill_limine_entry(void) {
     const struct arwill_input *input = arwill_qemu_serial_input();
     const struct arwill_filesystem *filesystem = arwill_boot_catalog_filesystem();
     const struct arwill_power *power = arwill_qemu_power();
+    const struct arwill_block_device *block_device = arwill_qemu_ata_block_device_init();
 
-    arwill_kernel_start(console, input, filesystem, &arwill_limine_memory, power);
+    arwill_kernel_start(console, input, filesystem, &arwill_limine_memory, power, block_device);
     arwill_cpu_idle_forever();
 }

@@ -1,15 +1,17 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 4 ]; then
-    echo "usage: smoke_qemu.sh <qemu-system-x86_64> <image.iso> <serial-log> <poweroff-exit-status>" >&2
+if [ "$#" -ne 6 ]; then
+    echo "usage: smoke_qemu.sh <qemu-system-x86_64> <machine> <image.iso> <test-disk> <serial-log> <poweroff-exit-status>" >&2
     exit 2
 fi
 
 qemu=$1
-iso=$2
-serial_log=$3
-expected_qemu_status=$4
+machine=$2
+iso=$3
+test_disk=$4
+serial_log=$5
+expected_qemu_status=$6
 qemu_status_log=$serial_log.status
 
 rm -f "$serial_log" "$qemu_status_log"
@@ -60,7 +62,7 @@ rm -f "$serial_log" "$qemu_status_log"
     wait_for_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_log_count "Arwill 0.1.0" 2
+    wait_for_log_count "Arwill 0.2.0" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_log_count "Arwill:/> " 4
@@ -73,6 +75,9 @@ rm -f "$serial_log" "$qemu_status_log"
     sleep 0.1
     printf 'mem\t\r'
     wait_for_log "physical allocator:"
+    sleep 0.1
+    printf 'blk\t\r'
+    wait_for_log "sample: ARWILL-BLOCK-DEVICE-TEST"
     sleep 0.1
     printf 'run he\t\r'
     wait_for_log "process hello: hello from pid"
@@ -109,15 +114,16 @@ rm -f "$serial_log" "$qemu_status_log"
     wait_for_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_log "version: 0.1.0"
+    wait_for_log "version: 0.2.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_log "type: text file"
     sleep 0.1
     printf 'ex\t\r'
-    ) | "$qemu" -M q35 -m 128M -cdrom "$iso" -boot d \
+    ) | "$qemu" -M "$machine" -m 128M -cdrom "$iso" -boot d \
         -serial stdio -monitor none -display none -no-reboot \
         -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+        -drive file="$test_disk",format=raw,if=ide,index=0,media=disk \
         > "$serial_log" 2>&1
 
     qemu_status=$?
@@ -194,13 +200,14 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.1.0"
+check_line "Arwill 0.2.0"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
 check_line "input: serial"
 check_line "shell: ready"
 check_line "filesystem: static boot catalog"
+check_line "block: qemu ata pio"
 check_line "memory: boot memory map"
 check_line "allocator: physical page bump allocator"
 check_line "processes: kernel cooperative"
@@ -208,10 +215,11 @@ check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.1.0"
+check_line "Arwill 0.2.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "meminfo    show memory map and page allocator"
+check_line "blkinfo    show block device read diagnostics"
 check_line "ps         show kernel process table"
 check_line "run [name] launch a built-in kernel process"
 check_line "Up/Down    browse command history"
@@ -222,6 +230,10 @@ check_line "memory map:"
 check_line "usable"
 check_line "physical allocator:"
 check_line "page size: 4096 bytes"
+check_line "block device: qemu ata pio"
+check_line "sector size: 512 bytes"
+check_line "sample lba: 1"
+check_line "sample: ARWILL-BLOCK-DEVICE-TEST"
 check_line "run: spawned pid"
 check_line "process hello: hello from pid"
 check_line "pid state runs exit name"
@@ -236,7 +248,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.1.0"
+check_line "version: 0.2.0"
 check_line "type: text file"
 check_line "Arwill:/boot/limine> "
 check_line "Arwill:/boot> exit"

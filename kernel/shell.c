@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include <arwill/identity.h>
+#include <arwill/kernel/block_device.h>
 #include <arwill/kernel/console.h>
 #include <arwill/kernel/cpu.h>
 #include <arwill/kernel/filesystem.h>
@@ -50,6 +51,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "cat", .completion = shell_completion_path },
     { .name = "stat", .completion = shell_completion_path },
     { .name = "meminfo", .completion = shell_completion_none },
+    { .name = "blkinfo", .completion = shell_completion_none },
     { .name = "ps", .completion = shell_completion_none },
     { .name = "run", .completion = shell_completion_process },
     { .name = "exit", .completion = shell_completion_none },
@@ -717,6 +719,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  cat [path] show text file contents");
     arwill_console_write_line(console, "  stat [path] show file or directory metadata");
     arwill_console_write_line(console, "  meminfo    show memory map and page allocator");
+    arwill_console_write_line(console, "  blkinfo    show block device read diagnostics");
     arwill_console_write_line(console, "  ps         show kernel process table");
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
     arwill_console_write_line(console, "  exit       power off the machine");
@@ -985,6 +988,73 @@ static void print_meminfo(
     arwill_console_write(console, "  allocations: ");
     write_uint64_decimal(console, stats.allocation_count);
     arwill_console_write_line(console, "");
+}
+
+static int is_sample_byte(uint8_t byte) {
+    return (byte >= 0x20U && byte <= 0x7eU) || byte == '\n';
+}
+
+static void print_block_sample(const struct arwill_console *console, const uint8_t *sector) {
+    enum {
+        sample_limit = 64
+    };
+
+    arwill_console_write(console, "sample: ");
+
+    for (size_t index = 0; index < sample_limit; index++) {
+        const uint8_t byte = sector[index];
+
+        if (byte == '\0' || byte == '\n') {
+            break;
+        }
+
+        if (is_sample_byte(byte)) {
+            write_byte_echo(console, byte);
+        } else {
+            arwill_console_write(console, ".");
+        }
+    }
+
+    arwill_console_write_line(console, "");
+}
+
+static void print_block_info(
+    const struct arwill_console *console,
+    const struct arwill_block_device *block_device
+) {
+    uint8_t sector[512];
+
+    if (block_device == 0) {
+        arwill_console_write_line(console, "block device: unavailable");
+        return;
+    }
+
+    arwill_console_write(console, "block device: ");
+    arwill_console_write_line(console, block_device->name);
+    arwill_console_write(console, "sector size: ");
+    write_uint64_decimal(console, (uint64_t)block_device->sector_size);
+    arwill_console_write_line(console, " bytes");
+    arwill_console_write(console, "sectors: ");
+    write_uint64_decimal(console, block_device->sector_count);
+    arwill_console_write_line(console, "");
+
+    if (block_device->sector_size != sizeof(sector)) {
+        arwill_console_write_line(console, "sample: unsupported sector size");
+        return;
+    }
+
+    if (block_device->sector_count <= 1U) {
+        arwill_console_write_line(console, "sample: disk too small");
+        return;
+    }
+
+    if (!arwill_block_read(block_device, 1, 1, sector, sizeof(sector))) {
+        arwill_console_write_line(console, "sample: read failed");
+        return;
+    }
+
+    arwill_console_write_line(console, "sample lba: 1");
+    print_block_sample(console, sector);
 }
 
 static uint32_t shell_hello_process(const struct arwill_process_runtime *runtime) {
@@ -1578,6 +1648,7 @@ static void run_command(
     const struct arwill_memory *memory,
     const struct arwill_power *power,
     struct arwill_process_manager *processes,
+    const struct arwill_block_device *block_device,
     struct shell_process_context *process_context,
     char *current_directory,
     const char *line
@@ -1608,6 +1679,11 @@ static void run_command(
 
     if (string_equals(line, "meminfo")) {
         print_meminfo(console, memory);
+        return;
+    }
+
+    if (string_equals(line, "blkinfo")) {
+        print_block_info(console, block_device);
         return;
     }
 
@@ -1667,7 +1743,8 @@ void arwill_shell_run(
     const struct arwill_filesystem *filesystem,
     const struct arwill_memory *memory,
     const struct arwill_power *power,
-    struct arwill_process_manager *processes
+    struct arwill_process_manager *processes,
+    const struct arwill_block_device *block_device
 ) {
     char line[shell_line_capacity];
     char current_directory[shell_path_capacity] = "/";
@@ -1725,6 +1802,7 @@ void arwill_shell_run(
                 memory,
                 power,
                 processes,
+                block_device,
                 &process_context,
                 current_directory,
                 line
