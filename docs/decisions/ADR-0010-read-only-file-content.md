@@ -20,8 +20,8 @@ Add a shell `cat [path]` command to display text files. `cat` resolves absolute
 and relative paths through the same current-directory logic as `cd` and `ls`.
 It reports directories, missing files, and binary files explicitly.
 
-Add a shell `stat [path]` command, with `info [path]` as an alias, to display
-directory entry counts and file metadata exposed by the same read-only catalog.
+Add a shell `stat [path]` command to display directory entry counts and file
+metadata exposed by the same read-only catalog.
 
 ## Consequences
 
@@ -30,8 +30,8 @@ honest boundary that Arwill does not yet read from storage. The filesystem
 contract grows by one narrow operation, but still has no open handles, streaming
 reads, writes, allocation, permissions, or mounts.
 
-Tab completion works for `cat`, `stat`, and `info` because they use the same
-path completion table as `ls` and `dir`.
+Tab completion works for `cat` and `stat` because they use the same path
+completion table as `ls`.
 
 ## Alternatives Considered
 

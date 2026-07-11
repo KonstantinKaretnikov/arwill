@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.0.8 has one executable path:
+Arwill 0.0.9 has one executable path:
 
 ```text
 Limine bootloader
@@ -40,7 +40,9 @@ Shell:
 
 - Lives in `kernel/shell.c`.
 - Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
-  `dir`, `cat`, `stat`, `info`, `meminfo`, `exit`, `poweroff`, and `halt`.
+  `cat`, `stat`, `meminfo`, `exit`, and `halt`.
+- Keeps one canonical command name per operation; alias commands are not
+  accepted.
 - Holds the current working directory as local shell state.
 - Owns Tab completion for command names and filesystem paths.
 - Owns a small in-memory command history navigated by Up and Down escape
@@ -76,8 +78,8 @@ Filesystem contract:
 Static boot catalog:
 
 - Lives in `kernel/boot_catalog.c`.
-- Provides a tiny read-only directory tree for `ls`, `dir`, `cd`, Tab
-  completion, `cat`, and `stat`.
+- Provides a tiny read-only directory tree for `ls`, `cd`, Tab completion,
+  `cat`, and `stat`.
 - Exposes small text payloads for `/system/identity` and
   `/boot/limine/limine.conf`; binary boot artifacts remain non-displayable.
 - It is not a disk filesystem and does not read from storage.

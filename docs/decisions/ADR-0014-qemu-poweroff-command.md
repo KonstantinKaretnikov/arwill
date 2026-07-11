@@ -14,8 +14,8 @@ management.
 ## Decision
 
 Add a narrow kernel power contract with one `poweroff` operation. Add `exit` to
-the shell, with `poweroff` as an alias. The command writes `status: powering
-off` and calls the power contract. `halt` remains the explicit CPU idle command.
+the shell. The command writes `status: powering off` and calls the power
+contract. `halt` remains the explicit CPU idle command.
 
 For the first QEMU target, implement poweroff through QEMU's `isa-debug-exit`
 device on I/O port `0xf4`. Host-side `make run` and the smoke test add:

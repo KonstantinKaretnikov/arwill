@@ -25,6 +25,8 @@ Rules for future work:
 - Keep all generated code understandable by a human reviewer.
 - Treat shell Russian-layout input normalization as ASCII command-entry
   convenience, not as Cyrillic text support.
+- Keep shell commands canonical; do not add built-in alias commands unless a
+  later ADR explicitly reverses ADR-0015.
 - When a durable workflow agreement is made with the project owner, update this
   file or another appropriate document in the same change so future sessions do
   not need to rediscover it.

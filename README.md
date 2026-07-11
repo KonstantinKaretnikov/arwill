@@ -15,7 +15,7 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.0.8`
+Version: `0.0.9`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
@@ -82,17 +82,14 @@ pwd
 cd [path]
 clear
 ls [path]
-dir [path]
 cat [path]
 stat [path]
-info [path]
 meminfo
 exit
-poweroff
 halt
 ```
 
-`ls` and `dir` currently list a static read-only boot catalog, not a real disk
+`ls` currently lists a static read-only boot catalog, not a real disk
 filesystem. The first supported paths are `/`, `/boot`, `/boot/limine`, and
 `/system`. `cd` changes the shell's current directory and supports absolute
 paths, relative paths, `.`, and `..`.
@@ -101,12 +98,12 @@ paths, relative paths, `.`, and `..`.
 and `/boot/limine/limine.conf`. Binary boot artifacts are visible in listings,
 but their contents are not displayed yet.
 
-`stat` displays directory and file metadata; `info` is an alias. `meminfo`
-prints the Limine-provided boot memory map and the current physical page
-allocator counters.
+`stat` displays directory and file metadata. `meminfo` prints the
+Limine-provided boot memory map and the current physical page allocator
+counters.
 
-`exit` powers off the current QEMU session; `poweroff` is an alias. `halt`
-remains available as a CPU idle-loop command.
+`exit` powers off the current QEMU session. `halt` remains available as a CPU
+idle-loop command.
 
 Press `Tab` to complete command names and paths. If there are multiple matches,
 the shell lists candidates and redraws the current prompt. Press Up and Down to
@@ -128,7 +125,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.0.8
+Arwill 0.0.9
 architecture: x86_64
 platform: qemu
 console: serial

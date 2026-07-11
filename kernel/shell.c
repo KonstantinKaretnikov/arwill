@@ -39,13 +39,10 @@ static const struct shell_command shell_commands[] = {
     { .name = "cd", .accepts_path = 1 },
     { .name = "clear", .accepts_path = 0 },
     { .name = "ls", .accepts_path = 1 },
-    { .name = "dir", .accepts_path = 1 },
     { .name = "cat", .accepts_path = 1 },
     { .name = "stat", .accepts_path = 1 },
-    { .name = "info", .accepts_path = 1 },
     { .name = "meminfo", .accepts_path = 0 },
     { .name = "exit", .accepts_path = 0 },
-    { .name = "poweroff", .accepts_path = 0 },
     { .name = "halt", .accepts_path = 0 },
 };
 
@@ -698,13 +695,10 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
     arwill_console_write_line(console, "  ls [path]  list the read-only boot catalog");
-    arwill_console_write_line(console, "  dir [path] alias for ls");
     arwill_console_write_line(console, "  cat [path] show text file contents");
     arwill_console_write_line(console, "  stat [path] show file or directory metadata");
-    arwill_console_write_line(console, "  info [path] alias for stat");
     arwill_console_write_line(console, "  meminfo    show memory map and page allocator");
     arwill_console_write_line(console, "  exit       power off the machine");
-    arwill_console_write_line(console, "  poweroff   alias for exit");
     arwill_console_write_line(console, "  Tab        complete commands and paths");
     arwill_console_write_line(console, "  Up/Down    browse command history");
     arwill_console_write_line(console, "  halt       enter the CPU idle loop");
@@ -1337,7 +1331,7 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "exit") || string_equals(line, "poweroff")) {
+    if (string_equals(line, "exit")) {
         arwill_console_write_line(console, "status: powering off");
         arwill_poweroff(power);
     }
@@ -1357,11 +1351,6 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "dir") || starts_with(line, "dir ")) {
-        print_listing(console, filesystem, current_directory, argument_after_command(line));
-        return;
-    }
-
     if (string_equals(line, "cat") || starts_with(line, "cat ")) {
         print_file(console, filesystem, current_directory, argument_after_command(line));
         return;
@@ -1374,17 +1363,6 @@ static void run_command(
             current_directory,
             argument_after_command(line),
             "stat"
-        );
-        return;
-    }
-
-    if (string_equals(line, "info") || starts_with(line, "info ")) {
-        print_stat(
-            console,
-            filesystem,
-            current_directory,
-            argument_after_command(line),
-            "info"
         );
         return;
     }

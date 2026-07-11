@@ -14,9 +14,10 @@ boundaries at once.
 Add the first interactive milestone as a serial shell over the existing QEMU
 COM1 path. Terminal keyboard input reaches the kernel as serial bytes. Add a
 small input contract, a read-only filesystem listing contract, and a static boot
-catalog used by `ls` and `dir`.
+catalog used by `ls`.
 
-The `ls` command is the primary command name. `dir` is accepted as an alias.
+The `ls` command is the primary command name. `dir` was originally accepted as
+an alias, but alias commands were later removed by ADR-0015.
 
 This milestone does not implement a disk storage driver. The static boot
 catalog is explicitly not a disk filesystem and does not read the ISO at
@@ -25,7 +26,7 @@ runtime.
 ## Consequences
 
 Arwill now has an interactive loop that can be tested through QEMU serial I/O.
-The user can type `help`, `version`, `ls`, `dir`, and `halt`.
+The user can type `help`, `version`, `ls`, and `halt`.
 
 The filesystem contract is intentionally narrow: list entries for a path. There
 is no file open, file read, write, allocation, mount table, block cache, or

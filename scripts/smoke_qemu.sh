@@ -60,7 +60,7 @@ rm -f "$serial_log" "$qemu_status_log"
     wait_for_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_log_count "Arwill 0.0.8" 2
+    wait_for_log_count "Arwill 0.0.9" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_log_count "Arwill:/> " 4
@@ -83,7 +83,7 @@ rm -f "$serial_log" "$qemu_status_log"
     printf 'pwd\r'
     wait_for_log_count "Arwill:/boot> " 2
     sleep 0.1
-    printf 'd\t\r'
+    printf 'l\t\r'
     wait_for_log "limine/"
     sleep 0.1
     printf 'cd l\t\r'
@@ -102,7 +102,7 @@ rm -f "$serial_log" "$qemu_status_log"
     wait_for_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_log "version: 0.0.8"
+    wait_for_log "version: 0.0.9"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_log "type: text file"
@@ -175,7 +175,19 @@ check_line() {
     fi
 }
 
-check_line "Arwill 0.0.8"
+check_absent() {
+    unexpected=$1
+
+    if grep -F -q "$unexpected" "$serial_log"; then
+        echo "unexpected serial output: $unexpected" >&2
+        echo "--- serial log ---" >&2
+        cat "$serial_log" >&2
+        echo "------------------" >&2
+        exit 1
+    fi
+}
+
+check_line "Arwill 0.0.9"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -188,11 +200,14 @@ check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.0.8"
+check_line "Arwill 0.0.9"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "meminfo    show memory map and page allocator"
 check_line "Up/Down    browse command history"
+check_absent "dir [path]"
+check_absent "info [path]"
+check_absent "poweroff"
 check_line "memory map:"
 check_line "usable"
 check_line "physical allocator:"
@@ -207,7 +222,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.0.8"
+check_line "version: 0.0.9"
 check_line "type: text file"
 check_line "Arwill:/boot/limine> "
 check_line "Arwill:/boot> exit"

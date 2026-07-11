@@ -20,8 +20,8 @@ Add `pwd` so the current directory can be observed.
 ## Consequences
 
 `cd` is useful for the current interactive shell without inventing a process
-model. `ls` and `dir` without arguments list the current directory. The prompt
-shows the current directory as `Arwill:/path>`.
+model. `ls` without arguments lists the current directory. The prompt shows the
+current directory as `Arwill:/path>`.
 
 This is intentionally shell state, not system-wide kernel state.
 
