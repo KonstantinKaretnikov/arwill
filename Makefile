@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.0.5
+PROJECT_VERSION := 0.0.6
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -34,6 +34,7 @@ SOURCES := \
 	kernel/filesystem.c \
 	kernel/input.c \
 	kernel/main.c \
+	kernel/memory.c \
 	kernel/shell.c \
 	arch/x86_64/boot/entry.c \
 	arch/x86_64/boot/limine_requests.c \

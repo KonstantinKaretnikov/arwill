@@ -1,10 +1,12 @@
 # Initial Architecture
 
-Arwill 0.0.5 has one executable path:
+Arwill 0.0.6 has one executable path:
 
 ```text
 Limine bootloader
   -> x86-64 Limine entry
+  -> Limine memory map snapshot
+  -> physical page allocator initialization
   -> QEMU serial I/O block
   -> architecture-independent kernel startup
   -> serial shell
@@ -36,11 +38,22 @@ Input contract:
 Shell:
 
 - Lives in `kernel/shell.c`.
-- Owns command parsing for `help`, `version`, `pwd`, `cd`, `ls`, `dir`, `cat`,
-  and `halt`.
+- Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
+  `dir`, `cat`, `stat`, `info`, `meminfo`, and `halt`.
 - Holds the current working directory as local shell state.
 - Owns Tab completion for command names and filesystem paths.
-- Depends on console, input, filesystem, and CPU idle contracts.
+- Owns a small in-memory command history navigated by Up and Down escape
+  sequences.
+- Depends on console, input, filesystem, memory, and CPU idle contracts.
+
+Memory contract:
+
+- Lives in `include/arwill/kernel/memory.h`.
+- Provides a boot memory map snapshot using Arwill-owned region types.
+- Provides physical page allocator counters and page allocation from usable
+  memory ranges.
+- The first allocator is bump-only: it can allocate pages but cannot free or
+  reuse pages yet.
 
 Filesystem contract:
 
@@ -53,7 +66,7 @@ Static boot catalog:
 
 - Lives in `kernel/boot_catalog.c`.
 - Provides a tiny read-only directory tree for `ls`, `dir`, `cd`, Tab
-  completion, and `cat`.
+  completion, `cat`, and `stat`.
 - Exposes small text payloads for `/system/identity` and
   `/boot/limine/limine.conf`; binary boot artifacts remain non-displayable.
 - It is not a disk filesystem and does not read from storage.
@@ -75,6 +88,8 @@ CPU idle:
 Boot infrastructure:
 
 - Limine is fetched into `third_party/limine/`.
+- The x86-64 boot block requests the Limine memory map and converts it before
+  entering architecture-independent kernel startup.
 - Limine config lives in `platform/qemu/limine.conf`.
 - ISO construction is host-side development tooling, not kernel code.
 

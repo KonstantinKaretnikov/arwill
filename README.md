@@ -15,11 +15,12 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.0.5`
+Version: `0.0.6`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
-The shell can read terminal keyboard input through QEMU serial I/O.
+The shell can read terminal keyboard input through QEMU serial I/O, inspect a
+boot memory map, and report the first physical page allocator state.
 
 ## Supported Host and Target
 
@@ -79,9 +80,13 @@ help
 version
 pwd
 cd [path]
+clear
 ls [path]
 dir [path]
 cat [path]
+stat [path]
+info [path]
+meminfo
 halt
 ```
 
@@ -94,8 +99,13 @@ paths, relative paths, `.`, and `..`.
 and `/boot/limine/limine.conf`. Binary boot artifacts are visible in listings,
 but their contents are not displayed yet.
 
+`stat` displays directory and file metadata; `info` is an alias. `meminfo`
+prints the Limine-provided boot memory map and the current physical page
+allocator counters.
+
 Press `Tab` to complete command names and paths. If there are multiple matches,
-the shell lists candidates and redraws the current prompt.
+the shell lists candidates and redraws the current prompt. Press Up and Down to
+browse the in-memory shell command history.
 
 ## Check
 
@@ -108,13 +118,15 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.0.5
+Arwill 0.0.6
 architecture: x86_64
 platform: qemu
 console: serial
 input: serial
 shell: ready
 filesystem: static boot catalog
+memory: boot memory map
+allocator: physical page bump allocator
 status: kernel initialized
 Arwill:/>
 ```

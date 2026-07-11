@@ -3,12 +3,14 @@
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/kernel.h>
+#include <arwill/kernel/memory.h>
 #include <arwill/kernel/shell.h>
 
 void arwill_kernel_start(
     const struct arwill_console *console,
     const struct arwill_input *input,
-    const struct arwill_filesystem *filesystem
+    const struct arwill_filesystem *filesystem,
+    const struct arwill_memory *memory
 ) {
     arwill_console_write(console, ARWILL_PROJECT_NAME);
     arwill_console_write(console, " ");
@@ -19,7 +21,9 @@ void arwill_kernel_start(
     arwill_console_write_line(console, "input: serial");
     arwill_console_write_line(console, "shell: ready");
     arwill_console_write_line(console, "filesystem: static boot catalog");
+    arwill_console_write_line(console, "memory: boot memory map");
+    arwill_console_write_line(console, "allocator: physical page bump allocator");
     arwill_console_write_line(console, "status: kernel initialized");
 
-    arwill_shell_run(console, input, filesystem);
+    arwill_shell_run(console, input, filesystem, memory);
 }

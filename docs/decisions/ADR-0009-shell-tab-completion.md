@@ -6,14 +6,14 @@ Status: accepted
 
 The serial shell now has enough commands and paths for interactive typing to
 benefit from completion. Arwill still has no terminal driver, cursor addressing,
-history, or line-editing library.
+or line-editing library.
 
 ## Decision
 
 Implement Tab completion inside the shell. Command completion matches built-in
 command names. Path completion is available for path-oriented commands such as
-`cd`, `ls`, `dir`, and `cat` through the existing read-only filesystem listing
-contract.
+`cd`, `ls`, `dir`, `cat`, `stat`, and `info` through the existing read-only
+filesystem listing contract.
 
 The shell completes a unique match inline. If multiple matches exist and no
 longer common prefix can be inserted, it prints candidates and redraws the
@@ -26,8 +26,8 @@ terminal abstraction or a broad line editor. Completion remains shell-local
 state and depends only on the existing console, input, and filesystem
 contracts.
 
-The UI is intentionally plain: no cursor movement, reverse search, history, or
-quoted argument parsing.
+The UI is intentionally plain: no cursor movement, reverse search, quoted
+argument parsing, or command-specific completion hooks.
 
 ## Alternatives Considered
 
@@ -37,5 +37,5 @@ rejected because the current filesystem contract can already list entries.
 
 ## Revisit
 
-Revisit when Arwill adds a richer terminal, command history, quoted arguments,
-or a writable filesystem.
+Revisit when Arwill adds a richer terminal, quoted arguments, command-specific
+completion hooks, or a writable filesystem.
