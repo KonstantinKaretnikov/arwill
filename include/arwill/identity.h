@@ -1,0 +1,15 @@
+#ifndef ARWILL_IDENTITY_H
+#define ARWILL_IDENTITY_H
+
+#ifndef ARWILL_PROJECT_NAME
+#define ARWILL_PROJECT_NAME "Arwill"
+#endif
+
+#ifndef ARWILL_PROJECT_VERSION
+#define ARWILL_PROJECT_VERSION "0.0.1"
+#endif
+
+#define ARWILL_TARGET_ARCHITECTURE "x86_64"
+#define ARWILL_TARGET_PLATFORM "qemu"
+
+#endif
