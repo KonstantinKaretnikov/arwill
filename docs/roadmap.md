@@ -1,14 +1,46 @@
 # Arwill Roadmap
 
-This roadmap records the current agreed order for the next large operating
-system milestones. It is intentionally sequential: finish and verify one layer
-before depending on it from the next layer.
+This roadmap records the current agreed order for large operating-system
+milestones. It is intentionally sequential: finish and verify one layer before
+depending on it from the next layer.
 
 ## Working Rule
 
 Prefer more tests and smaller verified steps over broad subsystem jumps. Every
-milestone should keep Arwill bootable, update documentation, and extend the
+milestone must keep Arwill bootable, update documentation, and extend the
 bounded QEMU smoke test or add another suitable automated check.
+
+Do not turn a future subsystem into a placeholder. If a layer cannot yet do real
+work, keep it absent or label the limitation explicitly.
+
+## Completed Baseline
+
+Status: `0.1.0`.
+
+Arwill already has:
+
+- architecture-first project rules, ADRs, and a pinned Limine boot path;
+- x86-64 plus QEMU as the first target;
+- freestanding C with minimal x86-64 inline assembly for port I/O and CPU idle;
+- a buildable bootable ISO and `make check` with a bounded QEMU serial smoke
+  test;
+- QEMU serial console output and blocking serial input;
+- a serial shell with canonical commands only: `help`, `version`, `pwd`, `cd`,
+  `clear`, `ls`, `cat`, `stat`, `meminfo`, `ps`, `run`, `exit`, and `halt`;
+- shell current directory state, path resolution, Tab completion, command
+  history, and Russian-layout command-entry normalization;
+- a static read-only boot catalog used by `ls`, `cd`, `cat`, `stat`, and path
+  completion;
+- read-only file contents for selected text files in that static catalog;
+- a Limine memory map snapshot and first bump-only physical page allocator
+  counters;
+- QEMU debug-exit poweroff through `exit`;
+- cooperative kernel-managed processes with PID, state, run count, exit code,
+  `run [name]`, and `ps`.
+
+Arwill does not yet have real disk I/O, storage-backed filesystems, interrupts,
+a timer, preemptive scheduling, user-space isolation, syscalls, ELF program
+loading, or writable persistent storage.
 
 ## Milestones
 
@@ -17,49 +49,138 @@ bounded QEMU smoke test or add another suitable automated check.
    Status: done in `0.1.0`.
 
    Arwill can launch built-in cooperative kernel processes with `run [name]`
-   and inspect them with `ps`. These are not user-space processes.
+   and inspect them with `ps`. These are kernel-managed run-to-completion work
+   units, not user-space processes.
+
+   Verified by: QEMU smoke test for `run hello`, process output, `ps`, and
+   successful `exit` poweroff.
 
 2. Block device reads
 
-   Add a narrow block device contract and the first QEMU-backed read-only
-   storage driver. The first goal is reading real sectors, not parsing a full
-   filesystem.
+   Goal: read real sectors from a QEMU-provided disk image through an explicit
+   block-device contract.
 
-   Expected tests: boot smoke coverage for device discovery and a deterministic
-   sector read from a known test image.
+   Scope:
+
+   - add a narrow read-only block-device contract;
+   - add a deterministic host-side test disk image fixture;
+   - attach that image in the QEMU run and smoke paths;
+   - implement the first QEMU-backed sector read path;
+   - expose only enough diagnostics to prove the contract, such as block device
+     identity and one deterministic sector read.
+
+   Candidate first driver: QEMU IDE/ATA PIO, because Arwill already has x86-64
+   port I/O. Revisit before implementation if virtio-blk becomes the cleaner
+   first target.
+
+   Expected tests:
+
+   - `make check` still boots and powers off;
+   - smoke test observes block device initialization;
+   - smoke test verifies bytes read from a known sector in the test image;
+   - negative path for out-of-range or unavailable reads returns an error
+     instead of hanging.
+
+   Definition of done: Arwill can read a known sector from a real QEMU-attached
+   image without any filesystem parser involved.
 
 3. Real read-only filesystem
 
-   Replace the static boot catalog with a filesystem implementation backed by
-   block storage. Candidate first formats are ISO9660 for the boot image or a
-   simple initrd/tar format.
+   Goal: replace the static boot catalog path with a filesystem implementation
+   backed by block storage.
 
-   Expected tests: `ls`, `cd`, `cat`, and `stat` should read real files through
-   the filesystem path, with negative tests for missing files and directories.
+   Scope:
+
+   - keep the existing `filesystem` contract or evolve it deliberately with an
+     ADR;
+   - choose one first read-only on-disk format;
+   - route `ls`, `cd`, `cat`, `stat`, and path completion through the
+     storage-backed implementation;
+   - keep the static catalog only as a fallback or remove it once the real path
+     is stable.
+
+   Candidate formats: ISO9660 for reading the boot image, a simple initrd/tar
+   image for a smaller parser, or another deliberately chosen read-only format.
+   Pick the format at the start of this milestone and document why.
+
+   Expected tests:
+
+   - smoke test lists directories from the real image;
+   - smoke test reads real file contents through `cat`;
+   - smoke test checks `stat` for real file and directory metadata;
+   - negative tests cover missing files, missing directories, and binary files.
+
+   Definition of done: the shell's filesystem commands no longer depend on
+   hard-coded directory entries for the primary happy path.
 
 4. Interrupts, timer, and scheduler foundation
 
-   Add IDT setup, interrupt handlers, a timer source, saved execution contexts,
-   and a simple scheduler path. This should turn process execution from
-   shell-triggered run-to-completion work into scheduled kernel tasks.
+   Goal: create the execution foundation needed to move beyond
+   shell-triggered run-to-completion kernel processes.
 
-   Expected tests: boot smoke output for initialized interrupt/timer blocks and
-   deterministic scheduler observations that do not depend on host timing.
+   Scope:
+
+   - add IDT setup and basic exception reporting;
+   - add a timer source;
+   - add saved execution context structures;
+   - add a simple scheduler path for kernel tasks;
+   - keep behavior deterministic enough for smoke tests.
+
+   Expected tests:
+
+   - smoke test observes interrupt and timer initialization;
+   - deliberate safe exception or diagnostic path reports through the serial
+     console;
+   - scheduler diagnostics show that more than one kernel task can make
+     progress;
+   - tests do not depend on fragile host timing.
+
+   Definition of done: Arwill can schedule kernel tasks independently of a
+   single shell command running a function to completion.
 
 5. User-space v1
 
-   Add the first user-mode program path: ELF loading, user/kernel privilege
-   transition, and a minimal syscall ABI such as `write` and `exit`.
+   Goal: run the first isolated user-mode program.
 
-   Expected tests: launch a tiny user program, observe its output through the
-   syscall path, and verify its exit status without crashing the kernel.
+   Scope:
+
+   - add the required descriptor/user-mode entry groundwork;
+   - add a minimal ELF loading path or a deliberately simpler first executable
+     format if documented;
+   - add a minimal syscall ABI, starting with `write` and `exit`;
+   - connect process exit status to the process table.
+
+   Expected tests:
+
+   - smoke test launches a tiny user program;
+   - program output reaches the serial console only through the syscall path;
+   - process exit status is observable through `ps` or another documented
+     command;
+   - invalid user behavior does not crash the kernel silently.
+
+   Definition of done: Arwill can run a separate user-mode program with a clear
+   kernel/user boundary.
 
 6. Writable filesystem
 
-   Add controlled write support after the read path, block layer, and process
-   direction are better established. This includes filesystem write contracts,
-   allocation or update rules, write error handling, and persistence semantics.
+   Goal: add controlled persistent write support after read storage, filesystem
+   reads, scheduling direction, and user-space basics are established.
 
-   Expected tests: create or modify a small file, read it back in the same boot,
-   and eventually verify persistence across a rebooted QEMU session with a test
-   disk image.
+   Scope:
+
+   - add block write support with error reporting;
+   - evolve the filesystem contract for create, overwrite, append, or whichever
+     first write operations are explicitly chosen;
+   - define allocation/update rules and persistence semantics;
+   - keep write operations narrow until crash consistency and caching are better
+     understood.
+
+   Expected tests:
+
+   - create or modify a small file and read it back in the same boot;
+   - verify persistence across a rebooted QEMU session with a test disk image;
+   - cover write failure paths such as no space or invalid path;
+   - keep read-only filesystem tests passing.
+
+   Definition of done: Arwill can persist a small file change to a QEMU disk
+   image and observe it again after reboot.
