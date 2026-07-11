@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.0.2
+PROJECT_VERSION := 0.0.3
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -18,6 +18,7 @@ QEMU ?= qemu-system-x86_64
 CFLAGS := --target=x86_64-elf
 CFLAGS += -std=c11 -ffreestanding -fno-stack-protector -fno-stack-check
 CFLAGS += -fno-pic -fno-pie -m64 -mno-red-zone -mcmodel=kernel
+CFLAGS += -mgeneral-regs-only
 CFLAGS += -Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion
 CFLAGS += -Wmissing-prototypes -Wstrict-prototypes
 CFLAGS += -Iinclude -Iarch/x86_64/include -Iplatform/qemu/include -Ithird_party/limine
@@ -69,7 +70,7 @@ $(KERNEL): $(OBJECTS) arch/x86_64/linker.ld
 	@mkdir -p $(dir $@)
 	$(LD_LLD) $(LDFLAGS) -o $@ $(OBJECTS)
 
-$(OBJ_DIR)/%.o: %.c
+$(OBJ_DIR)/%.o: %.c Makefile
 	@mkdir -p $(dir $@)
 	$(CLANG) $(CFLAGS) -c $< -o $@
 

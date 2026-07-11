@@ -49,19 +49,37 @@ rm -f "$serial_log"
         return 1
     }
 
-    wait_for_log "Arwill> "
+    wait_for_log "Arwill:/> "
     sleep 0.1
     printf 'help\r'
-    wait_for_log "halt       enter"
+    wait_for_log "cd \\[path\\]"
     sleep 0.1
     printf 'version\r'
-    wait_for_log_count "Arwill 0.0.2" 2
+    wait_for_log_count "Arwill 0.0.3" 2
     sleep 0.1
-    printf 'ls /\r'
+    printf 'pwd\r'
+    wait_for_log_count "Arwill:/> " 4
+    sleep 0.1
+    printf 'ls\r'
     wait_for_log "system/"
     sleep 0.1
-    printf 'dir /boot\r'
+    printf 'cd /boot\r'
+    wait_for_log "Arwill:/boot> "
+    sleep 0.1
+    printf 'pwd\r'
+    wait_for_log_count "Arwill:/boot> " 2
+    sleep 0.1
+    printf 'dir\r'
     wait_for_log "limine/"
+    sleep 0.1
+    printf 'cd limine\r'
+    wait_for_log "Arwill:/boot/limine> "
+    sleep 0.1
+    printf 'ls\r'
+    wait_for_log "limine.conf"
+    sleep 0.1
+    printf 'cd ..\r'
+    wait_for_log_count "Arwill:/boot> " 4
     sleep 0.1
     printf 'halt\r'
 ) | "$qemu" -M q35 -m 128M -cdrom "$iso" -boot d \
@@ -110,7 +128,7 @@ check_line() {
     fi
 }
 
-check_line "Arwill 0.0.2"
+check_line "Arwill 0.0.3"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -119,11 +137,14 @@ check_line "shell: ready"
 check_line "filesystem: static boot catalog"
 check_line "status: kernel initialized"
 check_line "commands:"
-check_line "Arwill 0.0.2"
+check_line "Arwill 0.0.3"
 check_line "boot/"
 check_line "system/"
+check_line "/boot"
 check_line "kernel.elf"
 check_line "limine/"
+check_line "limine.conf"
+check_line "Arwill:/boot/limine> "
 check_line "status: shell halted"
 
 echo "QEMU serial smoke test passed"
