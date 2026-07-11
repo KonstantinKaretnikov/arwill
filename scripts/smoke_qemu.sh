@@ -1,18 +1,23 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 3 ]; then
-    echo "usage: smoke_qemu.sh <qemu-system-x86_64> <image.iso> <serial-log>" >&2
+if [ "$#" -ne 4 ]; then
+    echo "usage: smoke_qemu.sh <qemu-system-x86_64> <image.iso> <serial-log> <poweroff-exit-status>" >&2
     exit 2
 fi
 
 qemu=$1
 iso=$2
 serial_log=$3
+expected_qemu_status=$4
+qemu_status_log=$serial_log.status
 
-rm -f "$serial_log"
+rm -f "$serial_log" "$qemu_status_log"
 
 (
+    set +e
+
+    (
     wait_for_log() {
         pattern=$1
         count=0
@@ -55,7 +60,7 @@ rm -f "$serial_log"
     wait_for_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_log_count "Arwill 0.0.7" 2
+    wait_for_log_count "Arwill 0.0.8" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_log_count "Arwill:/> " 4
@@ -97,15 +102,20 @@ rm -f "$serial_log"
     wait_for_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_log "version: 0.0.7"
+    wait_for_log "version: 0.0.8"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_log "type: text file"
     sleep 0.1
-    printf 'ha\t\r'
-) | "$qemu" -M q35 -m 128M -cdrom "$iso" -boot d \
-    -serial stdio -monitor none -display none -no-reboot -no-shutdown \
-    > "$serial_log" 2>&1 &
+    printf 'ex\t\r'
+    ) | "$qemu" -M q35 -m 128M -cdrom "$iso" -boot d \
+        -serial stdio -monitor none -display none -no-reboot \
+        -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+        > "$serial_log" 2>&1
+
+    qemu_status=$?
+    printf '%s\n' "$qemu_status" > "$qemu_status_log"
+) &
 qemu_pid=$!
 
 cleanup() {
@@ -121,7 +131,7 @@ deadline=50
 count=0
 
 while [ "$count" -lt "$deadline" ]; do
-    if [ -f "$serial_log" ] && grep -q "status: shell halted" "$serial_log"; then
+    if [ -f "$qemu_status_log" ]; then
         break
     fi
 
@@ -129,11 +139,27 @@ while [ "$count" -lt "$deadline" ]; do
     count=$((count + 1))
 done
 
-cleanup
+if [ ! -f "$qemu_status_log" ]; then
+    echo "QEMU did not power off before timeout" >&2
+    cleanup
+    exit 1
+fi
+
+wait "$qemu_pid" >/dev/null 2>&1 || true
 trap - EXIT INT TERM
 
 if [ ! -f "$serial_log" ]; then
     echo "QEMU did not create serial log: $serial_log" >&2
+    exit 1
+fi
+
+qemu_status=$(cat "$qemu_status_log")
+
+if [ "$qemu_status" -ne "$expected_qemu_status" ]; then
+    echo "unexpected QEMU exit status: $qemu_status, expected: $expected_qemu_status" >&2
+    echo "--- serial log ---" >&2
+    cat "$serial_log" >&2
+    echo "------------------" >&2
     exit 1
 fi
 
@@ -149,7 +175,7 @@ check_line() {
     fi
 }
 
-check_line "Arwill 0.0.7"
+check_line "Arwill 0.0.8"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -158,10 +184,11 @@ check_line "shell: ready"
 check_line "filesystem: static boot catalog"
 check_line "memory: boot memory map"
 check_line "allocator: physical page bump allocator"
+check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.0.7"
+check_line "Arwill 0.0.8"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "meminfo    show memory map and page allocator"
@@ -180,10 +207,11 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.0.7"
+check_line "version: 0.0.8"
 check_line "type: text file"
 check_line "Arwill:/boot/limine> "
-check_line "status: shell halted"
+check_line "Arwill:/boot> exit"
+check_line "status: powering off"
 
 echo "QEMU serial smoke test passed"
 cat "$serial_log"

@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.0.7 has one executable path:
+Arwill 0.0.8 has one executable path:
 
 ```text
 Limine bootloader
@@ -11,6 +11,7 @@ Limine bootloader
   -> architecture-independent kernel startup
   -> serial shell
   -> static read-only boot catalog
+  -> QEMU debug-exit poweroff when exit is requested
   -> x86-64 CPU idle loop when halt is requested
 ```
 
@@ -39,14 +40,22 @@ Shell:
 
 - Lives in `kernel/shell.c`.
 - Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
-  `dir`, `cat`, `stat`, `info`, `meminfo`, and `halt`.
+  `dir`, `cat`, `stat`, `info`, `meminfo`, `exit`, `poweroff`, and `halt`.
 - Holds the current working directory as local shell state.
 - Owns Tab completion for command names and filesystem paths.
 - Owns a small in-memory command history navigated by Up and Down escape
   sequences.
 - Normalizes standard Russian-layout UTF-8 input back to ASCII key positions;
   it does not support Cyrillic text entry yet.
-- Depends on console, input, filesystem, memory, and CPU idle contracts.
+- Depends on console, input, filesystem, memory, power, and CPU idle contracts.
+
+Power contract:
+
+- Lives in `include/arwill/kernel/power.h`.
+- Provides a narrow `poweroff` operation.
+- The first implementation is QEMU-specific and uses `isa-debug-exit`.
+- If the current platform cannot power off, the kernel falls back to the CPU
+  idle loop.
 
 Memory contract:
 
@@ -79,6 +88,13 @@ QEMU serial I/O:
 - Owns COM1 initialization, byte output, and byte input for the QEMU x86-64
   platform.
 - Keeps x86-64 port I/O behind `arch/x86_64/include/`.
+
+QEMU poweroff:
+
+- Lives in `platform/qemu/x86_64/power.c`.
+- Uses the QEMU `isa-debug-exit` device on port `0xf4`.
+- Host-side QEMU launch commands add that device and treat its expected exit
+  status as successful shell poweroff.
 
 CPU idle:
 

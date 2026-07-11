@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.0.7
+PROJECT_VERSION := 0.0.8
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -14,6 +14,8 @@ CLANG ?= $(if $(BREW_LLVM_PREFIX),$(BREW_LLVM_PREFIX)/bin/clang,clang)
 LD_LLD ?= $(if $(BREW_LLD_PREFIX),$(BREW_LLD_PREFIX)/bin/ld.lld,ld.lld)
 XORRISO ?= xorriso
 QEMU ?= qemu-system-x86_64
+QEMU_POWEROFF_EXIT_STATUS := 33
+QEMU_POWEROFF_ARGS := -device isa-debug-exit,iobase=0xf4,iosize=0x04
 
 CFLAGS := --target=x86_64-elf
 CFLAGS += -std=c11 -ffreestanding -fno-stack-protector -fno-stack-check
@@ -35,10 +37,12 @@ SOURCES := \
 	kernel/input.c \
 	kernel/main.c \
 	kernel/memory.c \
+	kernel/power.c \
 	kernel/shell.c \
 	arch/x86_64/boot/entry.c \
 	arch/x86_64/boot/limine_requests.c \
 	arch/x86_64/cpu/idle.c \
+	platform/qemu/x86_64/power.c \
 	platform/qemu/x86_64/serial_console.c
 
 OBJECTS := $(SOURCES:%.c=$(OBJ_DIR)/%.o)
@@ -51,7 +55,11 @@ setup:
 build: check-tools setup $(ISO)
 
 run: build
-	$(QEMU) -M q35 -m 128M -cdrom $(ISO) -boot d -serial stdio -monitor none -display none -no-reboot -no-shutdown
+	@set +e; \
+	$(QEMU) -M q35 -m 128M -cdrom $(ISO) -boot d -serial stdio -monitor none -display none -no-reboot $(QEMU_POWEROFF_ARGS); \
+	status=$$?; \
+	if [ "$$status" -eq "$(QEMU_POWEROFF_EXIT_STATUS)" ]; then exit 0; fi; \
+	exit "$$status"
 
 check: build check-artifacts smoke
 
@@ -65,7 +73,7 @@ check-artifacts: $(ISO)
 	@scripts/check_artifacts.sh "$(KERNEL)" "$(ISO)"
 
 smoke: $(ISO)
-	@scripts/smoke_qemu.sh "$(QEMU)" "$(ISO)" "$(SERIAL_LOG)"
+	@scripts/smoke_qemu.sh "$(QEMU)" "$(ISO)" "$(SERIAL_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)"
 
 $(KERNEL): $(OBJECTS) arch/x86_64/linker.ld
 	@mkdir -p $(dir $@)

@@ -7,6 +7,7 @@
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/memory.h>
+#include <arwill/kernel/power.h>
 #include <arwill/kernel/shell.h>
 
 enum {
@@ -43,6 +44,8 @@ static const struct shell_command shell_commands[] = {
     { .name = "stat", .accepts_path = 1 },
     { .name = "info", .accepts_path = 1 },
     { .name = "meminfo", .accepts_path = 0 },
+    { .name = "exit", .accepts_path = 0 },
+    { .name = "poweroff", .accepts_path = 0 },
     { .name = "halt", .accepts_path = 0 },
 };
 
@@ -700,6 +703,8 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  stat [path] show file or directory metadata");
     arwill_console_write_line(console, "  info [path] alias for stat");
     arwill_console_write_line(console, "  meminfo    show memory map and page allocator");
+    arwill_console_write_line(console, "  exit       power off the machine");
+    arwill_console_write_line(console, "  poweroff   alias for exit");
     arwill_console_write_line(console, "  Tab        complete commands and paths");
     arwill_console_write_line(console, "  Up/Down    browse command history");
     arwill_console_write_line(console, "  halt       enter the CPU idle loop");
@@ -1299,6 +1304,7 @@ static void run_command(
     const struct arwill_console *console,
     const struct arwill_filesystem *filesystem,
     const struct arwill_memory *memory,
+    const struct arwill_power *power,
     char *current_directory,
     const char *line
 ) {
@@ -1329,6 +1335,11 @@ static void run_command(
     if (string_equals(line, "meminfo")) {
         print_meminfo(console, memory);
         return;
+    }
+
+    if (string_equals(line, "exit") || string_equals(line, "poweroff")) {
+        arwill_console_write_line(console, "status: powering off");
+        arwill_poweroff(power);
     }
 
     if (string_equals(line, "cd") || starts_with(line, "cd ")) {
@@ -1386,7 +1397,8 @@ void arwill_shell_run(
     const struct arwill_console *console,
     const struct arwill_input *input,
     const struct arwill_filesystem *filesystem,
-    const struct arwill_memory *memory
+    const struct arwill_memory *memory,
+    const struct arwill_power *power
 ) {
     char line[shell_line_capacity];
     char current_directory[shell_path_capacity] = "/";
@@ -1436,7 +1448,7 @@ void arwill_shell_run(
             arwill_console_write_line(console, "");
             history_add(&history, line);
             history_position = history.count;
-            run_command(console, filesystem, memory, current_directory, line);
+            run_command(console, filesystem, memory, power, current_directory, line);
             length = 0;
             normalizer.utf8_state = shell_utf8_none;
             normalizer.russian_layout_active = 0;

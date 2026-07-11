@@ -5,12 +5,14 @@
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/memory.h>
+#include <arwill/kernel/power.h>
 
 void arwill_kernel_start(
     const struct arwill_console *console,
     const struct arwill_input *input,
     const struct arwill_filesystem *filesystem,
-    const struct arwill_memory *memory
+    const struct arwill_memory *memory,
+    const struct arwill_power *power
 ) __attribute__((noreturn));
 
 #endif
