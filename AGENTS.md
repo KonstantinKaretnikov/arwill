@@ -6,6 +6,9 @@ working on Arwill.
 Before changing architecture, read `MANIFESTO.md` and the relevant ADRs in
 `docs/decisions/`.
 
+Before starting a large new subsystem, check `docs/roadmap.md` and prefer the
+agreed milestone order unless the project owner explicitly changes direction.
+
 Rules for future work:
 
 - Do not silently change public contracts.
@@ -16,6 +19,7 @@ Rules for future work:
 - Prefer small, reviewable changes.
 - Keep the system bootable after each completed task.
 - Run all available checks before declaring completion.
+- Prefer sequential milestone work with tests added alongside each new behavior.
 - Update documentation when behavior or architecture changes.
 - Record substantial architectural decisions as ADRs.
 - Explain uncertainty rather than inventing hardware facts.

@@ -153,6 +153,7 @@ Arwill:/>
 
 - `AGENTS.md`: durable guidance for future AI coding agents.
 - `MANIFESTO.md`: project principles.
+- `docs/roadmap.md`: agreed order for upcoming large milestones.
 - `docs/architecture/`: architecture notes for the current system.
 - `docs/decisions/`: architectural decision records.
 - `docs/development/`: host setup and development workflows.
