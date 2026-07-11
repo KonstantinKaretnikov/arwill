@@ -12,8 +12,61 @@ serial_log=$3
 
 rm -f "$serial_log"
 
-"$qemu" -M q35 -m 128M -cdrom "$iso" -boot d \
-    -serial "file:${serial_log}" -display none -no-reboot -no-shutdown &
+(
+    wait_for_log() {
+        pattern=$1
+        count=0
+
+        while [ "$count" -lt 100 ]; do
+            if [ -f "$serial_log" ] && grep -q "$pattern" "$serial_log"; then
+                return 0
+            fi
+
+            sleep 0.1
+            count=$((count + 1))
+        done
+
+        return 1
+    }
+
+    wait_for_log_count() {
+        pattern=$1
+        expected_count=$2
+        count=0
+
+        while [ "$count" -lt 100 ]; do
+            if [ -f "$serial_log" ]; then
+                seen_count=$(grep -c "$pattern" "$serial_log" 2>/dev/null || true)
+                if [ "$seen_count" -ge "$expected_count" ]; then
+                    return 0
+                fi
+            fi
+
+            sleep 0.1
+            count=$((count + 1))
+        done
+
+        return 1
+    }
+
+    wait_for_log "Arwill> "
+    sleep 0.1
+    printf 'help\r'
+    wait_for_log "halt       enter"
+    sleep 0.1
+    printf 'version\r'
+    wait_for_log_count "Arwill 0.0.2" 2
+    sleep 0.1
+    printf 'ls /\r'
+    wait_for_log "system/"
+    sleep 0.1
+    printf 'dir /boot\r'
+    wait_for_log "limine/"
+    sleep 0.1
+    printf 'halt\r'
+) | "$qemu" -M q35 -m 128M -cdrom "$iso" -boot d \
+    -serial stdio -monitor none -display none -no-reboot -no-shutdown \
+    > "$serial_log" 2>&1 &
 qemu_pid=$!
 
 cleanup() {
@@ -29,7 +82,7 @@ deadline=50
 count=0
 
 while [ "$count" -lt "$deadline" ]; do
-    if [ -f "$serial_log" ] && grep -q "status: kernel initialized" "$serial_log"; then
+    if [ -f "$serial_log" ] && grep -q "status: shell halted" "$serial_log"; then
         break
     fi
 
@@ -57,11 +110,21 @@ check_line() {
     fi
 }
 
-check_line "Arwill 0.0.1"
+check_line "Arwill 0.0.2"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
+check_line "input: serial"
+check_line "shell: ready"
+check_line "filesystem: static boot catalog"
 check_line "status: kernel initialized"
+check_line "commands:"
+check_line "Arwill 0.0.2"
+check_line "boot/"
+check_line "system/"
+check_line "kernel.elf"
+check_line "limine/"
+check_line "status: shell halted"
 
 echo "QEMU serial smoke test passed"
 cat "$serial_log"

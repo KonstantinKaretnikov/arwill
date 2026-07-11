@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.0.1
+PROJECT_VERSION := 0.0.2
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -28,8 +28,12 @@ LDFLAGS := -nostdlib -static -z max-page-size=0x1000
 LDFLAGS += -T arch/x86_64/linker.ld
 
 SOURCES := \
+	kernel/boot_catalog.c \
 	kernel/console.c \
+	kernel/filesystem.c \
+	kernel/input.c \
 	kernel/main.c \
+	kernel/shell.c \
 	arch/x86_64/boot/entry.c \
 	arch/x86_64/boot/limine_requests.c \
 	arch/x86_64/cpu/idle.c \
@@ -45,7 +49,7 @@ setup:
 build: check-tools setup $(ISO)
 
 run: build
-	$(QEMU) -M q35 -m 128M -cdrom $(ISO) -boot d -serial stdio -display none -no-reboot -no-shutdown
+	$(QEMU) -M q35 -m 128M -cdrom $(ISO) -boot d -serial stdio -monitor none -display none -no-reboot -no-shutdown
 
 check: build check-artifacts smoke
 

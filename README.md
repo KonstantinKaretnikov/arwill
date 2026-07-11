@@ -15,11 +15,11 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.0.1`
+Version: `0.0.2`
 
-The first milestone boots an x86-64 kernel in QEMU through Limine and writes
-initialization status to the serial console. The kernel then enters a deliberate
-x86-64 halt loop.
+The current milestone boots an x86-64 kernel in QEMU through Limine, writes
+initialization status to the serial console, and starts a tiny serial shell.
+The shell can read terminal keyboard input through QEMU serial I/O.
 
 ## Supported Host and Target
 
@@ -72,6 +72,20 @@ make run
 
 Stop QEMU with `Ctrl-C`.
 
+Available shell commands:
+
+```text
+help
+version
+ls [path]
+dir [path]
+halt
+```
+
+`ls` and `dir` currently list a static read-only boot catalog, not a real disk
+filesystem. The first supported paths are `/`, `/boot`, `/boot/limine`, and
+`/system`.
+
 ## Check
 
 Run all available verification, including the bounded QEMU serial smoke test:
@@ -83,11 +97,15 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.0.1
+Arwill 0.0.2
 architecture: x86_64
 platform: qemu
 console: serial
+input: serial
+shell: ready
+filesystem: static boot catalog
 status: kernel initialized
+Arwill>
 ```
 
 ## Repository Map
@@ -98,7 +116,8 @@ status: kernel initialized
 - `docs/decisions/`: architectural decision records.
 - `docs/development/`: host setup and development workflows.
 - `include/`: public Arwill-owned C contracts.
-- `kernel/`: architecture-independent kernel orchestration.
+- `kernel/`: architecture-independent kernel orchestration, shell, contracts,
+  and static boot catalog.
 - `arch/x86_64/`: x86-64 entry, CPU idle, port I/O, and linker details.
 - `platform/qemu/`: QEMU-specific platform wiring and serial console block.
 - `scripts/`: host-side setup, artifact checks, and boot smoke tests.

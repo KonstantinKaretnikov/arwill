@@ -1,13 +1,15 @@
 # Initial Architecture
 
-Arwill 0.0.1 has one executable path:
+Arwill 0.0.2 has one executable path:
 
 ```text
 Limine bootloader
   -> x86-64 Limine entry
-  -> QEMU serial console block
+  -> QEMU serial I/O block
   -> architecture-independent kernel startup
-  -> x86-64 CPU idle loop
+  -> serial shell
+  -> static read-only boot catalog
+  -> x86-64 CPU idle loop when halt is requested
 ```
 
 ## Block Boundaries
@@ -25,10 +27,35 @@ Console contract:
 - Provides only `write` and `write_line`.
 - Is intentionally smaller than a driver model or formatting library.
 
-QEMU serial console:
+Input contract:
+
+- Lives in `include/arwill/kernel/input.h`.
+- Provides blocking byte input.
+- It is not yet a general keyboard driver or event system.
+
+Shell:
+
+- Lives in `kernel/shell.c`.
+- Owns command parsing for `help`, `version`, `ls`, `dir`, and `halt`.
+- Depends on console, input, filesystem, and CPU idle contracts.
+
+Filesystem contract:
+
+- Lives in `include/arwill/kernel/filesystem.h`.
+- Provides read-only directory listing by path.
+- It does not yet provide open, read, write, allocation, or mount behavior.
+
+Static boot catalog:
+
+- Lives in `kernel/boot_catalog.c`.
+- Provides a tiny read-only directory tree for the first `ls` command.
+- It is not a disk filesystem and does not read from storage.
+
+QEMU serial I/O:
 
 - Lives in `platform/qemu/x86_64/`.
-- Owns COM1 initialization and byte output for the QEMU x86-64 platform.
+- Owns COM1 initialization, byte output, and byte input for the QEMU x86-64
+  platform.
 - Keeps x86-64 port I/O behind `arch/x86_64/include/`.
 
 CPU idle:
