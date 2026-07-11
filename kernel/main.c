@@ -5,6 +5,7 @@
 #include <arwill/kernel/kernel.h>
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/power.h>
+#include <arwill/kernel/process.h>
 #include <arwill/kernel/shell.h>
 
 void arwill_kernel_start(
@@ -14,6 +15,10 @@ void arwill_kernel_start(
     const struct arwill_memory *memory,
     const struct arwill_power *power
 ) {
+    static struct arwill_process_manager process_manager;
+
+    arwill_process_manager_init(&process_manager);
+
     arwill_console_write(console, ARWILL_PROJECT_NAME);
     arwill_console_write(console, " ");
     arwill_console_write_line(console, ARWILL_PROJECT_VERSION);
@@ -25,8 +30,9 @@ void arwill_kernel_start(
     arwill_console_write_line(console, "filesystem: static boot catalog");
     arwill_console_write_line(console, "memory: boot memory map");
     arwill_console_write_line(console, "allocator: physical page bump allocator");
+    arwill_console_write_line(console, "processes: kernel cooperative");
     arwill_console_write_line(console, "power: qemu debug exit");
     arwill_console_write_line(console, "status: kernel initialized");
 
-    arwill_shell_run(console, input, filesystem, memory, power);
+    arwill_shell_run(console, input, filesystem, memory, power, &process_manager);
 }

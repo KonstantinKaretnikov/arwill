@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.0.9 has one executable path:
+Arwill 0.1.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -9,8 +9,10 @@ Limine bootloader
   -> physical page allocator initialization
   -> QEMU serial I/O block
   -> architecture-independent kernel startup
+  -> cooperative kernel process manager initialization
   -> serial shell
   -> static read-only boot catalog
+  -> cooperative built-in kernel process launch when run is requested
   -> QEMU debug-exit poweroff when exit is requested
   -> x86-64 CPU idle loop when halt is requested
 ```
@@ -40,16 +42,32 @@ Shell:
 
 - Lives in `kernel/shell.c`.
 - Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
-  `cat`, `stat`, `meminfo`, `exit`, and `halt`.
+  `cat`, `stat`, `meminfo`, `ps`, `run`, `exit`, and `halt`.
 - Keeps one canonical command name per operation; alias commands are not
   accepted.
 - Holds the current working directory as local shell state.
-- Owns Tab completion for command names and filesystem paths.
+- Owns Tab completion for command names, filesystem paths, and built-in process
+  names.
 - Owns a small in-memory command history navigated by Up and Down escape
   sequences.
 - Normalizes standard Russian-layout UTF-8 input back to ASCII key positions;
   it does not support Cyrillic text entry yet.
-- Depends on console, input, filesystem, memory, power, and CPU idle contracts.
+- Depends on console, input, filesystem, memory, process, power, and CPU idle
+  contracts.
+
+Process manager:
+
+- Public contract lives in `include/arwill/kernel/process.h`.
+- Implementation lives in `kernel/process.c`.
+- Owns a fixed-size table of kernel-managed processes with PID, state, run
+  count, and exit code.
+- The first scheduler behavior is cooperative and run-to-completion: the shell
+  can spawn a built-in kernel process with `run [name]`, then the process
+  manager runs ready entries synchronously.
+- `ps` displays the process table.
+- This is not user space. There are no separate address spaces, ELF program
+  loading, syscalls, kernel/user privilege transitions, timer interrupts, or
+  preemptive context switching yet.
 
 Power contract:
 

@@ -15,12 +15,13 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.0.9`
+Version: `0.1.0`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
 The shell can read terminal keyboard input through QEMU serial I/O, inspect a
-boot memory map, and report the first physical page allocator state.
+boot memory map, report the first physical page allocator state, and launch
+small cooperative kernel processes.
 
 ## Supported Host and Target
 
@@ -85,6 +86,8 @@ ls [path]
 cat [path]
 stat [path]
 meminfo
+ps
+run [name]
 exit
 halt
 ```
@@ -102,12 +105,18 @@ but their contents are not displayed yet.
 Limine-provided boot memory map and the current physical page allocator
 counters.
 
+`run [name]` launches one of the built-in cooperative kernel processes:
+`hello` or `counter`. `ps` shows the kernel process table with PID, state, run
+count, exit code, and name. These are kernel-managed processes that run to
+completion; Arwill does not have user-space isolation, ELF program loading,
+syscalls, or preemptive scheduling yet.
+
 `exit` powers off the current QEMU session. `halt` remains available as a CPU
 idle-loop command.
 
-Press `Tab` to complete command names and paths. If there are multiple matches,
-the shell lists candidates and redraws the current prompt. Press Up and Down to
-browse the in-memory shell command history.
+Press `Tab` to complete command names, paths, and built-in process names. If
+there are multiple matches, the shell lists candidates and redraws the current
+prompt. Press Up and Down to browse the in-memory shell command history.
 
 If the host terminal is left in a Russian keyboard layout, the shell normalizes
 standard Russian-layout UTF-8 input back to ASCII key positions for commands and
@@ -125,7 +134,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.0.9
+Arwill 0.1.0
 architecture: x86_64
 platform: qemu
 console: serial
@@ -134,6 +143,7 @@ shell: ready
 filesystem: static boot catalog
 memory: boot memory map
 allocator: physical page bump allocator
+processes: kernel cooperative
 power: qemu debug exit
 status: kernel initialized
 Arwill:/>

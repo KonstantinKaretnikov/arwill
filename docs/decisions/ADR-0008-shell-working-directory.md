@@ -25,6 +25,11 @@ current directory as `Arwill:/path>`.
 
 This is intentionally shell state, not system-wide kernel state.
 
+ADR-0016 later adds cooperative kernel-managed processes, but they still do not
+have per-process current directories, file descriptor tables, user-space
+address spaces, or a Unix-like process environment. The current directory
+therefore remains shell-local.
+
 ## Alternatives Considered
 
 A global kernel current directory was rejected because it would create hidden
@@ -34,6 +39,6 @@ rejected as too large for this milestone.
 
 ## Revisit
 
-Revisit when Arwill has tasks or processes. At that point, current directory
-state should move into the process or task model rather than remaining only in
-the shell.
+Revisit when Arwill has a richer process model with per-process filesystem
+state. At that point, current directory state should move into that model rather
+than remaining only in the shell.

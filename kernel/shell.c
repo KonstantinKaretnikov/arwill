@@ -8,6 +8,7 @@
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/power.h>
+#include <arwill/kernel/process.h>
 #include <arwill/kernel/shell.h>
 
 enum {
@@ -27,23 +28,32 @@ enum {
     utf8_cyrillic_lead_1 = 0xd1,
 };
 
+enum shell_completion_kind {
+    shell_completion_none,
+    shell_completion_path,
+    shell_completion_directory_path,
+    shell_completion_process
+};
+
 struct shell_command {
     const char *name;
-    int accepts_path;
+    enum shell_completion_kind completion;
 };
 
 static const struct shell_command shell_commands[] = {
-    { .name = "help", .accepts_path = 0 },
-    { .name = "version", .accepts_path = 0 },
-    { .name = "pwd", .accepts_path = 0 },
-    { .name = "cd", .accepts_path = 1 },
-    { .name = "clear", .accepts_path = 0 },
-    { .name = "ls", .accepts_path = 1 },
-    { .name = "cat", .accepts_path = 1 },
-    { .name = "stat", .accepts_path = 1 },
-    { .name = "meminfo", .accepts_path = 0 },
-    { .name = "exit", .accepts_path = 0 },
-    { .name = "halt", .accepts_path = 0 },
+    { .name = "help", .completion = shell_completion_none },
+    { .name = "version", .completion = shell_completion_none },
+    { .name = "pwd", .completion = shell_completion_none },
+    { .name = "cd", .completion = shell_completion_directory_path },
+    { .name = "clear", .completion = shell_completion_none },
+    { .name = "ls", .completion = shell_completion_path },
+    { .name = "cat", .completion = shell_completion_path },
+    { .name = "stat", .completion = shell_completion_path },
+    { .name = "meminfo", .completion = shell_completion_none },
+    { .name = "ps", .completion = shell_completion_none },
+    { .name = "run", .completion = shell_completion_process },
+    { .name = "exit", .completion = shell_completion_none },
+    { .name = "halt", .completion = shell_completion_none },
 };
 
 struct shell_history {
@@ -66,6 +76,15 @@ struct shell_input_normalizer {
     enum shell_utf8_state utf8_state;
     uint8_t utf8_lead;
     int russian_layout_active;
+};
+
+struct shell_process_context {
+    const struct arwill_console *console;
+};
+
+struct shell_builtin_process {
+    const char *name;
+    arwill_process_entry entry;
 };
 
 static int string_equals(const char *left, const char *right) {
@@ -698,8 +717,10 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  cat [path] show text file contents");
     arwill_console_write_line(console, "  stat [path] show file or directory metadata");
     arwill_console_write_line(console, "  meminfo    show memory map and page allocator");
+    arwill_console_write_line(console, "  ps         show kernel process table");
+    arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
     arwill_console_write_line(console, "  exit       power off the machine");
-    arwill_console_write_line(console, "  Tab        complete commands and paths");
+    arwill_console_write_line(console, "  Tab        complete commands, paths, and processes");
     arwill_console_write_line(console, "  Up/Down    browse command history");
     arwill_console_write_line(console, "  halt       enter the CPU idle loop");
 }
@@ -966,16 +987,177 @@ static void print_meminfo(
     arwill_console_write_line(console, "");
 }
 
-static int command_accepts_path(const char *command) {
-    const size_t command_count = sizeof(shell_commands) / sizeof(shell_commands[0]);
+static uint32_t shell_hello_process(const struct arwill_process_runtime *runtime) {
+    if (runtime == 0 || runtime->context == 0) {
+        return 1;
+    }
 
-    for (size_t index = 0; index < command_count; index++) {
-        if (string_equals(command, shell_commands[index].name)) {
-            return shell_commands[index].accepts_path;
+    const struct shell_process_context *context =
+        (const struct shell_process_context *)runtime->context;
+
+    if (context->console == 0) {
+        return 1;
+    }
+
+    arwill_console_write(context->console, "process ");
+    arwill_console_write(context->console, runtime->name);
+    arwill_console_write(context->console, ": hello from pid ");
+    write_uint64_decimal(context->console, (uint64_t)runtime->pid);
+    arwill_console_write_line(context->console, "");
+
+    return 0;
+}
+
+static uint32_t shell_counter_process(const struct arwill_process_runtime *runtime) {
+    if (runtime == 0 || runtime->context == 0) {
+        return 1;
+    }
+
+    const struct shell_process_context *context =
+        (const struct shell_process_context *)runtime->context;
+
+    if (context->console == 0) {
+        return 1;
+    }
+
+    for (uint64_t step = 1; step <= 3U; step++) {
+        arwill_console_write(context->console, "process ");
+        arwill_console_write(context->console, runtime->name);
+        arwill_console_write(context->console, ": pid ");
+        write_uint64_decimal(context->console, (uint64_t)runtime->pid);
+        arwill_console_write(context->console, " step ");
+        write_uint64_decimal(context->console, step);
+        arwill_console_write_line(context->console, "/3");
+    }
+
+    return 0;
+}
+
+static const struct shell_builtin_process shell_builtin_processes[] = {
+    { .name = "hello", .entry = shell_hello_process },
+    { .name = "counter", .entry = shell_counter_process },
+};
+
+static const struct shell_builtin_process *find_builtin_process(const char *name) {
+    const size_t process_count =
+        sizeof(shell_builtin_processes) / sizeof(shell_builtin_processes[0]);
+
+    for (size_t index = 0; index < process_count; index++) {
+        if (string_equals(name, shell_builtin_processes[index].name)) {
+            return &shell_builtin_processes[index];
         }
     }
 
     return 0;
+}
+
+static void print_available_processes(const struct arwill_console *console) {
+    const size_t process_count =
+        sizeof(shell_builtin_processes) / sizeof(shell_builtin_processes[0]);
+
+    arwill_console_write(console, "available processes:");
+
+    for (size_t index = 0; index < process_count; index++) {
+        arwill_console_write(console, " ");
+        arwill_console_write(console, shell_builtin_processes[index].name);
+    }
+
+    arwill_console_write_line(console, "");
+}
+
+static void print_process_table(
+    const struct arwill_console *console,
+    const struct arwill_process_manager *processes
+) {
+    const struct arwill_process *table = arwill_process_table(processes);
+    int saw_process = 0;
+
+    if (table == 0) {
+        arwill_console_write_line(console, "ps: process manager unavailable");
+        return;
+    }
+
+    arwill_console_write_line(console, "pid state runs exit name");
+
+    for (size_t index = 0; index < arwill_process_table_capacity; index++) {
+        const struct arwill_process *process = &table[index];
+
+        if (process->state == arwill_process_state_empty) {
+            continue;
+        }
+
+        saw_process = 1;
+        write_uint64_decimal(console, (uint64_t)process->pid);
+        arwill_console_write(console, " ");
+        arwill_console_write(console, arwill_process_state_name(process->state));
+        arwill_console_write(console, " ");
+        write_uint64_decimal(console, process->run_count);
+        arwill_console_write(console, " ");
+        write_uint64_decimal(console, (uint64_t)process->exit_code);
+        arwill_console_write(console, " ");
+        arwill_console_write_line(console, process->name);
+    }
+
+    if (!saw_process) {
+        arwill_console_write_line(console, "no processes");
+    }
+}
+
+static void run_process(
+    const struct arwill_console *console,
+    struct arwill_process_manager *processes,
+    struct shell_process_context *process_context,
+    const char *argument
+) {
+    char process_name[shell_line_capacity];
+
+    if (!copy_first_argument(process_name, sizeof(process_name), argument)) {
+        arwill_console_write_line(console, "run: process name too long");
+        return;
+    }
+
+    if (process_name[0] == '\0') {
+        arwill_console_write_line(console, "run: missing process name");
+        print_available_processes(console);
+        return;
+    }
+
+    const struct shell_builtin_process *builtin = find_builtin_process(process_name);
+
+    if (builtin == 0) {
+        arwill_console_write(console, "run: unknown process: ");
+        arwill_console_write_line(console, process_name);
+        print_available_processes(console);
+        return;
+    }
+
+    uint32_t pid = 0;
+
+    if (!arwill_process_spawn(processes, builtin->name, builtin->entry, process_context, &pid)) {
+        arwill_console_write_line(console, "run: process table full");
+        return;
+    }
+
+    arwill_console_write(console, "run: spawned pid ");
+    write_uint64_decimal(console, (uint64_t)pid);
+    arwill_console_write(console, ": ");
+    arwill_console_write_line(console, builtin->name);
+
+    if (arwill_process_run_ready(processes) == 0U) {
+        arwill_console_write_line(console, "run: no ready processes");
+    }
+}
+
+static enum shell_completion_kind command_completion(const char *command) {
+    const size_t command_count = sizeof(shell_commands) / sizeof(shell_commands[0]);
+
+    for (size_t index = 0; index < command_count; index++) {
+        if (string_equals(command, shell_commands[index].name)) {
+            return shell_commands[index].completion;
+        }
+    }
+
+    return shell_completion_none;
 }
 
 static void show_command_candidates(
@@ -1039,7 +1221,7 @@ static void complete_command(
             }
         }
 
-        if (command_accepts_path(single_match)) {
+        if (command_completion(single_match) != shell_completion_none) {
             (void)append_char_to_line(console, line, length, ' ');
         }
 
@@ -1258,6 +1440,95 @@ static void complete_path(
     show_path_candidates(console, current_directory, line, &listing, prefix, directories_only);
 }
 
+static void show_process_candidates(
+    const struct arwill_console *console,
+    const char *current_directory,
+    const char *line,
+    const char *prefix
+) {
+    const size_t process_count =
+        sizeof(shell_builtin_processes) / sizeof(shell_builtin_processes[0]);
+    const size_t prefix_length = string_length(prefix);
+
+    arwill_console_write_line(console, "");
+
+    for (size_t index = 0; index < process_count; index++) {
+        if (starts_with_sized(shell_builtin_processes[index].name, prefix, prefix_length)) {
+            arwill_console_write_line(console, shell_builtin_processes[index].name);
+        }
+    }
+
+    redraw_line(console, current_directory, line);
+}
+
+static void complete_process_name(
+    const struct arwill_console *console,
+    const char *current_directory,
+    char *line,
+    size_t *length,
+    size_t argument_start
+) {
+    char process_prefix[shell_line_capacity];
+    const char *single_match = 0;
+    size_t match_count = 0;
+    size_t shared_length = 0;
+    const size_t process_count =
+        sizeof(shell_builtin_processes) / sizeof(shell_builtin_processes[0]);
+
+    if (!copy_string(process_prefix, sizeof(process_prefix), &line[argument_start])) {
+        return;
+    }
+
+    const size_t prefix_length = string_length(process_prefix);
+
+    for (size_t index = 0; index < process_count; index++) {
+        const char *candidate = shell_builtin_processes[index].name;
+
+        if (!starts_with_sized(candidate, process_prefix, prefix_length)) {
+            continue;
+        }
+
+        if (match_count == 0U) {
+            single_match = candidate;
+            shared_length = string_length(candidate);
+        } else {
+            shared_length = common_prefix_length(single_match, candidate, shared_length);
+        }
+
+        match_count++;
+    }
+
+    if (match_count == 0U) {
+        return;
+    }
+
+    if (match_count == 1U && single_match != 0) {
+        const size_t candidate_length = string_length(single_match);
+
+        for (size_t index = prefix_length; index < candidate_length; index++) {
+            if (!append_char_to_line(console, line, length, single_match[index])) {
+                return;
+            }
+        }
+
+        (void)append_char_to_line(console, line, length, ' ');
+        return;
+    }
+
+    if (shared_length > prefix_length && single_match != 0) {
+        for (size_t index = prefix_length; index < shared_length; index++) {
+            if (!append_char_to_line(console, line, length, single_match[index])) {
+                return;
+            }
+        }
+
+        return;
+    }
+
+    line[*length] = '\0';
+    show_process_candidates(console, current_directory, line, process_prefix);
+}
+
 static void complete_line(
     const struct arwill_console *console,
     const struct arwill_filesystem *filesystem,
@@ -1279,7 +1550,14 @@ static void complete_line(
         return;
     }
 
-    if (!command_accepts_path(command)) {
+    const enum shell_completion_kind completion = command_completion(command);
+
+    if (completion == shell_completion_none) {
+        return;
+    }
+
+    if (completion == shell_completion_process) {
+        complete_process_name(console, current_directory, line, length, argument_start);
         return;
     }
 
@@ -1290,7 +1568,7 @@ static void complete_line(
         line,
         length,
         argument_start,
-        string_equals(command, "cd")
+        completion == shell_completion_directory_path
     );
 }
 
@@ -1299,6 +1577,8 @@ static void run_command(
     const struct arwill_filesystem *filesystem,
     const struct arwill_memory *memory,
     const struct arwill_power *power,
+    struct arwill_process_manager *processes,
+    struct shell_process_context *process_context,
     char *current_directory,
     const char *line
 ) {
@@ -1328,6 +1608,16 @@ static void run_command(
 
     if (string_equals(line, "meminfo")) {
         print_meminfo(console, memory);
+        return;
+    }
+
+    if (string_equals(line, "ps")) {
+        print_process_table(console, processes);
+        return;
+    }
+
+    if (string_equals(line, "run") || starts_with(line, "run ")) {
+        run_process(console, processes, process_context, argument_after_command(line));
         return;
     }
 
@@ -1376,7 +1666,8 @@ void arwill_shell_run(
     const struct arwill_input *input,
     const struct arwill_filesystem *filesystem,
     const struct arwill_memory *memory,
-    const struct arwill_power *power
+    const struct arwill_power *power,
+    struct arwill_process_manager *processes
 ) {
     char line[shell_line_capacity];
     char current_directory[shell_path_capacity] = "/";
@@ -1385,11 +1676,13 @@ void arwill_shell_run(
     size_t history_position = 0;
     enum shell_escape_state escape_state = shell_escape_none;
     struct shell_input_normalizer normalizer;
+    struct shell_process_context process_context;
 
     history.count = 0;
     normalizer.utf8_state = shell_utf8_none;
     normalizer.utf8_lead = 0;
     normalizer.russian_layout_active = 0;
+    process_context.console = console;
 
     write_prompt(console, current_directory);
 
@@ -1426,7 +1719,16 @@ void arwill_shell_run(
             arwill_console_write_line(console, "");
             history_add(&history, line);
             history_position = history.count;
-            run_command(console, filesystem, memory, power, current_directory, line);
+            run_command(
+                console,
+                filesystem,
+                memory,
+                power,
+                processes,
+                &process_context,
+                current_directory,
+                line
+            );
             length = 0;
             normalizer.utf8_state = shell_utf8_none;
             normalizer.russian_layout_active = 0;

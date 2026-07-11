@@ -6,13 +6,15 @@
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/power.h>
+#include <arwill/kernel/process.h>
 
 void arwill_shell_run(
     const struct arwill_console *console,
     const struct arwill_input *input,
     const struct arwill_filesystem *filesystem,
     const struct arwill_memory *memory,
-    const struct arwill_power *power
+    const struct arwill_power *power,
+    struct arwill_process_manager *processes
 ) __attribute__((noreturn));
 
 #endif
