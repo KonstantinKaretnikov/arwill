@@ -23,6 +23,14 @@ Rules for future work:
 - Preserve separation between architecture-independent, architecture-specific,
   and platform-specific code.
 - Keep all generated code understandable by a human reviewer.
+- When a durable workflow agreement is made with the project owner, update this
+  file or another appropriate document in the same change so future sessions do
+  not need to rediscover it.
+- Commit completed, verified milestones locally, but do not push every commit
+  automatically. Push when asked, when sharing is needed, or when the owner has
+  clearly approved publishing the accumulated work.
+- For longer tasks, play `/System/Library/Sounds/Glass.aiff` with `afplay`
+  after the work is complete, if tool permissions allow it.
 
 Avoid implementing future subsystems as placeholders. A missing scheduler,
 allocator, filesystem, shell, graphics layer, network stack, interrupt layer, or

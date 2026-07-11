@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.0.3 has one executable path:
+Arwill 0.0.4 has one executable path:
 
 ```text
 Limine bootloader
@@ -39,6 +39,7 @@ Shell:
 - Owns command parsing for `help`, `version`, `pwd`, `cd`, `ls`, `dir`, and
   `halt`.
 - Holds the current working directory as local shell state.
+- Owns Tab completion for command names and filesystem paths.
 - Depends on console, input, filesystem, and CPU idle contracts.
 
 Filesystem contract:

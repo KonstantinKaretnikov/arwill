@@ -51,37 +51,37 @@ rm -f "$serial_log"
 
     wait_for_log "Arwill:/> "
     sleep 0.1
-    printf 'help\r'
-    wait_for_log "cd \\[path\\]"
+    printf 'he\t\r'
+    wait_for_log "Tab        complete"
     sleep 0.1
-    printf 'version\r'
-    wait_for_log_count "Arwill 0.0.3" 2
+    printf 'ver\t\r'
+    wait_for_log_count "Arwill 0.0.4" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_log_count "Arwill:/> " 4
     sleep 0.1
-    printf 'ls\r'
+    printf 'l\t\r'
     wait_for_log "system/"
     sleep 0.1
-    printf 'cd /boot\r'
+    printf 'cd /b\t\r'
     wait_for_log "Arwill:/boot> "
     sleep 0.1
     printf 'pwd\r'
     wait_for_log_count "Arwill:/boot> " 2
     sleep 0.1
-    printf 'dir\r'
+    printf 'd\t\r'
     wait_for_log "limine/"
     sleep 0.1
-    printf 'cd limine\r'
+    printf 'cd l\t\r'
     wait_for_log "Arwill:/boot/limine> "
     sleep 0.1
-    printf 'ls\r'
+    printf 'l\t\r'
     wait_for_log "limine.conf"
     sleep 0.1
     printf 'cd ..\r'
     wait_for_log_count "Arwill:/boot> " 4
     sleep 0.1
-    printf 'halt\r'
+    printf 'ha\t\r'
 ) | "$qemu" -M q35 -m 128M -cdrom "$iso" -boot d \
     -serial stdio -monitor none -display none -no-reboot -no-shutdown \
     > "$serial_log" 2>&1 &
@@ -128,7 +128,7 @@ check_line() {
     fi
 }
 
-check_line "Arwill 0.0.3"
+check_line "Arwill 0.0.4"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -137,7 +137,8 @@ check_line "shell: ready"
 check_line "filesystem: static boot catalog"
 check_line "status: kernel initialized"
 check_line "commands:"
-check_line "Arwill 0.0.3"
+check_line "Arwill 0.0.4"
+check_line "Tab        complete"
 check_line "boot/"
 check_line "system/"
 check_line "/boot"
