@@ -41,6 +41,20 @@ static int same_bytes(const uint8_t *left, const uint8_t *right, size_t length) 
     return 1;
 }
 
+static void put32(uint8_t *buffer, size_t offset, uint32_t value) {
+    buffer[offset] = (uint8_t)(value >> 24U);
+    buffer[offset + 1U] = (uint8_t)(value >> 16U);
+    buffer[offset + 2U] = (uint8_t)(value >> 8U);
+    buffer[offset + 3U] = (uint8_t)value;
+}
+
+static uint32_t get32(const uint8_t *buffer, size_t offset) {
+    return ((uint32_t)buffer[offset] << 24U) |
+        ((uint32_t)buffer[offset + 1U] << 16U) |
+        ((uint32_t)buffer[offset + 2U] << 8U) |
+        (uint32_t)buffer[offset + 3U];
+}
+
 static void write_char(const struct arwill_console *console, char value) {
     char text[2] = { value, '\0' };
     arwill_console_write(console, text);
@@ -63,6 +77,7 @@ int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
     stack->gateway_resolved = 0;
     stack->echo_identifier = 0x4152U;
     stack->echo_sequence = 0;
+    arwill_tcp_listener_init(&stack->tcp_listener, 22U, 0x41520000U);
     return 1;
 }
 
@@ -185,6 +200,97 @@ int arwill_ipv4_ping_gateway(struct arwill_ipv4_stack *stack) {
         return 1;
     }
     return 0;
+}
+
+static int send_tcp_reply(struct arwill_ipv4_stack *stack, const uint8_t *request,
+    const struct arwill_tcp_segment *reply) {
+    uint8_t frame[60];
+    uint8_t *ip = frame + 14U;
+    uint8_t *tcp = ip + 20U;
+    uint32_t sum = 0;
+
+    if (reply->flags == 0U) {
+        return 1;
+    }
+    for (size_t index = 0; index < sizeof(frame); index++) {
+        frame[index] = 0;
+    }
+    for (size_t index = 0; index < arwill_network_mac_length; index++) {
+        frame[index] = request[6U + index];
+        frame[6U + index] = stack->mac[index];
+    }
+    put16(frame, 12U, 0x0800U);
+    ip[0] = 0x45U;
+    put16(ip, 2U, 40U);
+    ip[6] = 0x40U;
+    ip[8] = 64U;
+    ip[9] = 6U;
+    for (size_t index = 0; index < 4U; index++) {
+        ip[12U + index] = stack->address[index];
+        ip[16U + index] = request[26U + index];
+    }
+    put16(ip, 10U, checksum(ip, 20U));
+    put16(tcp, 0U, reply->source_port);
+    put16(tcp, 2U, reply->destination_port);
+    put32(tcp, 4U, reply->sequence);
+    put32(tcp, 8U, reply->acknowledgement);
+    tcp[12] = 0x50U;
+    tcp[13] = reply->flags;
+    put16(tcp, 14U, 4096U);
+    for (size_t index = 12U; index < 20U; index++) {
+        sum += ((uint32_t)ip[index] << ((index & 1U) == 0U ? 8U : 0U));
+        sum += ((uint32_t)ip[16U + index - 12U] << ((index & 1U) == 0U ? 8U : 0U));
+    }
+    sum += 6U + 20U;
+    for (size_t index = 0; index < 20U; index += 2U) {
+        sum += get16(tcp, index);
+    }
+    while ((sum >> 16U) != 0U) {
+        sum = (sum & 0xffffU) + (sum >> 16U);
+    }
+    put16(tcp, 16U, (uint16_t)~sum);
+    return arwill_network_send_frame(stack->network, frame, sizeof(frame));
+}
+
+int arwill_ipv4_service_tcp(struct arwill_ipv4_stack *stack, size_t *frames_processed) {
+    uint8_t frame[arwill_network_frame_capacity];
+    size_t length = 0;
+    size_t processed = 0;
+
+    if (frames_processed != 0) {
+        *frames_processed = 0;
+    }
+    if (stack == 0 || stack->network == 0) {
+        return 0;
+    }
+    for (size_t attempt = 0; attempt < 4096U; attempt++) {
+        if (!arwill_network_poll_frame(stack->network, frame, sizeof(frame), &length)) {
+            if ((attempt % 64U) == 63U) {
+                arwill_cpu_wait_for_interrupt();
+            }
+            continue;
+        }
+        if (length < 54U || get16(frame, 12U) != 0x0800U || frame[14] != 0x45U ||
+            frame[23] != 6U || !same_bytes(frame + 30U, stack->address, 4U)) {
+            continue;
+        }
+        struct arwill_tcp_segment incoming;
+        struct arwill_tcp_segment reply;
+        incoming.source_port = get16(frame, 34U);
+        incoming.destination_port = get16(frame, 36U);
+        incoming.sequence = get32(frame, 38U);
+        incoming.acknowledgement = get32(frame, 42U);
+        incoming.flags = frame[47];
+        if (!arwill_tcp_listener_receive(&stack->tcp_listener, &incoming, &reply) ||
+            !send_tcp_reply(stack, frame, &reply)) {
+            continue;
+        }
+        processed++;
+    }
+    if (frames_processed != 0) {
+        *frames_processed = processed;
+    }
+    return 1;
 }
 
 void arwill_ipv4_print_config(const struct arwill_ipv4_stack *stack,

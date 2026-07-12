@@ -119,6 +119,9 @@ run_qemu_to_log() {
     printf 'tcpcheck\r'
     wait_for_primary_log "tcpcheck: listener state established"
     sleep 0.1
+    printf 'tcplisten\r'
+    wait_for_primary_log "tcplisten: frames 0, state listen"
+    sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
     sleep 0.1
@@ -363,6 +366,7 @@ check_line "netcfg     show fixed IPv4 network configuration"
 check_line "arping     transmit an ARP request to the gateway"
 check_line "ping       send one ICMP echo to the gateway"
 check_line "tcpcheck   exercise the TCP listener handshake"
+check_line "tcplisten  poll for TCP port 22 connections"
 check_line "network: qemu e1000"
 check_line "mac: 52:54:00:12:34:56"
 check_line "frame path: tx/rx bounded polling ready"
@@ -372,6 +376,7 @@ check_line "gateway: 10.0.2.2"
 check_line "arping: request transmitted to 10.0.2.2"
 check_line "ping: reply received"
 check_line "tcpcheck: listener state established"
+check_line "tcplisten: frames 0, state listen"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"

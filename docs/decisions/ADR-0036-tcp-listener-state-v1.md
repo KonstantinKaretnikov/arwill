@@ -12,14 +12,16 @@ increment.
 
 Add a small architecture-independent TCP listener state machine. It accepts a
 SYN for a configured port, produces SYN-ACK values, validates the final ACK,
-and exposes `listen`, `syn-received`, and `established` states. The first
-consumer is a `tcpcheck` shell diagnostic for port 22.
+and exposes `listen`, `syn-received`, and `established` states. The IPv4 layer
+now parses inbound TCP headers for port 22 and emits a TCP SYN-ACK frame. The
+shell exposes `tcpcheck` and bounded `tcplisten` diagnostics.
 
 ## Consequences
 
-TCP handshake state is now explicit and testable. It is not yet wired to IPv4
-TCP packet parsing, checksums, retransmission, payload delivery, or a socket
-API; those are the next part of the same milestone.
+TCP handshake state is now explicit and wired through Ethernet/IPv4 framing.
+TCP checksums are emitted for SYN-ACK. Retransmission, validation of incoming
+checksums, payload delivery, a persistent service loop, and a socket API are
+the next part of the same milestone.
 
 ## Verification
 

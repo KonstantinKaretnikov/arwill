@@ -59,6 +59,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "arping", .completion = shell_completion_none },
     { .name = "ping", .completion = shell_completion_none },
     { .name = "tcpcheck", .completion = shell_completion_none },
+    { .name = "tcplisten", .completion = shell_completion_none },
     { .name = "pwd", .completion = shell_completion_none },
     { .name = "cd", .completion = shell_completion_directory_path },
     { .name = "clear", .completion = shell_completion_none },
@@ -759,6 +760,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  arping     transmit an ARP request to the gateway");
     arwill_console_write_line(console, "  ping       send one ICMP echo to the gateway");
     arwill_console_write_line(console, "  tcpcheck   exercise the TCP listener handshake");
+    arwill_console_write_line(console, "  tcplisten  poll for TCP port 22 connections");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
@@ -2457,6 +2459,19 @@ static void run_command(
         }
         arwill_console_write(console, "tcpcheck: listener state ");
         arwill_console_write_line(console, arwill_tcp_state_name(listener.state));
+        return;
+    }
+
+    if (string_equals(line, "tcplisten")) {
+        size_t processed = 0;
+        if (ipv4 == 0 || !arwill_ipv4_service_tcp(ipv4, &processed)) {
+            arwill_console_write_line(console, "tcplisten: network unavailable");
+            return;
+        }
+        arwill_console_write(console, "tcplisten: frames ");
+        write_size_decimal(console, processed);
+        arwill_console_write(console, ", state ");
+        arwill_console_write_line(console, arwill_tcp_state_name(ipv4->tcp_listener.state));
         return;
     }
 
