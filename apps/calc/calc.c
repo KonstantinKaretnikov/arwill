@@ -91,6 +91,7 @@ int calculator_main(void) {
     static const char interrupted[] = "^C\n";
     static const char error[] = "error\n";
     static const char erase[] = "\b \b";
+    static const char line_break[] = "\n";
     char input[64];
     char output[32];
 
@@ -118,6 +119,12 @@ int calculator_main(void) {
             }
             syscall_write(&input[length], 1U);
             length++;
+        }
+
+        if (length == 4U && input[0] == 'e' && input[1] == 'x' &&
+            input[2] == 'i' && input[3] == 't') {
+            syscall_write(line_break, text_length(line_break));
+            return 0;
         }
 
         long result = 0;

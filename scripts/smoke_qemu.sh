@@ -179,9 +179,8 @@ run_qemu_to_log() {
     printf '5+6\r'
     wait_for_primary_log "11"
     sleep 0.1
-    printf '\003'
-    wait_for_primary_log "calc> \\^C"
-    wait_for_primary_log "exec: exited 130"
+    printf 'exit\r'
+    wait_for_primary_log "exec: exited 0"
     sleep 0.1
     printf 'cat /apps/hello.awp\r'
     wait_for_primary_log "cat: cannot display binary file: /apps/hello.awp"
@@ -435,7 +434,7 @@ check_line "apps/"
 check_line "calc> "
 check_line "84"
 check_line "11"
-check_line "exec: exited 130"
+check_line "exec: exited 0"
 check_line "system/"
 check_line "cat: cannot display binary file: /apps/hello.awp"
 check_line "mkdir: created /scratch"
