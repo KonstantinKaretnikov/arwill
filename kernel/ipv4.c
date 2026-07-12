@@ -252,9 +252,32 @@ static int send_tcp_reply(struct arwill_ipv4_stack *stack, const uint8_t *reques
     return arwill_network_send_frame(stack->network, frame, sizeof(frame));
 }
 
-int arwill_ipv4_service_tcp(struct arwill_ipv4_stack *stack, size_t *frames_processed) {
+int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
     uint8_t frame[arwill_network_frame_capacity];
     size_t length = 0;
+    if (stack == 0 || stack->network == 0) {
+        return 0;
+    }
+    if (!arwill_network_poll_frame(stack->network, frame, sizeof(frame), &length) ||
+        length < 54U || get16(frame, 12U) != 0x0800U || frame[14] != 0x45U ||
+        frame[23] != 6U || !same_bytes(frame + 30U, stack->address, 4U)) {
+        return 0;
+    }
+    struct arwill_tcp_segment incoming;
+    struct arwill_tcp_segment reply;
+    incoming.source_port = get16(frame, 34U);
+    incoming.destination_port = get16(frame, 36U);
+    incoming.sequence = get32(frame, 38U);
+    incoming.acknowledgement = get32(frame, 42U);
+    incoming.flags = frame[47];
+    if (!arwill_tcp_listener_receive(&stack->tcp_listener, &incoming, &reply) ||
+        !send_tcp_reply(stack, frame, &reply)) {
+        return 0;
+    }
+    return 1;
+}
+
+int arwill_ipv4_service_tcp(struct arwill_ipv4_stack *stack, size_t *frames_processed) {
     size_t processed = 0;
 
     if (frames_processed != 0) {
@@ -264,28 +287,10 @@ int arwill_ipv4_service_tcp(struct arwill_ipv4_stack *stack, size_t *frames_proc
         return 0;
     }
     for (size_t attempt = 0; attempt < 4096U; attempt++) {
-        if (!arwill_network_poll_frame(stack->network, frame, sizeof(frame), &length)) {
-            if ((attempt % 64U) == 63U) {
-                arwill_cpu_wait_for_interrupt();
-            }
-            continue;
+        processed += (size_t)arwill_ipv4_poll_tcp(stack);
+        if ((attempt % 64U) == 63U) {
+            arwill_cpu_wait_for_interrupt();
         }
-        if (length < 54U || get16(frame, 12U) != 0x0800U || frame[14] != 0x45U ||
-            frame[23] != 6U || !same_bytes(frame + 30U, stack->address, 4U)) {
-            continue;
-        }
-        struct arwill_tcp_segment incoming;
-        struct arwill_tcp_segment reply;
-        incoming.source_port = get16(frame, 34U);
-        incoming.destination_port = get16(frame, 36U);
-        incoming.sequence = get32(frame, 38U);
-        incoming.acknowledgement = get32(frame, 42U);
-        incoming.flags = frame[47];
-        if (!arwill_tcp_listener_receive(&stack->tcp_listener, &incoming, &reply) ||
-            !send_tcp_reply(stack, frame, &reply)) {
-            continue;
-        }
-        processed++;
     }
     if (frames_processed != 0) {
         *frames_processed = processed;

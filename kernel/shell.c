@@ -2653,7 +2653,12 @@ void arwill_shell_run(
     write_prompt(console, current_directory);
 
     for (;;) {
-        const uint8_t byte = arwill_input_read_byte(input);
+        uint8_t byte = 0;
+        while (!arwill_input_try_read_byte(input, &byte)) {
+            if (ipv4 != 0) {
+                (void)arwill_ipv4_poll_tcp(ipv4);
+            }
+        }
 
         if (escape_state == shell_escape_started) {
             if (byte == ascii_left_bracket) {

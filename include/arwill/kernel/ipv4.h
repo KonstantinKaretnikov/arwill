@@ -28,6 +28,7 @@ int arwill_ipv4_send_arp_request(const struct arwill_ipv4_stack *stack,
 int arwill_ipv4_ping_gateway(struct arwill_ipv4_stack *stack);
 
 int arwill_ipv4_service_tcp(struct arwill_ipv4_stack *stack, size_t *frames_processed);
+int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack);
 
 void arwill_ipv4_print_config(const struct arwill_ipv4_stack *stack,
     const struct arwill_console *console);

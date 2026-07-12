@@ -51,6 +51,16 @@ static uint8_t serial_input_read_byte(void *context) {
     return serial_read_byte();
 }
 
+static int serial_input_try_read_byte(void *context, uint8_t *byte) {
+    (void)context;
+    if (byte == 0 || (arwill_x86_64_in8(com1_base + register_line_status) &
+        line_status_data_ready) == 0U) {
+        return 0;
+    }
+    *byte = arwill_x86_64_in8(com1_base + register_data);
+    return 1;
+}
+
 static const struct arwill_console serial_console = {
     .context = 0,
     .write = serial_console_write,
@@ -59,6 +69,7 @@ static const struct arwill_console serial_console = {
 static const struct arwill_input serial_input = {
     .context = 0,
     .read_byte = serial_input_read_byte,
+    .try_read_byte = serial_input_try_read_byte,
 };
 
 const struct arwill_console *arwill_qemu_serial_console_init(void) {
