@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.2.0`.
+Status: `0.3.0`.
 
 Arwill already has:
 
@@ -32,19 +32,21 @@ Arwill already has:
 - [x] shell current directory state, path resolution, Tab completion, command
   history, and Russian-layout command-entry normalization;
 - [x] a static read-only boot catalog used by `ls`, `cd`, `cat`, `stat`, and
-  path completion;
+  path completion before disk mount;
 - [x] read-only file contents for selected text files in that static catalog;
 - [x] read-only sector access from a QEMU-attached raw test disk through an ATA
   PIO block-device contract;
+- [x] storage-backed read-only ARFS mounted from the raw test disk for `ls`,
+  `cd`, `cat`, `stat`, and path completion;
 - [x] a Limine memory map snapshot and first bump-only physical page allocator
   counters;
 - [x] QEMU debug-exit poweroff through `exit`;
 - [x] cooperative kernel-managed processes with PID, state, run count, exit
   code, `run [name]`, and `ps`.
 
-Arwill does not yet have storage-backed filesystems, block writes, interrupts,
-a timer, preemptive scheduling, user-space isolation, syscalls, ELF program
-loading, or writable persistent storage.
+Arwill does not yet have block writes, interrupts, a timer, preemptive
+scheduling, user-space isolation, syscalls, ELF program loading, or writable
+persistent storage.
 
 ## Milestones
 
@@ -90,7 +92,9 @@ loading, or writable persistent storage.
    Definition of done: Arwill can read a known sector from a real QEMU-attached
    image without any filesystem parser involved.
 
-3. [ ] Real read-only filesystem
+3. [x] Real read-only filesystem
+
+   Status: done in `0.3.0`.
 
    Goal: replace the static boot catalog path with a filesystem implementation
    backed by block storage.
@@ -109,12 +113,15 @@ loading, or writable persistent storage.
    image for a smaller parser, or another deliberately chosen read-only format.
    Pick the format at the start of this milestone and document why.
 
-   Expected tests:
+   Verified by:
 
-   - smoke test lists directories from the real image;
-   - smoke test reads real file contents through `cat`;
-   - smoke test checks `stat` for real file and directory metadata;
-   - negative tests cover missing files, missing directories, and binary files.
+   - smoke test observes `filesystem: arfs read-only disk`;
+   - smoke test lists `/`, `/boot`, and `/boot/limine` through ARFS;
+   - smoke test reads `/boot/limine/limine.conf`, `/system/identity`, and
+     `/docs/readme` through `cat`;
+   - smoke test checks `stat /system/identity`;
+   - smoke test covers binary-file handling with `/boot/kernel.elf`;
+   - smoke test covers missing-file handling with `/docs/missing`.
 
    Definition of done: the shell's filesystem commands no longer depend on
    hard-coded directory entries for the primary happy path.

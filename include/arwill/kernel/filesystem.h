@@ -32,6 +32,7 @@ struct arwill_fs_file {
 };
 
 struct arwill_filesystem {
+    const char *name;
     void *context;
     int (*list)(void *context, const char *path, struct arwill_fs_listing *listing);
     int (*read_file)(void *context, const char *path, struct arwill_fs_file *file);

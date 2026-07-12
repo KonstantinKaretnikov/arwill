@@ -715,7 +715,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
-    arwill_console_write_line(console, "  ls [path]  list the read-only boot catalog");
+    arwill_console_write_line(console, "  ls [path]  list the current filesystem");
     arwill_console_write_line(console, "  cat [path] show text file contents");
     arwill_console_write_line(console, "  stat [path] show file or directory metadata");
     arwill_console_write_line(console, "  meminfo    show memory map and page allocator");

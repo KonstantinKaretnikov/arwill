@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.2.0 has one executable path:
+Arwill 0.3.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -10,9 +10,10 @@ Limine bootloader
   -> QEMU serial I/O block
   -> architecture-independent kernel startup
   -> QEMU ATA PIO block-device initialization
+  -> ARFS read-only filesystem mount from the raw test disk
   -> cooperative kernel process manager initialization
   -> serial shell
-  -> static read-only boot catalog
+  -> storage-backed read-only filesystem
   -> deterministic raw disk sector read when blkinfo is requested
   -> cooperative built-in kernel process launch when run is requested
   -> QEMU debug-exit poweroff when exit is requested
@@ -104,6 +105,18 @@ Filesystem contract:
 - It does not yet provide open handles, streaming reads, writes, allocation, or
   mount behavior.
 
+ARFS read-only filesystem:
+
+- Public mount entry lives in `include/arwill/kernel/arfs.h`.
+- Implementation lives in `kernel/arfs.c`.
+- Mounts from the current block device by reading a small ARFS superblock and
+  manifest from the deterministic raw test disk image.
+- Provides the primary filesystem for `ls`, `cd`, Tab completion, `cat`, and
+  `stat` in the normal QEMU test path.
+- It is intentionally simple: fixed-size manifest parsing, read-only file
+  contents, no allocation, no writes, no open handles, no block cache, and no
+  partition table.
+
 Static boot catalog:
 
 - Lives in `kernel/boot_catalog.c`.
@@ -112,6 +125,7 @@ Static boot catalog:
 - Exposes small text payloads for `/system/identity` and
   `/boot/limine/limine.conf`; binary boot artifacts remain non-displayable.
 - It is not a disk filesystem and does not read from storage.
+- It now acts as a fallback if ARFS cannot mount.
 
 QEMU ATA PIO block device:
 

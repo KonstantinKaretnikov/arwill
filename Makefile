@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.2.0
+PROJECT_VERSION := 0.3.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -34,6 +34,7 @@ LDFLAGS := -nostdlib -static -z max-page-size=0x1000
 LDFLAGS += -T arch/x86_64/linker.ld
 
 SOURCES := \
+	kernel/arfs.c \
 	kernel/boot_catalog.c \
 	kernel/block_device.c \
 	kernel/console.c \
@@ -107,8 +108,8 @@ $(ISO): $(KERNEL) platform/qemu/limine.conf third_party/limine/limine
 		$(ISO_ROOT) -o $(ISO)
 	third_party/limine/limine bios-install $(ISO)
 
-$(TEST_DISK): scripts/create_test_disk.sh
-	@sh scripts/create_test_disk.sh "$@"
+$(TEST_DISK): scripts/create_test_disk.sh Makefile
+	@sh scripts/create_test_disk.sh "$@" "$(PROJECT_VERSION)"
 
 third_party/limine/limine:
 	@scripts/setup_limine.sh

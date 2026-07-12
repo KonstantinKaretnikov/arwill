@@ -165,6 +165,7 @@ static int boot_catalog_read_file(
 }
 
 static const struct arwill_filesystem boot_catalog = {
+    .name = "static boot catalog",
     .context = 0,
     .list = boot_catalog_list,
     .read_file = boot_catalog_read_file,

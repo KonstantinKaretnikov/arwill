@@ -62,7 +62,7 @@ rm -f "$serial_log" "$qemu_status_log"
     wait_for_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_log_count "Arwill 0.2.0" 2
+    wait_for_log_count "Arwill 0.3.0" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_log_count "Arwill:/> " 4
@@ -114,10 +114,16 @@ rm -f "$serial_log" "$qemu_status_log"
     wait_for_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_log "version: 0.2.0"
+    wait_for_log "version: 0.3.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_log "type: text file"
+    sleep 0.1
+    printf 'cat /docs/readme\r'
+    wait_for_log "storage-backed read-only filesystem"
+    sleep 0.1
+    printf 'cat /docs/missing\r'
+    wait_for_log "cat: no such file: /docs/missing"
     sleep 0.1
     printf 'ex\t\r'
     ) | "$qemu" -M "$machine" -m 128M -cdrom "$iso" -boot d \
@@ -200,13 +206,13 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.2.0"
+check_line "Arwill 0.3.0"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
 check_line "input: serial"
 check_line "shell: ready"
-check_line "filesystem: static boot catalog"
+check_line "filesystem: arfs read-only disk"
 check_line "block: qemu ata pio"
 check_line "memory: boot memory map"
 check_line "allocator: physical page bump allocator"
@@ -215,9 +221,10 @@ check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.2.0"
+check_line "Arwill 0.3.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
+check_line "ls [path]  list the current filesystem"
 check_line "meminfo    show memory map and page allocator"
 check_line "blkinfo    show block device read diagnostics"
 check_line "ps         show kernel process table"
@@ -239,6 +246,7 @@ check_line "process hello: hello from pid"
 check_line "pid state runs exit name"
 check_line "finished"
 check_line "boot/"
+check_line "docs/"
 check_line "system/"
 check_line "Arwill:/> cd /boot/"
 check_line "/boot"
@@ -248,8 +256,11 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.2.0"
+check_line "version: 0.3.0"
+check_line "filesystem: arfs"
 check_line "type: text file"
+check_line "Arwill storage-backed read-only filesystem"
+check_line "cat: no such file: /docs/missing"
 check_line "Arwill:/boot/limine> "
 check_line "Arwill:/boot> exit"
 check_line "status: powering off"

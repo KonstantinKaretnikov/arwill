@@ -29,7 +29,12 @@ void arwill_kernel_start(
     arwill_console_write_line(console, "console: serial");
     arwill_console_write_line(console, "input: serial");
     arwill_console_write_line(console, "shell: ready");
-    arwill_console_write_line(console, "filesystem: static boot catalog");
+    arwill_console_write(console, "filesystem: ");
+    if (filesystem == 0 || filesystem->name == 0) {
+        arwill_console_write_line(console, "unknown");
+    } else {
+        arwill_console_write_line(console, filesystem->name);
+    }
     arwill_console_write(console, "block: ");
     if (block_device == 0 || block_device->name == 0) {
         arwill_console_write_line(console, "unavailable");

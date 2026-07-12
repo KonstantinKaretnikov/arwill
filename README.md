@@ -15,14 +15,15 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.2.0`
+Version: `0.3.0`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
 The shell can read terminal keyboard input through QEMU serial I/O, inspect a
 boot memory map, report the first physical page allocator state, and launch
 small cooperative kernel processes. Arwill can also read sectors from a
-QEMU-attached raw test disk through a read-only ATA PIO block-device driver.
+QEMU-attached raw test disk through a read-only ATA PIO block-device driver and
+serve shell filesystem commands from a storage-backed read-only ARFS image.
 
 ## Supported Host and Target
 
@@ -94,14 +95,14 @@ exit
 halt
 ```
 
-`ls` currently lists a static read-only boot catalog, not a real disk
-filesystem. The first supported paths are `/`, `/boot`, `/boot/limine`, and
-`/system`. `cd` changes the shell's current directory and supports absolute
-paths, relative paths, `.`, and `..`.
+`ls` lists the current read-only filesystem. In the normal QEMU test path this
+is ARFS mounted from the raw test disk image. The supported paths are `/`,
+`/boot`, `/boot/limine`, `/docs`, and `/system`. `cd` changes the shell's
+current directory and supports absolute paths, relative paths, `.`, and `..`.
 
-`cat` displays text files from the static catalog, such as `/system/identity`
-and `/boot/limine/limine.conf`. Binary boot artifacts are visible in listings,
-but their contents are not displayed yet.
+`cat` displays text files from ARFS, such as `/system/identity`,
+`/boot/limine/limine.conf`, and `/docs/readme`. Binary boot artifacts are
+visible in listings, but their contents are not displayed yet.
 
 `stat` displays directory and file metadata. `meminfo` prints the
 Limine-provided boot memory map and the current physical page allocator
@@ -141,13 +142,13 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.2.0
+Arwill 0.3.0
 architecture: x86_64
 platform: qemu
 console: serial
 input: serial
 shell: ready
-filesystem: static boot catalog
+filesystem: arfs read-only disk
 block: qemu ata pio
 memory: boot memory map
 allocator: physical page bump allocator
@@ -167,7 +168,7 @@ Arwill:/>
 - `docs/development/`: host setup and development workflows.
 - `include/`: public Arwill-owned C contracts.
 - `kernel/`: architecture-independent kernel orchestration, shell, contracts,
-  and static boot catalog.
+  static boot catalog fallback, and ARFS read-only filesystem support.
 - `arch/x86_64/`: x86-64 entry, CPU idle, port I/O, and linker details.
 - `platform/qemu/`: QEMU-specific platform wiring and serial console block.
 - `scripts/`: host-side setup, artifact checks, and boot smoke tests.

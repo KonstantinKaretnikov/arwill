@@ -4,6 +4,7 @@
 #include <limine.h>
 
 #include <arwill/arch/x86_64/limine_requests.h>
+#include <arwill/kernel/arfs.h>
 #include <arwill/kernel/boot_catalog.h>
 #include <arwill/kernel/cpu.h>
 #include <arwill/kernel/kernel.h>
@@ -85,9 +86,13 @@ void arwill_limine_entry(void) {
 
     const struct arwill_console *console = arwill_qemu_serial_console_init();
     const struct arwill_input *input = arwill_qemu_serial_input();
-    const struct arwill_filesystem *filesystem = arwill_boot_catalog_filesystem();
     const struct arwill_power *power = arwill_qemu_power();
     const struct arwill_block_device *block_device = arwill_qemu_ata_block_device_init();
+    const struct arwill_filesystem *filesystem = arwill_arfs_mount(block_device);
+
+    if (filesystem == 0) {
+        filesystem = arwill_boot_catalog_filesystem();
+    }
 
     arwill_kernel_start(console, input, filesystem, &arwill_limine_memory, power, block_device);
     arwill_cpu_idle_forever();
