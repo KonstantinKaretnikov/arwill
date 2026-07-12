@@ -17,6 +17,9 @@ struct arwill_ipv4_stack {
     uint16_t echo_identifier;
     uint16_t echo_sequence;
     struct arwill_tcp_listener tcp_listener;
+    uint32_t tcp_frames_received;
+    uint32_t tcp_syn_ack_sent;
+    uint32_t ssh_banners_sent;
 };
 
 int arwill_ipv4_init(struct arwill_ipv4_stack *stack,

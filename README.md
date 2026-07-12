@@ -168,6 +168,8 @@ that gateway. `ping` completes one bounded ARP/ICMP echo exchange with the
 QEMU gateway. DHCP, routing, TCP, sockets, and SSH are still planned.
 
 Interactive `make run` forwards host `127.0.0.1:22224` to guest TCP port 22.
+If that port is occupied, set `QEMU_SSH_HOST_PORT`, for example
+`make run QEMU_SSH_HOST_PORT=22225`.
 The current listener performs only the TCP handshake; it has no SSH payload
 service yet.
 

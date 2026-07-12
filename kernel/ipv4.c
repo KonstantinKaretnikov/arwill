@@ -78,6 +78,9 @@ int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
     stack->echo_identifier = 0x4152U;
     stack->echo_sequence = 0;
     arwill_tcp_listener_init(&stack->tcp_listener, 22U, 0x41520000U);
+    stack->tcp_frames_received = 0;
+    stack->tcp_syn_ack_sent = 0;
+    stack->ssh_banners_sent = 0;
     return 1;
 }
 
@@ -282,9 +285,13 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
     incoming.sequence = get32(frame, 38U);
     incoming.acknowledgement = get32(frame, 42U);
     incoming.flags = frame[47];
+    stack->tcp_frames_received++;
     if (!arwill_tcp_listener_receive(&stack->tcp_listener, &incoming, &reply) ||
         !send_tcp_reply(stack, frame, &reply, 0, 0U)) {
         return 0;
+    }
+    if (reply.flags != 0U) {
+        stack->tcp_syn_ack_sent++;
     }
     if (stack->tcp_listener.state == arwill_tcp_state_established && reply.flags == 0U) {
         static const uint8_t banner[] = "SSH-2.0-Arwill\r\n";
@@ -296,6 +303,7 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
         if (!send_tcp_reply(stack, frame, &reply, banner, sizeof(banner) - 1U)) {
             return 0;
         }
+        stack->ssh_banners_sent++;
         stack->tcp_listener.sequence += (uint32_t)(sizeof(banner) - 1U);
     }
     return 1;

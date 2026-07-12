@@ -2474,6 +2474,13 @@ static void run_command(
         write_size_decimal(console, processed);
         arwill_console_write(console, ", state ");
         arwill_console_write_line(console, arwill_tcp_state_name(ipv4->tcp_listener.state));
+        arwill_console_write(console, "tcp frames: ");
+        write_uint64_decimal(console, ipv4->tcp_frames_received);
+        arwill_console_write(console, ", syn-ack: ");
+        write_uint64_decimal(console, ipv4->tcp_syn_ack_sent);
+        arwill_console_write(console, ", ssh banners: ");
+        write_uint64_decimal(console, ipv4->ssh_banners_sent);
+        arwill_console_write_line(console, "");
         return;
     }
 
