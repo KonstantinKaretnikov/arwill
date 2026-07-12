@@ -9,6 +9,7 @@
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/power.h>
 #include <arwill/kernel/process.h>
+#include <arwill/kernel/user.h>
 
 void arwill_shell_run(
     const struct arwill_console *console,
@@ -18,7 +19,8 @@ void arwill_shell_run(
     const struct arwill_power *power,
     struct arwill_process_manager *processes,
     const struct arwill_block_device *block_device,
-    const struct arwill_interrupts *interrupts
+    const struct arwill_interrupts *interrupts,
+    const struct arwill_user_runtime *user_runtime
 ) __attribute__((noreturn));
 
 #endif

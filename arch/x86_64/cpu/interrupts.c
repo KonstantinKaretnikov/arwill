@@ -3,14 +3,17 @@
 
 #include <arwill/arch/x86_64/interrupts.h>
 #include <arwill/arch/x86_64/io.h>
+#include <arwill/arch/x86_64/user_mode.h>
 #include <arwill/kernel/interrupts.h>
 #include <arwill/kernel/scheduler.h>
 
 enum {
     idt_entry_count = 256,
     idt_gate_interrupt = 0x8e,
+    idt_gate_user_interrupt = 0xee,
     vector_breakpoint = 3,
     vector_irq0_timer = 32,
+    vector_syscall = 0x80,
     pic1_command = 0x20,
     pic1_data = 0x21,
     pic2_command = 0xa0,
@@ -86,13 +89,13 @@ static void io_wait(void) {
     arwill_x86_64_out8(0x80, 0);
 }
 
-static void idt_set_gate(uint8_t vector, void (*handler)(void)) {
+static void idt_set_gate(uint8_t vector, uint8_t attributes, void (*handler)(void)) {
     const uint64_t address = (uint64_t)handler;
 
     idt[vector].offset_low = (uint16_t)(address & 0xffffU);
     idt[vector].selector = read_code_segment();
     idt[vector].ist = 0;
-    idt[vector].attributes = idt_gate_interrupt;
+    idt[vector].attributes = attributes;
     idt[vector].offset_mid = (uint16_t)((address >> 16U) & 0xffffU);
     idt[vector].offset_high = (uint32_t)(address >> 32U);
     idt[vector].zero = 0;
@@ -213,8 +216,10 @@ const struct arwill_interrupts *arwill_x86_64_interrupts_init(void) {
     interrupt_context.exception_count = 0;
     interrupt_context.last_exception_vector = 0;
 
-    idt_set_gate(vector_breakpoint, (void (*)(void))breakpoint_handler);
-    idt_set_gate(vector_irq0_timer, (void (*)(void))timer_handler);
+    idt_set_gate(vector_breakpoint, idt_gate_interrupt, (void (*)(void))breakpoint_handler);
+    idt_set_gate(vector_irq0_timer, idt_gate_interrupt, (void (*)(void))timer_handler);
+    idt_set_gate(vector_syscall, idt_gate_user_interrupt, arwill_x86_64_user_syscall_entry);
+    arwill_x86_64_user_mode_mark_syscall_gate_loaded();
 
     pointer.limit = (uint16_t)(sizeof(idt) - 1U);
     pointer.base = (uint64_t)idt;

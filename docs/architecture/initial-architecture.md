@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.4.0 has one executable path:
+Arwill 0.5.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -10,6 +10,7 @@ Limine bootloader
   -> QEMU serial I/O block
   -> QEMU ATA PIO block-device initialization
   -> ARFS read-only filesystem mount from the raw test disk
+  -> x86-64 GDT, TSS, and user runtime initialization
   -> x86-64 IDT, PIC, and PIT timer initialization
   -> architecture-independent kernel startup
   -> cooperative kernel process manager initialization
@@ -21,6 +22,8 @@ Limine bootloader
   -> interrupt/timer diagnostics when irqinfo or irqprobe is requested
   -> scheduler tick diagnostics when schedinfo is requested
   -> cooperative built-in kernel process launch when run is requested
+  -> user page mapping and built-in ring 3 user program launch when userhello
+     or userbad is run
   -> QEMU debug-exit poweroff when exit is requested
   -> x86-64 CPU idle loop when halt is requested
 ```
@@ -51,7 +54,7 @@ Shell:
 - Lives in `kernel/shell.c`.
 - Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
   `cat`, `stat`, `meminfo`, `blkinfo`, `irqinfo`, `irqprobe`, `schedinfo`,
-  `ps`, `run`, `exit`, and `halt`.
+  `userinfo`, `ps`, `run`, `exit`, and `halt`.
 - Keeps one canonical command name per operation; alias commands are not
   accepted.
 - Holds the current working directory as local shell state.
@@ -62,7 +65,7 @@ Shell:
 - Normalizes standard Russian-layout UTF-8 input back to ASCII key positions;
   it does not support Cyrillic text entry yet.
 - Depends on block device, console, input, filesystem, memory, process, power,
-  interrupts, scheduler, and CPU idle contracts.
+  interrupts, scheduler, user runtime, and CPU idle contracts.
 
 Block device contract:
 
@@ -82,10 +85,12 @@ Process manager:
 - The first scheduler behavior is cooperative and run-to-completion: the shell
   can spawn a built-in kernel process with `run [name]`, then the process
   manager runs ready entries synchronously.
+- Built-in `userhello` and `userbad` process entries enter ring 3 through the
+  user runtime and return user exit status to this same process table.
 - `ps` displays the process table.
-- This is not user space. There are no separate address spaces, ELF program
-  loading, syscalls, kernel/user privilege transitions, saved task contexts, or
-  preemptive context switching yet.
+- The process manager is still not a full scheduler. It does not own separate
+  address spaces, ELF program loading, saved task contexts, or preemptive
+  context switching.
 
 Interrupt controller contract:
 
@@ -94,7 +99,7 @@ Interrupt controller contract:
 - The first x86-64 implementation lives in `arch/x86_64/cpu/interrupts.c`.
 - It installs a minimal IDT, remaps the legacy PIC, unmasks IRQ0 only,
   configures the PIT at 100 Hz, handles breakpoint vector 3 for diagnostics,
-  and handles timer vector 32.
+  handles timer vector 32, and installs a DPL 3 `int 0x80` syscall gate.
 - `irqinfo` reports IDT/PIC/PIT state and timer ticks. `irqprobe` triggers a
   safe breakpoint exception and verifies that vector 3 was handled.
 - This is not a full interrupt subsystem: there is no APIC, IOAPIC, HPET,
@@ -110,7 +115,32 @@ Scheduler foundation:
   between two named slots, `shell` and `idle`, so scheduler progress is visible
   through `schedinfo`.
 - This is deliberately only a foundation. It does not save CPU contexts, switch
-  stacks, preempt kernel code, wake sleeping tasks, or run user-space programs.
+  stacks, preempt kernel code, wake sleeping tasks, or preempt user-space
+  programs.
+
+User runtime:
+
+- Public contract lives in `include/arwill/kernel/user.h`.
+- Architecture-independent wrappers live in `kernel/user.c`.
+- The first x86-64 implementation lives in `arch/x86_64/cpu/user_mode.c`.
+- Limine HHDM is requested so the kernel can initialize newly allocated
+  physical pages before mapping them into user virtual memory.
+- The x86-64 implementation installs a GDT with kernel and user descriptors,
+  loads a TSS with an `rsp0` stack for privilege transitions, maps one user code
+  page and one user stack page, and enters ring 3 with `iretq`.
+- The first syscall ABI uses `int 0x80`: syscall `1` writes bytes to the serial
+  console through the console contract, and syscall `2` exits with a status
+  code.
+- `run userhello` executes a tiny generated user program that writes
+  `user hello: hello from ring 3` through syscall `write` and exits with code
+  `7`.
+- `run userbad` executes a tiny generated user program with an unknown syscall;
+  the kernel converts it to exit code `127` and records a bad-syscall count.
+- `userinfo` reports HHDM, GDT, TSS, syscall gate, run, syscall, byte, and
+  bad-syscall counters.
+- This is not a general program loader. There is no ELF loader, file-backed
+  executable, per-process page table, argument passing, heap, signal model, or
+  preemptive user scheduling yet.
 
 Power contract:
 
@@ -128,6 +158,8 @@ Memory contract:
   memory ranges.
 - The first allocator is bump-only: it can allocate pages but cannot free or
   reuse pages yet.
+- User-mode setup consumes physical pages for generated user code, user stack,
+  and page-table pages; those allocations are not freed yet.
 
 Filesystem contract:
 
@@ -190,10 +222,10 @@ CPU idle:
 Boot infrastructure:
 
 - Limine is fetched into `third_party/limine/`.
-- The x86-64 boot block requests the Limine memory map and converts it before
+- The x86-64 boot block requests the Limine memory map and HHDM offset before
   entering architecture-independent kernel startup.
 - The x86-64 boot block wires QEMU storage, ARFS, and the x86-64 interrupt
-  controller into the architecture-independent kernel entry.
+  controller and user runtime into the architecture-independent kernel entry.
 - Limine config lives in `platform/qemu/limine.conf`.
 - ISO construction is host-side development tooling, not kernel code.
 

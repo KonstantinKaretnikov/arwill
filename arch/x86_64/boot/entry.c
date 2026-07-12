@@ -5,6 +5,7 @@
 
 #include <arwill/arch/x86_64/interrupts.h>
 #include <arwill/arch/x86_64/limine_requests.h>
+#include <arwill/arch/x86_64/user_mode.h>
 #include <arwill/kernel/arfs.h>
 #include <arwill/kernel/boot_catalog.h>
 #include <arwill/kernel/cpu.h>
@@ -90,6 +91,10 @@ void arwill_limine_entry(void) {
     const struct arwill_power *power = arwill_qemu_power();
     const struct arwill_block_device *block_device = arwill_qemu_ata_block_device_init();
     const struct arwill_filesystem *filesystem = arwill_arfs_mount(block_device);
+    const struct limine_hhdm_response *hhdm = arwill_limine_hhdm_response();
+    const uint64_t hhdm_offset = hhdm == 0 ? 0 : hhdm->offset;
+    const struct arwill_user_runtime *user_runtime =
+        arwill_x86_64_user_mode_init(&arwill_limine_memory, hhdm_offset);
     const struct arwill_interrupts *interrupts = arwill_x86_64_interrupts_init();
 
     if (filesystem == 0) {
@@ -103,7 +108,8 @@ void arwill_limine_entry(void) {
         &arwill_limine_memory,
         power,
         block_device,
-        interrupts
+        interrupts,
+        user_runtime
     );
     arwill_cpu_idle_forever();
 }

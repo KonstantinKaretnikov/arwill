@@ -10,6 +10,7 @@
 #include <arwill/kernel/process.h>
 #include <arwill/kernel/scheduler.h>
 #include <arwill/kernel/shell.h>
+#include <arwill/kernel/user.h>
 
 void arwill_kernel_start(
     const struct arwill_console *console,
@@ -18,7 +19,8 @@ void arwill_kernel_start(
     const struct arwill_memory *memory,
     const struct arwill_power *power,
     const struct arwill_block_device *block_device,
-    const struct arwill_interrupts *interrupts
+    const struct arwill_interrupts *interrupts,
+    const struct arwill_user_runtime *user_runtime
 ) {
     static struct arwill_process_manager process_manager;
 
@@ -55,6 +57,12 @@ void arwill_kernel_start(
         arwill_console_write_line(console, interrupts->name);
     }
     arwill_console_write_line(console, "scheduler: timer tick foundation");
+    arwill_console_write(console, "user: ");
+    if (user_runtime == 0 || user_runtime->name == 0) {
+        arwill_console_write_line(console, "unavailable");
+    } else {
+        arwill_console_write_line(console, user_runtime->name);
+    }
     arwill_console_write_line(console, "power: qemu debug exit");
     arwill_interrupts_enable(interrupts);
     arwill_console_write_line(console, "status: kernel initialized");
@@ -67,6 +75,7 @@ void arwill_kernel_start(
         power,
         &process_manager,
         block_device,
-        interrupts
+        interrupts,
+        user_runtime
     );
 }

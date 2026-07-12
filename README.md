@@ -15,7 +15,7 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.4.0`
+Version: `0.5.0`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
@@ -25,7 +25,9 @@ small cooperative kernel processes. Arwill can also read sectors from a
 QEMU-attached raw test disk through a read-only ATA PIO block-device driver and
 serve shell filesystem commands from a storage-backed read-only ARFS image.
 The x86-64/QEMU path now installs an IDT, remaps the legacy PIC, configures the
-PIT timer, and exposes interrupt, timer, and scheduler tick diagnostics.
+PIT timer, and exposes interrupt, timer, and scheduler tick diagnostics. It can
+also enter ring 3 for tiny built-in user programs, handle `int 0x80` syscalls
+for `write` and `exit`, and report their exit status through `ps`.
 
 ## Supported Host and Target
 
@@ -94,6 +96,7 @@ blkinfo
 irqinfo
 irqprobe
 schedinfo
+userinfo
 ps
 run [name]
 exit
@@ -121,11 +124,19 @@ and a sample string read from LBA 1 of the deterministic test disk image.
 handled. `schedinfo` displays the current timer tick accounting for the first
 scheduler foundation.
 
+`userinfo` displays the current x86-64 user-mode setup, including HHDM, GDT,
+TSS, syscall-gate, run, syscall, byte, and bad-syscall counters.
+
 `run [name]` launches one of the built-in cooperative kernel processes:
-`hello` or `counter`. `ps` shows the kernel process table with PID, state, run
-count, exit code, and name. These are kernel-managed processes that run to
-completion; Arwill does not have user-space isolation, ELF program loading,
-syscalls, saved task contexts, or preemptive context switching yet.
+`hello`, `counter`, `userhello`, or `userbad`. `userhello` enters ring 3 and
+prints through the `write` syscall before exiting with code `7`. `userbad`
+enters ring 3 and makes an unknown syscall, which exits with code `127`
+without crashing the kernel. `ps` shows the process table with PID, state, run
+count, exit code, and name.
+
+These are still narrow built-in programs. Arwill does not yet have ELF program
+loading, per-process address spaces, saved task contexts, or preemptive context
+switching.
 
 `exit` powers off the current QEMU session. `halt` remains available as a CPU
 idle-loop command.
@@ -150,7 +161,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.4.0
+Arwill 0.5.0
 architecture: x86_64
 platform: qemu
 console: serial
@@ -163,6 +174,7 @@ allocator: physical page bump allocator
 processes: kernel cooperative
 interrupts: x86_64 idt pic pit
 scheduler: timer tick foundation
+user: x86_64 ring3 int80
 power: qemu debug exit
 status: kernel initialized
 Arwill:/>
@@ -178,9 +190,10 @@ Arwill:/>
 - `docs/development/`: host setup and development workflows.
 - `include/`: public Arwill-owned C contracts.
 - `kernel/`: architecture-independent kernel orchestration, shell, contracts,
-  static boot catalog fallback, and ARFS read-only filesystem support.
+  static boot catalog fallback, ARFS read-only filesystem support, and
+  user-runtime wrappers.
 - `arch/x86_64/`: x86-64 entry, CPU idle, interrupt setup, port I/O, and linker
-  details.
+  details, including the first ring 3 user-mode path.
 - `platform/qemu/`: QEMU-specific platform wiring and serial console block.
 - `scripts/`: host-side setup, artifact checks, and boot smoke tests.
 - `third_party/`: documented external dependencies fetched by `make setup`.

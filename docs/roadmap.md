@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.4.0`.
+Status: `0.5.0`.
 
 Arwill already has:
 
@@ -28,7 +28,7 @@ Arwill already has:
 - [x] QEMU serial console output and blocking serial input;
 - [x] a serial shell with canonical commands only: `help`, `version`, `pwd`,
   `cd`, `clear`, `ls`, `cat`, `stat`, `meminfo`, `blkinfo`, `irqinfo`,
-  `irqprobe`, `schedinfo`, `ps`, `run`, `exit`, and `halt`;
+  `irqprobe`, `schedinfo`, `userinfo`, `ps`, `run`, `exit`, and `halt`;
 - [x] shell current directory state, path resolution, Tab completion, command
   history, and Russian-layout command-entry normalization;
 - [x] a static read-only boot catalog used by `ls`, `cd`, `cat`, `stat`, and
@@ -45,10 +45,13 @@ Arwill already has:
   code, `run [name]`, and `ps`;
 - [x] x86-64 IDT setup, legacy PIC remap, PIT timer interrupts, and a safe
   breakpoint exception diagnostic;
-- [x] scheduler tick accounting exposed through `schedinfo`.
+- [x] scheduler tick accounting exposed through `schedinfo`;
+- [x] minimal x86-64 ring 3 user-mode entry with GDT, TSS, HHDM-backed user
+  mappings, `int 0x80` syscalls for `write` and `exit`, and process-table exit
+  status for built-in user programs.
 
 Arwill does not yet have block writes, saved task contexts, preemptive context
-switching, user-space isolation, syscalls, ELF program loading, or writable
+switching, per-process address spaces, ELF program loading, or writable
 persistent storage.
 
 ## Milestones
@@ -159,28 +162,35 @@ persistent storage.
    callback into scheduler accounting, ready for a later saved-context
    scheduler.
 
-5. [ ] User-space v1
+5. [x] User-space v1
+
+   Status: done in `0.5.0`.
 
    Goal: run the first isolated user-mode program.
 
    Scope:
 
    - add the required descriptor/user-mode entry groundwork;
-   - add a minimal ELF loading path or a deliberately simpler first executable
-     format if documented;
-   - add a minimal syscall ABI, starting with `write` and `exit`;
-   - connect process exit status to the process table.
+   - choose deliberately generated built-in machine-code programs as the first
+     executable format;
+   - request Limine HHDM and map user code and stack pages with user access;
+   - add a minimal `int 0x80` syscall ABI with `write` and `exit`;
+   - connect process exit status to the process table;
+   - keep the limitation explicit: no ELF loader or per-process address spaces
+     yet.
 
-   Expected tests:
+   Verified by:
 
-   - smoke test launches a tiny user program;
-   - program output reaches the serial console only through the syscall path;
-   - process exit status is observable through `ps` or another documented
-     command;
-   - invalid user behavior does not crash the kernel silently.
+   - smoke test launches `run userhello`;
+   - user output reaches the serial console through syscall `write`;
+   - syscall `exit` returns code `7`, visible through `ps`;
+   - smoke test launches `run userbad`;
+   - an unknown syscall exits with code `127`, increments the bad-syscall
+     counter, and does not crash the kernel;
+   - `userinfo` reports HHDM, GDT, TSS, syscall gate, and syscall counters.
 
-   Definition of done: Arwill can run a separate user-mode program with a clear
-   kernel/user boundary.
+   Definition of done: Arwill can run a separate ring 3 user-mode program with
+   a clear first kernel/user syscall boundary.
 
 6. [ ] Writable filesystem
 

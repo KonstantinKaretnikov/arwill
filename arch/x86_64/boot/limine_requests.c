@@ -27,8 +27,19 @@ static volatile struct limine_memmap_request arwill_limine_memmap_request = {
     .response = 0,
 };
 
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_hhdm_request arwill_limine_hhdm_request = {
+    .id = LIMINE_HHDM_REQUEST_ID,
+    .revision = 0,
+    .response = 0,
+};
+
 __attribute__((used, section(".limine_requests_end_marker")))
 static volatile uint64_t arwill_limine_requests_end_marker[2] = LIMINE_REQUESTS_END_MARKER;
+
+const struct limine_hhdm_response *arwill_limine_hhdm_response(void) {
+    return arwill_limine_hhdm_request.response;
+}
 
 const struct limine_memmap_response *arwill_limine_memmap_response(void) {
     return arwill_limine_memmap_request.response;

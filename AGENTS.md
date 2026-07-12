@@ -31,9 +31,11 @@ Rules for future work:
   convenience, not as Cyrillic text support.
 - Keep shell commands canonical; do not add built-in alias commands unless a
   later ADR explicitly reverses ADR-0015.
-- Treat current processes as cooperative kernel-managed processes only. Do not
-  describe them as user-space processes until Arwill has isolation, program
-  loading, syscalls, and scheduling support that justifies that claim.
+- Distinguish process kinds precisely. `hello` and `counter` are cooperative
+  kernel-managed built-ins. `userhello` and `userbad` are narrow ring 3
+  user-mode demos using the first `int 0x80` syscall ABI. Arwill still does not
+  have a general ELF loader, per-process address spaces, saved task contexts, or
+  preemptive user scheduling.
 - When a durable workflow agreement is made with the project owner, update this
   file or another appropriate document in the same change so future sessions do
   not need to rediscover it.

@@ -13,6 +13,7 @@
 #include <arwill/kernel/process.h>
 #include <arwill/kernel/scheduler.h>
 #include <arwill/kernel/shell.h>
+#include <arwill/kernel/user.h>
 
 enum {
     shell_line_capacity = 96,
@@ -57,6 +58,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "irqinfo", .completion = shell_completion_none },
     { .name = "irqprobe", .completion = shell_completion_none },
     { .name = "schedinfo", .completion = shell_completion_none },
+    { .name = "userinfo", .completion = shell_completion_none },
     { .name = "ps", .completion = shell_completion_none },
     { .name = "run", .completion = shell_completion_process },
     { .name = "exit", .completion = shell_completion_none },
@@ -87,6 +89,7 @@ struct shell_input_normalizer {
 
 struct shell_process_context {
     const struct arwill_console *console;
+    const struct arwill_user_runtime *user_runtime;
 };
 
 struct shell_builtin_process {
@@ -728,6 +731,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  irqinfo    show interrupt and timer diagnostics");
     arwill_console_write_line(console, "  irqprobe   trigger a safe breakpoint exception");
     arwill_console_write_line(console, "  schedinfo  show scheduler tick diagnostics");
+    arwill_console_write_line(console, "  userinfo   show user-mode diagnostics");
     arwill_console_write_line(console, "  ps         show kernel process table");
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
     arwill_console_write_line(console, "  exit       power off the machine");
@@ -1189,6 +1193,45 @@ static void print_scheduler_info(
     }
 }
 
+static void print_user_info(
+    const struct arwill_console *console,
+    const struct arwill_user_runtime *user_runtime
+) {
+    struct arwill_user_stats stats;
+
+    arwill_user_runtime_stats(user_runtime, &stats);
+
+    arwill_console_write(console, "user: ");
+    if (user_runtime == 0 || user_runtime->name == 0) {
+        arwill_console_write_line(console, "unavailable");
+    } else {
+        arwill_console_write_line(console, user_runtime->name);
+    }
+
+    arwill_console_write(console, "available: ");
+    print_yes_no(console, stats.available);
+    arwill_console_write(console, "hhdm: ");
+    print_yes_no(console, stats.hhdm_available);
+    arwill_console_write(console, "gdt: ");
+    print_loaded_missing(console, stats.gdt_loaded);
+    arwill_console_write(console, "tss: ");
+    print_loaded_missing(console, stats.tss_loaded);
+    arwill_console_write(console, "syscall gate: ");
+    print_loaded_missing(console, stats.syscall_gate_loaded);
+    arwill_console_write(console, "runs: ");
+    write_uint64_decimal(console, stats.runs);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "syscalls: ");
+    write_uint64_decimal(console, stats.syscall_count);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "bytes written: ");
+    write_uint64_decimal(console, stats.bytes_written);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "bad syscalls: ");
+    write_uint64_decimal(console, stats.bad_syscalls);
+    arwill_console_write_line(console, "");
+}
+
 static uint32_t shell_hello_process(const struct arwill_process_runtime *runtime) {
     if (runtime == 0 || runtime->context == 0) {
         return 1;
@@ -1235,9 +1278,56 @@ static uint32_t shell_counter_process(const struct arwill_process_runtime *runti
     return 0;
 }
 
+static uint32_t shell_user_program_process(
+    const struct arwill_process_runtime *runtime,
+    enum arwill_user_program program
+) {
+    if (runtime == 0 || runtime->context == 0) {
+        return 1;
+    }
+
+    const struct shell_process_context *context =
+        (const struct shell_process_context *)runtime->context;
+
+    if (context->console == 0 || context->user_runtime == 0) {
+        return 1;
+    }
+
+    struct arwill_user_program_result result;
+
+    if (!arwill_user_run_program(
+            context->user_runtime,
+            program,
+            context->console,
+            &result
+        )) {
+        arwill_console_write(context->console, runtime->name);
+        arwill_console_write_line(context->console, ": user program launch failed");
+        return 1;
+    }
+
+    if (!result.exited) {
+        arwill_console_write(context->console, runtime->name);
+        arwill_console_write_line(context->console, ": user program did not exit");
+        return 1;
+    }
+
+    return result.exit_code;
+}
+
+static uint32_t shell_user_hello_process(const struct arwill_process_runtime *runtime) {
+    return shell_user_program_process(runtime, arwill_user_program_hello);
+}
+
+static uint32_t shell_user_bad_process(const struct arwill_process_runtime *runtime) {
+    return shell_user_program_process(runtime, arwill_user_program_bad_syscall);
+}
+
 static const struct shell_builtin_process shell_builtin_processes[] = {
     { .name = "hello", .entry = shell_hello_process },
     { .name = "counter", .entry = shell_counter_process },
+    { .name = "userhello", .entry = shell_user_hello_process },
+    { .name = "userbad", .entry = shell_user_bad_process },
 };
 
 static const struct shell_builtin_process *find_builtin_process(const char *name) {
@@ -1782,6 +1872,7 @@ static void run_command(
     struct arwill_process_manager *processes,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
+    const struct arwill_user_runtime *user_runtime,
     struct shell_process_context *process_context,
     char *current_directory,
     const char *line
@@ -1832,6 +1923,11 @@ static void run_command(
 
     if (string_equals(line, "schedinfo")) {
         print_scheduler_info(console, interrupts);
+        return;
+    }
+
+    if (string_equals(line, "userinfo")) {
+        print_user_info(console, user_runtime);
         return;
     }
 
@@ -1893,7 +1989,8 @@ void arwill_shell_run(
     const struct arwill_power *power,
     struct arwill_process_manager *processes,
     const struct arwill_block_device *block_device,
-    const struct arwill_interrupts *interrupts
+    const struct arwill_interrupts *interrupts,
+    const struct arwill_user_runtime *user_runtime
 ) {
     char line[shell_line_capacity];
     char current_directory[shell_path_capacity] = "/";
@@ -1909,6 +2006,7 @@ void arwill_shell_run(
     normalizer.utf8_lead = 0;
     normalizer.russian_layout_active = 0;
     process_context.console = console;
+    process_context.user_runtime = user_runtime;
 
     write_prompt(console, current_directory);
 
@@ -1953,6 +2051,7 @@ void arwill_shell_run(
                 processes,
                 block_device,
                 interrupts,
+                user_runtime,
                 &process_context,
                 current_directory,
                 line

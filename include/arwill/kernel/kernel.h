@@ -8,6 +8,7 @@
 #include <arwill/kernel/interrupts.h>
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/power.h>
+#include <arwill/kernel/user.h>
 
 void arwill_kernel_start(
     const struct arwill_console *console,
@@ -16,7 +17,8 @@ void arwill_kernel_start(
     const struct arwill_memory *memory,
     const struct arwill_power *power,
     const struct arwill_block_device *block_device,
-    const struct arwill_interrupts *interrupts
+    const struct arwill_interrupts *interrupts,
+    const struct arwill_user_runtime *user_runtime
 ) __attribute__((noreturn));
 
 #endif
