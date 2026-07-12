@@ -483,8 +483,8 @@ driver work, not accidental default access for every ring 3 program.
 
 19. [ ] TCP and socket foundation
 
-   Status: started: port-22 listener handshake state is wired to bounded
-   Ethernet/IPv4 polling through `tcplisten`.
+   Status: started: port-22 listener handshake state and in-order payload ACKs
+   are wired to bounded Ethernet/IPv4 polling through `tcplisten`.
 
    Goal: wire the listener to IPv4 TCP packet parsing, checksums,
    retransmission, and a small kernel socket contract for a later owner-only
@@ -494,5 +494,7 @@ driver work, not accidental default access for every ring 3 program.
 
    Status: cryptographic foundation selected in ADR-0037. SHA-256 and the first
    fail-closed x86-64/QEMU entropy source are implemented and smoke-tested per
-   ADR-0038. X25519 is implemented and checked against RFC 7748. Remaining
-   algorithms are P-256 ECDSA host authentication and ChaCha20-Poly1305.
+   ADR-0038. X25519 is implemented and checked against RFC 7748. SSH binary
+   framing and bidirectional KEXINIT are verified with OpenSSH 10.2, which now
+   reaches `expecting SSH2_MSG_KEX_ECDH_REPLY`. Remaining algorithms are P-256
+   ECDSA host authentication and ChaCha20-Poly1305.

@@ -133,6 +133,9 @@ run_qemu_to_log() {
     printf 'entropyinfo\r'
     wait_for_primary_log "sample: acquired 32 bytes"
     sleep 0.1
+    printf 'sshcheck\r'
+    wait_for_primary_log "sshcheck: identification and kexinit passed"
+    sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
     sleep 0.1
@@ -381,6 +384,7 @@ check_line "tcplisten  poll for TCP port 22 connections"
 check_line "tcpinfo    show TCP port 22 listener state"
 check_line "cryptocheck verify the SHA-256 primitive"
 check_line "entropyinfo show hardware entropy status"
+check_line "sshcheck   verify SSH identification and KEXINIT framing"
 check_line "network: qemu e1000"
 check_line "mac: 52:54:00:12:34:56"
 check_line "frame path: tx/rx bounded polling ready"
@@ -397,6 +401,7 @@ check_line "cryptocheck: x25519 rfc7748 passed"
 check_line "entropy: x86_64 rdrand"
 check_line "available: yes"
 check_line "sample: acquired 32 bytes"
+check_line "sshcheck: identification and kexinit passed"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"

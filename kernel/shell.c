@@ -18,6 +18,7 @@
 #include <arwill/kernel/process.h>
 #include <arwill/kernel/scheduler.h>
 #include <arwill/kernel/shell.h>
+#include <arwill/kernel/ssh.h>
 #include <arwill/kernel/tcp.h>
 #include <arwill/kernel/user.h>
 
@@ -65,6 +66,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "tcpinfo", .completion = shell_completion_none },
     { .name = "cryptocheck", .completion = shell_completion_none },
     { .name = "entropyinfo", .completion = shell_completion_none },
+    { .name = "sshcheck", .completion = shell_completion_none },
     { .name = "pwd", .completion = shell_completion_none },
     { .name = "cd", .completion = shell_completion_directory_path },
     { .name = "clear", .completion = shell_completion_none },
@@ -769,6 +771,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  tcpinfo    show TCP port 22 listener state");
     arwill_console_write_line(console, "  cryptocheck verify the SHA-256 primitive");
     arwill_console_write_line(console, "  entropyinfo show hardware entropy status");
+    arwill_console_write_line(console, "  sshcheck   verify SSH identification and KEXINIT framing");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
@@ -2450,6 +2453,7 @@ static void run_command(
         syn.sequence = 100U;
         syn.acknowledgement = 0U;
         syn.flags = arwill_tcp_flag_syn;
+        syn.payload_length = 0U;
         if (!arwill_tcp_listener_receive(&listener, &syn, &reply) ||
             reply.flags != (arwill_tcp_flag_syn | arwill_tcp_flag_ack) ||
             reply.acknowledgement != 101U) {
@@ -2461,6 +2465,7 @@ static void run_command(
         ack.sequence = 101U;
         ack.acknowledgement = reply.sequence + 1U;
         ack.flags = arwill_tcp_flag_ack;
+        ack.payload_length = 0U;
         if (!arwill_tcp_listener_receive(&listener, &ack, &reply)) {
             arwill_console_write_line(console, "tcpcheck: ACK failed");
             return;
@@ -2488,8 +2493,22 @@ static void run_command(
         write_uint64_decimal(console, ipv4->ssh_banners_sent);
         arwill_console_write_line(console, "");
         arwill_console_write(console, "ssh client: ");
-        arwill_console_write_line(console, ipv4->ssh_client_identification_received ?
-            ipv4->ssh_client_identification : "not received");
+        arwill_console_write_line(console, ipv4->ssh.client_identification_received ?
+            ipv4->ssh.client_identification : "not received");
+        arwill_console_write(console, "ssh kexinit: server ");
+        arwill_console_write(console, ipv4->ssh.server_kexinit_sent ? "sent" : "pending");
+        arwill_console_write(console, ", client ");
+        arwill_console_write_line(console,
+            ipv4->ssh.client_kexinit_received ? "received" : "pending");
+        arwill_console_write(console, "ssh kex failures: build ");
+        write_uint64_decimal(console, ipv4->ssh_kexinit_build_failures);
+        arwill_console_write(console, ", send ");
+        write_uint64_decimal(console, ipv4->ssh_kexinit_send_failures);
+        arwill_console_write(console, ", receive ");
+        write_uint64_decimal(console, ipv4->ssh_receive_failures);
+        arwill_console_write(console, ", last ");
+        write_uint64_decimal(console, ipv4->ssh.last_error);
+        arwill_console_write_line(console, "");
         return;
     }
 
@@ -2583,6 +2602,40 @@ static void run_command(
 
         arwill_console_write_line(console, arwill_entropy_fill(sample, sizeof(sample)) ?
             "sample: acquired 32 bytes" : "sample: acquisition failed");
+        return;
+    }
+
+    if (string_equals(line, "sshcheck")) {
+        static const uint8_t client_identification[] = "SSH-2.0-Smoke\r\n";
+        static const uint8_t client_kexinit[] = {
+            0U, 0U, 0U, 12U, 10U, 20U,
+            0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
+        };
+        struct arwill_ssh_transport transport;
+        uint8_t server_kexinit[arwill_ssh_server_packet_capacity];
+        size_t server_kexinit_length = 0;
+
+        arwill_ssh_transport_init(&transport);
+        const int passed = arwill_ssh_transport_receive(
+            &transport,
+            client_identification,
+            sizeof(client_identification) - 1U
+        ) && arwill_ssh_transport_build_kexinit(
+            &transport,
+            server_kexinit,
+            sizeof(server_kexinit),
+            &server_kexinit_length
+        ) && server_kexinit_length >= 6U
+            && server_kexinit[5] == 20U
+            && arwill_ssh_transport_receive(
+                &transport,
+                client_kexinit,
+                sizeof(client_kexinit)
+            ) && transport.client_kexinit_received;
+
+        arwill_console_write_line(console, passed ?
+            "sshcheck: identification and kexinit passed" :
+            "sshcheck: identification or kexinit failed");
         return;
     }
 

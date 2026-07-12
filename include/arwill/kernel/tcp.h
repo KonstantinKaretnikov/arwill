@@ -1,6 +1,7 @@
 #ifndef ARWILL_KERNEL_TCP_H
 #define ARWILL_KERNEL_TCP_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 enum arwill_tcp_state {
@@ -23,6 +24,7 @@ struct arwill_tcp_segment {
     uint32_t sequence;
     uint32_t acknowledgement;
     uint8_t flags;
+    size_t payload_length;
 };
 
 struct arwill_tcp_listener {

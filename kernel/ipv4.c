@@ -81,8 +81,10 @@ int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
     stack->tcp_frames_received = 0;
     stack->tcp_syn_ack_sent = 0;
     stack->ssh_banners_sent = 0;
-    stack->ssh_client_identification_length = 0;
-    stack->ssh_client_identification_received = 0;
+    stack->ssh_kexinit_build_failures = 0;
+    stack->ssh_kexinit_send_failures = 0;
+    stack->ssh_receive_failures = 0;
+    arwill_ssh_transport_init(&stack->ssh);
     return 1;
 }
 
@@ -253,7 +255,7 @@ static uint16_t tcp_checksum(const uint8_t *ip, const uint8_t *tcp, size_t lengt
 
 static int send_tcp_reply(struct arwill_ipv4_stack *stack, const uint8_t *request,
     const struct arwill_tcp_segment *reply, const uint8_t *payload, size_t payload_length) {
-    uint8_t frame[96];
+    uint8_t frame[arwill_network_frame_capacity];
     uint8_t *ip = frame + 14U;
     uint8_t *tcp = ip + 20U;
 
@@ -311,6 +313,15 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
         frame[23] != 6U || !same_bytes(frame + 30U, stack->address, 4U)) {
         return 0;
     }
+    const size_t tcp_header_length = (size_t)(frame[46] >> 4U) * 4U;
+    const size_t ip_length = get16(frame, 16U);
+    if (tcp_header_length < 20U || ip_length < 20U + tcp_header_length
+        || 14U + ip_length > length) {
+        return 0;
+    }
+    const size_t payload_length = ip_length - 20U - tcp_header_length;
+    const uint8_t *payload = frame + 14U + 20U + tcp_header_length;
+
     struct arwill_tcp_segment incoming;
     struct arwill_tcp_segment reply;
     incoming.source_port = get16(frame, 34U);
@@ -318,55 +329,65 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
     incoming.sequence = get32(frame, 38U);
     incoming.acknowledgement = get32(frame, 42U);
     incoming.flags = frame[47];
+    incoming.payload_length = payload_length;
     stack->tcp_frames_received++;
-    if (!arwill_tcp_listener_receive(&stack->tcp_listener, &incoming, &reply) ||
-        !send_tcp_reply(stack, frame, &reply, 0, 0U)) {
+    if (!arwill_tcp_listener_receive(&stack->tcp_listener, &incoming, &reply)) {
         return 0;
     }
-    if (reply.flags != 0U) {
+    int reply_sent = 0;
+    if (reply.flags == (arwill_tcp_flag_syn | arwill_tcp_flag_ack)) {
         stack->tcp_syn_ack_sent++;
     }
-    if (stack->tcp_listener.state == arwill_tcp_state_established && reply.flags == 0U) {
+    if (stack->tcp_listener.state == arwill_tcp_state_established
+        && reply.flags == 0U && stack->ssh_banners_sent == 0U) {
         static const uint8_t banner[] = "SSH-2.0-Arwill\r\n";
         reply.source_port = stack->tcp_listener.port;
         reply.destination_port = incoming.source_port;
         reply.sequence = stack->tcp_listener.sequence;
-        reply.acknowledgement = incoming.sequence;
+        reply.acknowledgement = stack->tcp_listener.acknowledgement;
         reply.flags = arwill_tcp_flag_ack | arwill_tcp_flag_psh;
         if (!send_tcp_reply(stack, frame, &reply, banner, sizeof(banner) - 1U)) {
             return 0;
         }
         stack->ssh_banners_sent++;
         stack->tcp_listener.sequence += (uint32_t)(sizeof(banner) - 1U);
+        reply_sent = 1;
     }
-    const size_t tcp_header_length = (size_t)(frame[46] >> 4U) * 4U;
-    const size_t ip_length = get16(frame, 16U);
-    if (stack->tcp_listener.state == arwill_tcp_state_established &&
-        tcp_header_length >= 20U && ip_length >= 20U + tcp_header_length &&
-        14U + ip_length <= length) {
-        const size_t payload_length = ip_length - 20U - tcp_header_length;
-        const uint8_t *payload = frame + 14U + 20U + tcp_header_length;
-        static const char prefix[] = "SSH-2.0-";
-        if (payload_length >= sizeof(prefix) - 1U) {
-            int matches = 1;
-            for (size_t index = 0; index < sizeof(prefix) - 1U; index++) {
-                if (payload[index] != (uint8_t)prefix[index]) {
-                    matches = 0;
-                }
-            }
-            if (matches) {
-                size_t copied = payload_length;
-                if (copied >= sizeof(stack->ssh_client_identification)) {
-                    copied = sizeof(stack->ssh_client_identification) - 1U;
-                }
-                for (size_t index = 0; index < copied; index++) {
-                    stack->ssh_client_identification[index] = (char)payload[index];
-                }
-                stack->ssh_client_identification[copied] = '\0';
-                stack->ssh_client_identification_length = copied;
-                stack->ssh_client_identification_received = 1;
-            }
+    if (stack->tcp_listener.state == arwill_tcp_state_established
+        && payload_length != 0U) {
+        if (!arwill_ssh_transport_receive(&stack->ssh, payload, payload_length)) {
+            stack->ssh_receive_failures++;
+            return 0;
         }
+        if (stack->ssh.client_identification_received && !stack->ssh.server_kexinit_sent) {
+            uint8_t kexinit[arwill_ssh_server_packet_capacity];
+            size_t kexinit_length = 0;
+
+            if (!arwill_ssh_transport_build_kexinit(
+                &stack->ssh,
+                kexinit,
+                sizeof(kexinit),
+                &kexinit_length
+            )) {
+                stack->ssh_kexinit_build_failures++;
+                return 0;
+            }
+            reply.source_port = stack->tcp_listener.port;
+            reply.destination_port = incoming.source_port;
+            reply.sequence = stack->tcp_listener.sequence;
+            reply.acknowledgement = stack->tcp_listener.acknowledgement;
+            reply.flags = arwill_tcp_flag_ack | arwill_tcp_flag_psh;
+            if (!send_tcp_reply(stack, frame, &reply, kexinit, kexinit_length)) {
+                stack->ssh_kexinit_send_failures++;
+                return 0;
+            }
+            stack->tcp_listener.sequence += (uint32_t)kexinit_length;
+            stack->ssh.server_kexinit_sent = 1;
+            reply_sent = 1;
+        }
+    }
+    if (!reply_sent && !send_tcp_reply(stack, frame, &reply, 0, 0U)) {
+        return 0;
     }
     return 1;
 }

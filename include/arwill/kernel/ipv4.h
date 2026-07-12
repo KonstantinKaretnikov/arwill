@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include <arwill/kernel/network.h>
+#include <arwill/kernel/ssh.h>
 #include <arwill/kernel/tcp.h>
 
 struct arwill_ipv4_stack {
@@ -20,9 +21,10 @@ struct arwill_ipv4_stack {
     uint32_t tcp_frames_received;
     uint32_t tcp_syn_ack_sent;
     uint32_t ssh_banners_sent;
-    char ssh_client_identification[64];
-    size_t ssh_client_identification_length;
-    int ssh_client_identification_received;
+    uint32_t ssh_kexinit_build_failures;
+    uint32_t ssh_kexinit_send_failures;
+    uint32_t ssh_receive_failures;
+    struct arwill_ssh_transport ssh;
 };
 
 int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
