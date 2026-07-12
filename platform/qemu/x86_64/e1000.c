@@ -84,6 +84,7 @@ struct e1000_context {
     uint8_t *tx_buffer[e1000_ring_count];
     uint8_t *rx_buffer[e1000_ring_count];
     uint32_t tx_tail;
+    uint32_t rx_next;
     uint8_t mac[arwill_network_mac_length];
     int ready;
 };
@@ -242,24 +243,27 @@ static int poll_frame(
         return 0;
     }
 
-    if ((device->rx_descriptor->status & e1000_rx_status_dd) == 0U) {
+    const uint32_t descriptor_index = device->rx_next;
+    if ((device->rx_descriptor[descriptor_index].status & e1000_rx_status_dd) == 0U) {
         return 0;
     }
 
-    const size_t received = device->rx_descriptor->length;
-    if ((device->rx_descriptor->status & e1000_rx_status_eop) == 0U ||
+    const size_t received = device->rx_descriptor[descriptor_index].length;
+    if ((device->rx_descriptor[descriptor_index].status & e1000_rx_status_eop) == 0U ||
         received > capacity || received > e1000_buffer_capacity) {
-        device->rx_descriptor->status = 0;
-        register_write(e1000_register_rdt, 0U);
+        device->rx_descriptor[descriptor_index].status = 0;
+        register_write(e1000_register_rdt, descriptor_index);
+        device->rx_next = (descriptor_index + 1U) % e1000_ring_count;
         return 0;
     }
 
     for (size_t index = 0; index < received; index++) {
-        frame[index] = device->rx_buffer[0][index];
+        frame[index] = device->rx_buffer[descriptor_index][index];
     }
     *length = received;
-    device->rx_descriptor->status = 0;
-    register_write(e1000_register_rdt, 0U);
+    device->rx_descriptor[descriptor_index].status = 0;
+    register_write(e1000_register_rdt, descriptor_index);
+    device->rx_next = (descriptor_index + 1U) % e1000_ring_count;
     return 1;
 }
 
@@ -332,6 +336,8 @@ const struct arwill_network_device *arwill_qemu_e1000_init(
         return 0;
     }
     e1000.rx_descriptor = (volatile struct e1000_rx_descriptor *)virtual;
+    e1000.tx_tail = 0;
+    e1000.rx_next = 0;
     for (size_t index = 0; index < e1000_ring_count; index++) {
         if (!allocate_page(&e1000.tx_buffer_physical[index], &e1000.tx_buffer[index]) ||
             !allocate_page(&e1000.rx_buffer_physical[index], &e1000.rx_buffer[index])) {

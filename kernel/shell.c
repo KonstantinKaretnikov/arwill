@@ -2414,7 +2414,11 @@ static void run_command(
     if (string_equals(line, "ping")) {
         arwill_console_write_line(console, "ping 10.0.2.2");
         if (ipv4 == 0 || !arwill_ipv4_ping_gateway(ipv4)) {
-            arwill_console_write_line(console, "ping: no reply");
+            if (ipv4 != 0 && ipv4->gateway_resolved) {
+                arwill_console_write_line(console, "ping: ICMP no reply");
+            } else {
+                arwill_console_write_line(console, "ping: ARP no reply");
+            }
             return;
         }
         arwill_console_write_line(console, "ping: reply received");

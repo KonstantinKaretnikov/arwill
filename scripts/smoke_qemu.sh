@@ -114,7 +114,7 @@ run_qemu_to_log() {
     wait_for_primary_log "arping: request transmitted to 10.0.2.2"
     sleep 0.1
     printf 'ping\r'
-    wait_for_primary_log "ping: no reply"
+    wait_for_primary_log "ping: reply received"
     sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
@@ -366,7 +366,7 @@ check_line "netprobe: transmitted 60 bytes"
 check_line "ipv4: 10.0.2.15/24"
 check_line "gateway: 10.0.2.2"
 check_line "arping: request transmitted to 10.0.2.2"
-check_line "ping: no reply"
+check_line "ping: reply received"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"

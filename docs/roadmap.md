@@ -471,10 +471,18 @@ driver work, not accidental default access for every ring 3 program.
    frame. Interrupt-driven networking, sockets, and IP configuration remain
    out of scope for this milestone.
 
-18. [ ] ARP/IPv4/ICMP foundation
+18. [x] ARP/IPv4/ICMP foundation
 
-   Status: started: fixed configuration and ARP request construction are now
-   present through `netcfg` and `arping`.
+   Status: done in the current `0.14.0` increment.
 
-   Goal: finish ARP reply handling and verify ICMP echo replies for one fixed
-   QEMU IPv4 address. DHCP, routing, and sockets remain out of scope.
+   Scope: fixed QEMU configuration (`10.0.2.15/24` and gateway `10.0.2.2`),
+   ARP reply handling, and one bounded ICMP echo request/reply through `ping`.
+   DHCP, routing, and sockets remain out of scope.
+
+   Verified by: QEMU smoke observes `ping: reply received`.
+
+19. [ ] TCP and socket foundation
+
+   Goal: provide one bounded TCP listener suitable for a later owner-only SSH
+   service, including connection state, checksums, retransmission, and a small
+   kernel socket contract.
