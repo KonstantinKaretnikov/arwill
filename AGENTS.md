@@ -50,6 +50,9 @@ Rules for future work:
   memory subsystem, userspace heap, or physical page release mechanism.
 - Treat the current device registry as a fixed-size inspection table. It is not
   a full driver model, bus hierarchy, hotplug system, or ownership layer.
+- Treat the current framebuffer text console as a serial-output mirror. It is
+  not a graphics subsystem, terminal emulator, windowing layer, or input focus
+  model.
 - When a durable workflow agreement is made with the project owner, update this
   file or another appropriate document in the same change so future sessions do
   not need to rediscover it.

@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.9.0`.
+Status: `0.10.0`.
 
 Arwill already has:
 
@@ -44,6 +44,8 @@ Arwill already has:
 - [x] a Limine memory map snapshot, first bump-only physical page allocator
   counters, and a small HHDM-backed kernel heap;
 - [x] a tiny fixed-size device registry and `devices` shell command;
+- [x] framebuffer text console mirroring serial output when Limine provides a
+  32-bit framebuffer;
 - [x] QEMU debug-exit poweroff through `exit`;
 - [x] cooperative kernel-managed processes with PID, state, run count, exit
   code, `run [name]`, cooperative `step`, and `ps`;
@@ -58,9 +60,8 @@ Arwill already has:
 
 Arwill does not yet have general filesystem allocation, arbitrary file create,
 append, delete, rename, saved CPU contexts, preemptive context switching,
-framebuffer text console, per-process address spaces, program image loading
-from storage, ELF program loading, multi-user accounts, or a general-purpose
-writable storage subsystem.
+per-process address spaces, program image loading from storage, ELF program
+loading, multi-user accounts, or a general-purpose writable storage subsystem.
 
 ## Product Direction
 
@@ -339,7 +340,9 @@ driver work, not accidental default access for every ring 3 program.
    Definition of done: Arwill can list its current devices and their basic
    status without creating cross-layer shortcuts.
 
-10. [ ] Framebuffer text console
+10. [x] Framebuffer text console
+
+   Status: done in `0.10.0` as a serial mirror.
 
    Goal: add a simple screen console for board-style experimentation while
    keeping serial as the primary test channel.
@@ -347,9 +350,18 @@ driver work, not accidental default access for every ring 3 program.
    Scope:
 
    - use Limine framebuffer information on x86-64/QEMU;
-   - draw basic text output;
+   - request a framebuffer from Limine;
+   - draw basic text output with a built-in bitmap font;
+   - mirror the serial console so existing boot and shell output appears on
+     screen too;
    - keep graphics, windows, fonts beyond one built-in bitmap font, and input
      focus out of scope.
+
+   Verified by:
+
+   - smoke test still uses serial output as the authoritative channel;
+   - device registry lists `fb0` as a ready Limine framebuffer text console;
+   - existing shell smoke coverage continues through the mirror console.
 
    Definition of done: boot status and shell output can be mirrored to a basic
    framebuffer text console while serial smoke tests remain authoritative.

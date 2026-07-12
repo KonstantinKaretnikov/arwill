@@ -3,6 +3,7 @@
 
 #include <limine.h>
 
+#include <arwill/arch/x86_64/framebuffer_console.h>
 #include <arwill/arch/x86_64/interrupts.h>
 #include <arwill/arch/x86_64/limine_requests.h>
 #include <arwill/arch/x86_64/user_mode.h>
@@ -88,7 +89,11 @@ void arwill_limine_entry(void) {
     initialize_memory_from_limine();
     arwill_device_registry_init(&arwill_limine_devices);
 
-    const struct arwill_console *console = arwill_qemu_serial_console_init();
+    const struct arwill_console *serial_console = arwill_qemu_serial_console_init();
+    const struct arwill_console *console = arwill_x86_64_framebuffer_console_init(
+        arwill_limine_framebuffer_response(),
+        serial_console
+    );
     const struct arwill_input *input = arwill_qemu_serial_input();
     const struct arwill_power *power = arwill_qemu_power();
     const struct arwill_block_device *block_device = arwill_qemu_ata_block_device_init();
@@ -105,7 +110,14 @@ void arwill_limine_entry(void) {
         "serial0",
         arwill_device_kind_console,
         "qemu serial",
-        console == 0 ? "unavailable" : "ready"
+        serial_console == 0 ? "unavailable" : "ready"
+    );
+    (void)arwill_device_register(
+        &arwill_limine_devices,
+        "fb0",
+        arwill_device_kind_console,
+        "limine framebuffer text",
+        arwill_x86_64_framebuffer_console_status()
     );
     (void)arwill_device_register(
         &arwill_limine_devices,

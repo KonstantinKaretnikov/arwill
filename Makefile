@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.9.0
+PROJECT_VERSION := 0.10.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -49,6 +49,7 @@ SOURCES := \
 	kernel/scheduler.c \
 	kernel/shell.c \
 	kernel/user.c \
+	arch/x86_64/boot/framebuffer_console.c \
 	arch/x86_64/boot/entry.c \
 	arch/x86_64/boot/limine_requests.c \
 	arch/x86_64/cpu/idle.c \

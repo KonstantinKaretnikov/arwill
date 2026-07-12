@@ -15,14 +15,15 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.9.0`
+Version: `0.10.0`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
 The shell can read terminal keyboard input through QEMU serial I/O, inspect a
-boot memory map, report physical page allocator and kernel heap state, list the
-detected device registry, and launch small cooperative kernel processes that
-can yield and continue on later shell steps. Arwill can also read sectors from a
+boot memory map, mirror serial output to a framebuffer text console, report
+physical page allocator and kernel heap state, list the detected device
+registry, and launch small cooperative kernel processes that can yield and
+continue on later shell steps. Arwill can also read sectors from a
 QEMU-attached raw test disk through an ATA PIO block-device driver and serve
 shell filesystem commands from a storage-backed ARFS image. ARFS now supports a
 first persistent writable owner note at `/owner/note`.
@@ -159,8 +160,9 @@ These are still narrow built-in programs. Arwill does not yet have ELF program
 loading, per-process address spaces, saved CPU contexts, or preemptive context
 switching.
 
-`exit` powers off the current QEMU session. `halt` remains available as a CPU
-idle-loop command.
+The QEMU path mirrors serial output to a simple framebuffer text console when
+Limine provides a 32-bit framebuffer. `exit` powers off the current QEMU
+session. `halt` remains available as a CPU idle-loop command.
 
 Press `Tab` to complete command names, paths, and built-in process names. If
 there are multiple matches, the shell lists candidates and redraws the current
@@ -182,7 +184,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.9.0
+Arwill 0.10.0
 architecture: x86_64
 platform: qemu
 console: serial

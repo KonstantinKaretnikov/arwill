@@ -88,7 +88,7 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.9.0" 2
+    wait_for_primary_log_count "Arwill 0.10.0" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
@@ -111,6 +111,7 @@ run_qemu_to_log() {
     printf 'dev\t\r'
     wait_for_primary_log "name kind driver status"
     wait_for_primary_log "serial0 console qemu serial ready"
+    wait_for_primary_log "fb0 console limine framebuffer text ready"
     wait_for_primary_log "disk0 block qemu ata pio ready"
     wait_for_primary_log "heap0 memory hhdm free-list ready"
     wait_for_primary_log "user0 user x86_64 ring3 int80 ready"
@@ -199,7 +200,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.9.0"
+    wait_for_primary_log "version: 0.10.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -287,7 +288,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.9.0"
+check_line "Arwill 0.10.0"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -307,7 +308,7 @@ check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.9.0"
+check_line "Arwill 0.10.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -339,6 +340,7 @@ check_line "heaptest: allocated and freed 2 blocks"
 check_line "heaptest: allocations 2, frees 2"
 check_line "name kind driver status"
 check_line "serial0 console qemu serial ready"
+check_line "fb0 console limine framebuffer text ready"
 check_line "input0 input qemu serial ready"
 check_line "disk0 block qemu ata pio ready"
 check_line "fs0 filesystem arfs writable owner note mounted"
@@ -407,7 +409,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.9.0"
+check_line "version: 0.10.0"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"

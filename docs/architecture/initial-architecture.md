@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.9.0 has one executable path:
+Arwill 0.10.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -10,6 +10,7 @@ Limine bootloader
   -> small kernel heap initialization from HHDM-mapped physical pages
   -> tiny device registry publication
   -> QEMU serial I/O block
+  -> Limine framebuffer text console mirror
   -> QEMU ATA PIO block-device initialization
   -> ARFS filesystem mount from the raw test disk
   -> single-owner model publication
@@ -49,6 +50,18 @@ Console contract:
 - Lives in `include/arwill/kernel/console.h`.
 - Provides only `write` and `write_line`.
 - Is intentionally smaller than a driver model or formatting library.
+
+Framebuffer text console:
+
+- Public init contract lives in
+  `arch/x86_64/include/arwill/arch/x86_64/framebuffer_console.h`.
+- Implementation lives in `arch/x86_64/boot/framebuffer_console.c`.
+- Uses Limine's first 32-bit framebuffer when available.
+- Mirrors the serial console with a small built-in 5x7 bitmap font.
+- Handles printable ASCII, newlines, carriage returns, and backspace well
+  enough for current shell output.
+- It is not a graphics subsystem: there is no windowing, color theme, font
+  loading, acceleration, scrolling buffer, or input focus.
 
 Input contract:
 

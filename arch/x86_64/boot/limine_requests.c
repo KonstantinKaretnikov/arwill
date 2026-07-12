@@ -34,6 +34,13 @@ static volatile struct limine_hhdm_request arwill_limine_hhdm_request = {
     .response = 0,
 };
 
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_framebuffer_request arwill_limine_framebuffer_request = {
+    .id = LIMINE_FRAMEBUFFER_REQUEST_ID,
+    .revision = 0,
+    .response = 0,
+};
+
 __attribute__((used, section(".limine_requests_end_marker")))
 static volatile uint64_t arwill_limine_requests_end_marker[2] = LIMINE_REQUESTS_END_MARKER;
 
@@ -43,4 +50,8 @@ const struct limine_hhdm_response *arwill_limine_hhdm_response(void) {
 
 const struct limine_memmap_response *arwill_limine_memmap_response(void) {
     return arwill_limine_memmap_request.response;
+}
+
+const struct limine_framebuffer_response *arwill_limine_framebuffer_response(void) {
+    return arwill_limine_framebuffer_request.response;
 }
