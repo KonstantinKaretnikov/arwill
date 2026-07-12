@@ -202,14 +202,32 @@ int arwill_ipv4_ping_gateway(struct arwill_ipv4_stack *stack) {
     return 0;
 }
 
+static uint16_t tcp_checksum(const uint8_t *ip, const uint8_t *tcp, size_t length) {
+    uint32_t sum = 6U + (uint32_t)length;
+
+    for (size_t index = 12U; index < 20U; index += 2U) {
+        sum += get16(ip, index);
+        sum += get16(ip, index + 4U);
+    }
+    for (size_t index = 0; index + 1U < length; index += 2U) {
+        sum += get16(tcp, index);
+    }
+    if ((length & 1U) != 0U) {
+        sum += (uint32_t)tcp[length - 1U] << 8U;
+    }
+    while ((sum >> 16U) != 0U) {
+        sum = (sum & 0xffffU) + (sum >> 16U);
+    }
+    return (uint16_t)~sum;
+}
+
 static int send_tcp_reply(struct arwill_ipv4_stack *stack, const uint8_t *request,
-    const struct arwill_tcp_segment *reply) {
-    uint8_t frame[60];
+    const struct arwill_tcp_segment *reply, const uint8_t *payload, size_t payload_length) {
+    uint8_t frame[96];
     uint8_t *ip = frame + 14U;
     uint8_t *tcp = ip + 20U;
-    uint32_t sum = 0;
 
-    if (reply->flags == 0U) {
+    if (reply->flags == 0U || payload_length > sizeof(frame) - 54U) {
         return 1;
     }
     for (size_t index = 0; index < sizeof(frame); index++) {
@@ -221,7 +239,7 @@ static int send_tcp_reply(struct arwill_ipv4_stack *stack, const uint8_t *reques
     }
     put16(frame, 12U, 0x0800U);
     ip[0] = 0x45U;
-    put16(ip, 2U, 40U);
+    put16(ip, 2U, (uint16_t)(40U + payload_length));
     ip[6] = 0x40U;
     ip[8] = 64U;
     ip[9] = 6U;
@@ -237,19 +255,13 @@ static int send_tcp_reply(struct arwill_ipv4_stack *stack, const uint8_t *reques
     tcp[12] = 0x50U;
     tcp[13] = reply->flags;
     put16(tcp, 14U, 4096U);
-    for (size_t index = 12U; index < 20U; index++) {
-        sum += ((uint32_t)ip[index] << ((index & 1U) == 0U ? 8U : 0U));
-        sum += ((uint32_t)ip[16U + index - 12U] << ((index & 1U) == 0U ? 8U : 0U));
+    for (size_t index = 0; index < payload_length; index++) {
+        tcp[20U + index] = payload[index];
     }
-    sum += 6U + 20U;
-    for (size_t index = 0; index < 20U; index += 2U) {
-        sum += get16(tcp, index);
-    }
-    while ((sum >> 16U) != 0U) {
-        sum = (sum & 0xffffU) + (sum >> 16U);
-    }
-    put16(tcp, 16U, (uint16_t)~sum);
-    return arwill_network_send_frame(stack->network, frame, sizeof(frame));
+    put16(tcp, 16U, tcp_checksum(ip, tcp, 20U + payload_length));
+    const size_t frame_length = 14U + 20U + 20U + payload_length;
+    return arwill_network_send_frame(stack->network, frame,
+        frame_length < 60U ? 60U : frame_length);
 }
 
 int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
@@ -271,8 +283,20 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
     incoming.acknowledgement = get32(frame, 42U);
     incoming.flags = frame[47];
     if (!arwill_tcp_listener_receive(&stack->tcp_listener, &incoming, &reply) ||
-        !send_tcp_reply(stack, frame, &reply)) {
+        !send_tcp_reply(stack, frame, &reply, 0, 0U)) {
         return 0;
+    }
+    if (stack->tcp_listener.state == arwill_tcp_state_established && reply.flags == 0U) {
+        static const uint8_t banner[] = "SSH-2.0-Arwill\r\n";
+        reply.source_port = stack->tcp_listener.port;
+        reply.destination_port = incoming.source_port;
+        reply.sequence = stack->tcp_listener.sequence;
+        reply.acknowledgement = incoming.sequence;
+        reply.flags = arwill_tcp_flag_ack | arwill_tcp_flag_psh;
+        if (!send_tcp_reply(stack, frame, &reply, banner, sizeof(banner) - 1U)) {
+            return 0;
+        }
+        stack->tcp_listener.sequence += (uint32_t)(sizeof(banner) - 1U);
     }
     return 1;
 }

@@ -13,6 +13,7 @@ enum {
     arwill_tcp_flag_fin = 1U,
     arwill_tcp_flag_syn = 2U,
     arwill_tcp_flag_rst = 4U,
+    arwill_tcp_flag_psh = 8U,
     arwill_tcp_flag_ack = 16U
 };
 

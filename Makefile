@@ -21,7 +21,7 @@ QEMU_MACHINE := pc
 QEMU_POWEROFF_EXIT_STATUS := 33
 QEMU_POWEROFF_ARGS := -device isa-debug-exit,iobase=0xf4,iosize=0x04
 QEMU_STORAGE_ARGS := -drive file=$(TEST_DISK),format=raw,if=ide,index=0,media=disk
-QEMU_NETWORK_ARGS := -netdev user,id=net0,hostfwd=tcp:127.0.0.1:22222-:22 -device e1000,netdev=net0,mac=52:54:00:12:34:56
+QEMU_NETWORK_ARGS := -netdev user,id=net0,hostfwd=tcp:127.0.0.1:22223-:22 -device e1000,netdev=net0,mac=52:54:00:12:34:56
 
 CFLAGS := --target=x86_64-elf
 CFLAGS += -std=c11 -ffreestanding -fno-stack-protector -fno-stack-check

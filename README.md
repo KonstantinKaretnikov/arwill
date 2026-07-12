@@ -167,7 +167,7 @@ gateway (`10.0.2.2`). `arping` constructs and transmits an ARP request for
 that gateway. `ping` completes one bounded ARP/ICMP echo exchange with the
 QEMU gateway. DHCP, routing, TCP, sockets, and SSH are still planned.
 
-Interactive `make run` forwards host `127.0.0.1:22222` to guest TCP port 22.
+Interactive `make run` forwards host `127.0.0.1:22223` to guest TCP port 22.
 The current listener performs only the TCP handshake; it has no SSH payload
 service yet.
 
