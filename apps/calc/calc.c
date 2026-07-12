@@ -96,6 +96,7 @@ int calculator_main(void) {
         if (syscall_read(&input[length], 1U) != 1L) {
             return 1;
         }
+        syscall_write(&input[length], 1U);
         if (input[length] == '\n' || input[length] == '\r') {
             break;
         }
