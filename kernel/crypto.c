@@ -1,6 +1,7 @@
 #include <arwill/kernel/crypto.h>
 
 #include "inner.h"
+#include "x25519_adapter.h"
 
 void arwill_crypto_sha256(const void *data, size_t length, uint8_t output[arwill_sha256_size]) {
     br_sha256_context context;
@@ -8,4 +9,31 @@ void arwill_crypto_sha256(const void *data, size_t length, uint8_t output[arwill
     br_sha256_init(&context);
     br_sha256_update(&context, data, length);
     br_sha256_out(&context, output);
+}
+
+int arwill_crypto_x25519(
+    uint8_t output[arwill_x25519_size],
+    const uint8_t scalar[arwill_x25519_size],
+    const uint8_t point[arwill_x25519_size]
+) {
+    uint8_t nonzero = 0U;
+
+    if (!bearssl_x25519_mul(output, scalar, point)) {
+        return 0;
+    }
+
+    for (size_t index = 0; index < arwill_x25519_size; index++) {
+        nonzero |= output[index];
+    }
+
+    return nonzero != 0U;
+}
+
+int arwill_crypto_x25519_public(
+    uint8_t output[arwill_x25519_size],
+    const uint8_t scalar[arwill_x25519_size]
+) {
+    static const uint8_t generator[arwill_x25519_size] = { 9U };
+
+    return arwill_crypto_x25519(output, scalar, generator);
 }

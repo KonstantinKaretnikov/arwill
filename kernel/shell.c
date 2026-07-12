@@ -2513,24 +2513,58 @@ static void run_command(
     }
 
     if (string_equals(line, "cryptocheck")) {
-        static const uint8_t expected[arwill_sha256_size] = {
+        static const uint8_t expected_sha256[arwill_sha256_size] = {
             0xbaU, 0x78U, 0x16U, 0xbfU, 0x8fU, 0x01U, 0xcfU, 0xeaU,
             0x41U, 0x41U, 0x40U, 0xdeU, 0x5dU, 0xaeU, 0x22U, 0x23U,
             0xb0U, 0x03U, 0x61U, 0xa3U, 0x96U, 0x17U, 0x7aU, 0x9cU,
             0xb4U, 0x10U, 0xffU, 0x61U, 0xf2U, 0x00U, 0x15U, 0xadU,
         };
+        static const uint8_t x25519_scalar[arwill_x25519_size] = {
+            0xa5U, 0x46U, 0xe3U, 0x6bU, 0xf0U, 0x52U, 0x7cU, 0x9dU,
+            0x3bU, 0x16U, 0x15U, 0x4bU, 0x82U, 0x46U, 0x5eU, 0xddU,
+            0x62U, 0x14U, 0x4cU, 0x0aU, 0xc1U, 0xfcU, 0x5aU, 0x18U,
+            0x50U, 0x6aU, 0x22U, 0x44U, 0xbaU, 0x44U, 0x9aU, 0xc4U,
+        };
+        static const uint8_t x25519_point[arwill_x25519_size] = {
+            0xe6U, 0xdbU, 0x68U, 0x67U, 0x58U, 0x30U, 0x30U, 0xdbU,
+            0x35U, 0x94U, 0xc1U, 0xa4U, 0x24U, 0xb1U, 0x5fU, 0x7cU,
+            0x72U, 0x66U, 0x24U, 0xecU, 0x26U, 0xb3U, 0x35U, 0x3bU,
+            0x10U, 0xa9U, 0x03U, 0xa6U, 0xd0U, 0xabU, 0x1cU, 0x4cU,
+        };
+        static const uint8_t expected_x25519[arwill_x25519_size] = {
+            0xc3U, 0xdaU, 0x55U, 0x37U, 0x9dU, 0xe9U, 0xc6U, 0x90U,
+            0x8eU, 0x94U, 0xeaU, 0x4dU, 0xf2U, 0x8dU, 0x08U, 0x4fU,
+            0x32U, 0xecU, 0xcfU, 0x03U, 0x49U, 0x1cU, 0x71U, 0xf7U,
+            0x54U, 0xb4U, 0x07U, 0x55U, 0x77U, 0xa2U, 0x85U, 0x52U,
+        };
         uint8_t digest[arwill_sha256_size];
-        int matches = 1;
+        uint8_t x25519_output[arwill_x25519_size];
+        int sha256_matches = 1;
+        int x25519_matches;
 
         arwill_crypto_sha256("abc", 3U, digest);
         for (size_t index = 0; index < arwill_sha256_size; index++) {
-            if (digest[index] != expected[index]) {
-                matches = 0;
+            if (digest[index] != expected_sha256[index]) {
+                sha256_matches = 0;
             }
         }
 
-        arwill_console_write_line(console, matches ?
+        arwill_console_write_line(console, sha256_matches ?
             "cryptocheck: sha256 abc passed" : "cryptocheck: sha256 abc failed");
+
+        x25519_matches = arwill_crypto_x25519(
+            x25519_output,
+            x25519_scalar,
+            x25519_point
+        );
+        for (size_t index = 0; index < arwill_x25519_size; index++) {
+            if (x25519_output[index] != expected_x25519[index]) {
+                x25519_matches = 0;
+            }
+        }
+        arwill_console_write_line(console, x25519_matches ?
+            "cryptocheck: x25519 rfc7748 passed" :
+            "cryptocheck: x25519 rfc7748 failed");
         return;
     }
 

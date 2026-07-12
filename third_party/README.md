@@ -17,3 +17,7 @@ binary package license in `third_party/limine/LICENSE`.
 subset: three BearSSL 0.6 source files (only trailing spaces normalized), the BearSSL MIT license,
 an Arwill compatibility header, and exact provenance. It intentionally does
 not contain BearSSL's TLS, X.509, or general public headers.
+
+`third_party/bearssl_x25519/` follows the same rule for X25519: one specialized
+Curve25519 implementation plus its constant-time copy helper, with a small
+Arwill compatibility header and exact provenance.

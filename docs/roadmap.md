@@ -494,5 +494,5 @@ driver work, not accidental default access for every ring 3 program.
 
    Status: cryptographic foundation selected in ADR-0037. SHA-256 and the first
    fail-closed x86-64/QEMU entropy source are implemented and smoke-tested per
-   ADR-0038. Remaining algorithms are Curve25519 ECDH, P-256 ECDSA host
-   authentication, and ChaCha20-Poly1305.
+   ADR-0038. X25519 is implemented and checked against RFC 7748. Remaining
+   algorithms are P-256 ECDSA host authentication and ChaCha20-Poly1305.
