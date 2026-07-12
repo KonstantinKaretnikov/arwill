@@ -44,8 +44,8 @@ Rules for future work:
 - Treat ARFS v2 as a tiny mutable filesystem core with fixed entry, path, and
   file-size limits. It supports directory creation, whole-file byte writes,
   removal, and contiguous allocation, but has no append, rename, journal,
-  atomic metadata update, or crash consistency. The shell `write` command
-  remains restricted to `/owner/note` until dedicated commands expose more.
+  atomic metadata update, or crash consistency. The shell exposes these
+  operations through `mkdir`, `write`, `writehex`, and `rm`.
 - Treat the current kernel heap as a small HHDM-backed free-list allocator. It
   is useful for small kernel objects, but it is not a slab allocator, virtual
   memory subsystem, userspace heap, or physical page release mechanism.

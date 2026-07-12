@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.11.0 has one executable path:
+Arwill 0.12.0 has one executable path:
 
 ```text
 Limine bootloader

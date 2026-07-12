@@ -53,7 +53,10 @@ static const struct shell_command shell_commands[] = {
     { .name = "clear", .completion = shell_completion_none },
     { .name = "ls", .completion = shell_completion_path },
     { .name = "cat", .completion = shell_completion_path },
+    { .name = "mkdir", .completion = shell_completion_directory_path },
     { .name = "write", .completion = shell_completion_path },
+    { .name = "writehex", .completion = shell_completion_path },
+    { .name = "rm", .completion = shell_completion_path },
     { .name = "stat", .completion = shell_completion_path },
     { .name = "meminfo", .completion = shell_completion_none },
     { .name = "heaptest", .completion = shell_completion_none },
@@ -732,7 +735,10 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  clear      clear the terminal screen");
     arwill_console_write_line(console, "  ls [path]  list the current filesystem");
     arwill_console_write_line(console, "  cat [path] show text file contents");
-    arwill_console_write_line(console, "  write [path] [text] overwrite a writable text file");
+    arwill_console_write_line(console, "  mkdir [path] create a directory");
+    arwill_console_write_line(console, "  write [path] [text] create or overwrite a text file");
+    arwill_console_write_line(console, "  writehex [path] [hex] create or overwrite a binary file");
+    arwill_console_write_line(console, "  rm [path] remove a file or empty directory");
     arwill_console_write_line(console, "  stat [path] show file or directory metadata");
     arwill_console_write_line(console, "  meminfo    show memory map and allocators");
     arwill_console_write_line(console, "  heaptest   exercise kernel heap allocation");
@@ -989,7 +995,12 @@ static void write_file(
         return;
     }
 
-    if (!arwill_filesystem_write_file(filesystem, resolved_path, contents)) {
+    if (!arwill_filesystem_write_bytes(
+            filesystem,
+            resolved_path,
+            arwill_fs_file_text,
+            (const uint8_t *)contents,
+            string_length(contents))) {
         arwill_console_write(console, "write: cannot write: ");
         arwill_console_write_line(console, resolved_path);
         return;
@@ -998,6 +1009,118 @@ static void write_file(
     arwill_console_write(console, "write: wrote ");
     write_uint64_decimal(console, (uint64_t)string_length(contents));
     arwill_console_write(console, " bytes to ");
+    arwill_console_write_line(console, resolved_path);
+}
+
+static int hex_nibble(char value, uint8_t *nibble) {
+    if (value >= '0' && value <= '9') {
+        *nibble = (uint8_t)(value - '0');
+        return 1;
+    }
+    if (value >= 'a' && value <= 'f') {
+        *nibble = (uint8_t)(value - 'a' + 10);
+        return 1;
+    }
+    if (value >= 'A' && value <= 'F') {
+        *nibble = (uint8_t)(value - 'A' + 10);
+        return 1;
+    }
+    return 0;
+}
+
+static void write_hex_file(
+    const struct arwill_console *console,
+    const struct arwill_filesystem *filesystem,
+    const char *current_directory,
+    const char *argument
+) {
+    char path_argument[shell_path_capacity];
+    char resolved_path[shell_path_capacity];
+    uint8_t bytes[shell_line_capacity / 2U];
+    const char *hex = second_argument_after_first(argument);
+    const size_t hex_length = string_length(hex);
+
+    if (!copy_first_argument(path_argument, sizeof(path_argument), argument)) {
+        arwill_console_write_line(console, "writehex: path too long");
+        return;
+    }
+    if (path_argument[0] == '\0') {
+        arwill_console_write_line(console, "writehex: missing path");
+        return;
+    }
+    if (hex_length == 0U || (hex_length % 2U) != 0U) {
+        arwill_console_write_line(console, "writehex: hex must contain complete bytes");
+        return;
+    }
+    if (!resolve_path(current_directory, path_argument, resolved_path, sizeof(resolved_path))) {
+        arwill_console_write_line(console, "writehex: path too long");
+        return;
+    }
+
+    const size_t byte_count = hex_length / 2U;
+    for (size_t index = 0; index < byte_count; index++) {
+        uint8_t high = 0;
+        uint8_t low = 0;
+        if (!hex_nibble(hex[index * 2U], &high) ||
+            !hex_nibble(hex[index * 2U + 1U], &low)) {
+            arwill_console_write_line(console, "writehex: invalid hex digit");
+            return;
+        }
+        bytes[index] = (uint8_t)((uint8_t)(high << 4U) | low);
+    }
+
+    if (!arwill_filesystem_write_bytes(
+            filesystem, resolved_path, arwill_fs_file_binary, bytes, byte_count)) {
+        arwill_console_write(console, "writehex: cannot write: ");
+        arwill_console_write_line(console, resolved_path);
+        return;
+    }
+
+    arwill_console_write(console, "writehex: wrote ");
+    write_uint64_decimal(console, (uint64_t)byte_count);
+    arwill_console_write(console, " bytes to ");
+    arwill_console_write_line(console, resolved_path);
+}
+
+static void mutate_path(
+    const struct arwill_console *console,
+    const struct arwill_filesystem *filesystem,
+    const char *current_directory,
+    const char *argument,
+    const char *command,
+    int create
+) {
+    char path_argument[shell_path_capacity];
+    char resolved_path[shell_path_capacity];
+
+    if (!copy_first_argument(path_argument, sizeof(path_argument), argument)) {
+        arwill_console_write(console, command);
+        arwill_console_write_line(console, ": path too long");
+        return;
+    }
+    if (path_argument[0] == '\0') {
+        arwill_console_write(console, command);
+        arwill_console_write_line(console, ": missing path");
+        return;
+    }
+    if (!resolve_path(current_directory, path_argument, resolved_path, sizeof(resolved_path))) {
+        arwill_console_write(console, command);
+        arwill_console_write_line(console, ": path too long");
+        return;
+    }
+
+    const int changed = create
+        ? arwill_filesystem_create_directory(filesystem, resolved_path)
+        : arwill_filesystem_remove(filesystem, resolved_path);
+    if (!changed) {
+        arwill_console_write(console, command);
+        arwill_console_write(console, create ? ": cannot create: " : ": cannot remove: ");
+        arwill_console_write_line(console, resolved_path);
+        return;
+    }
+
+    arwill_console_write(console, command);
+    arwill_console_write(console, create ? ": created " : ": removed ");
     arwill_console_write_line(console, resolved_path);
 }
 
@@ -1067,7 +1190,9 @@ static void print_stat(
     }
 
     arwill_console_write_line(console, "binary file");
-    arwill_console_write_line(console, "size: unknown");
+    arwill_console_write(console, "size: ");
+    write_uint64_decimal(console, file.size_bytes);
+    arwill_console_write_line(console, " bytes");
 }
 
 static void print_memory_region(
@@ -2251,8 +2376,25 @@ static void run_command(
         return;
     }
 
+    if (string_equals(line, "mkdir") || starts_with(line, "mkdir ")) {
+        mutate_path(console, filesystem, current_directory,
+            argument_after_command(line), "mkdir", 1);
+        return;
+    }
+
     if (string_equals(line, "write") || starts_with(line, "write ")) {
         write_file(console, filesystem, current_directory, argument_after_command(line));
+        return;
+    }
+
+    if (string_equals(line, "writehex") || starts_with(line, "writehex ")) {
+        write_hex_file(console, filesystem, current_directory, argument_after_command(line));
+        return;
+    }
+
+    if (string_equals(line, "rm") || starts_with(line, "rm ")) {
+        mutate_path(console, filesystem, current_directory,
+            argument_after_command(line), "rm", 0);
         return;
     }
 

@@ -15,7 +15,7 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.11.0`
+Version: `0.12.0`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
@@ -26,8 +26,9 @@ registry, and launch small cooperative kernel processes that can yield and
 continue on later shell steps. It can also load a tiny stored Arwill Program
 Image from ARFS and run it in ring 3. Arwill can also read sectors from a
 QEMU-attached raw test disk through an ATA PIO block-device driver and serve
-shell filesystem commands from a storage-backed ARFS image. ARFS now supports a
-first persistent writable owner note at `/owner/note`.
+shell filesystem commands from a storage-backed ARFS image. ARFS v2 now exposes
+bounded directory creation, whole-file text and binary writes, removal, and
+reuse of released contiguous space.
 The x86-64/QEMU path now installs an IDT, remaps the legacy PIC, configures the
 PIT timer, and exposes interrupt, timer, and scheduler tick diagnostics. It can
 also enter ring 3 for tiny built-in user programs, handle `int 0x80` syscalls
@@ -98,7 +99,10 @@ cd [path]
 clear
 ls [path]
 cat [path]
+mkdir [path]
 write [path] [text]
+writehex [path] [hex]
+rm [path]
 stat [path]
 meminfo
 heaptest
@@ -126,9 +130,12 @@ current directory and supports absolute paths, relative paths, `.`, and `..`.
 `/boot/limine/limine.conf`, and `/docs/readme`. Binary boot artifacts are
 visible in listings, but their contents are not displayed yet.
 
-`write /owner/note [text]` overwrites the first writable ARFS text file. The
-data is written to the QEMU raw disk image and is verified by the smoke test
-across a rebooted QEMU session. Other paths remain read-only for now.
+`mkdir` creates a directory, `write` creates or replaces a complete text file,
+`writehex` creates or replaces a binary file from pairs of hexadecimal digits,
+and `rm` removes a file or empty directory. Mutations are persisted to the QEMU
+raw disk image. ARFS v2 remains bounded to 16 entries, short paths, files below
+2048 bytes, and contiguous allocation; it has no append, rename, journal, or
+crash consistency.
 
 `stat` displays directory and file metadata. `devices` lists the current
 platform devices and their basic status. `meminfo` prints the
@@ -194,7 +201,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.11.0
+Arwill 0.12.0
 architecture: x86_64
 platform: qemu
 console: serial

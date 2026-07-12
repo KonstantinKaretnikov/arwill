@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.11.0`.
+Status: `0.12.0`.
 
 Arwill already has:
 
@@ -59,8 +59,8 @@ Arwill already has:
 - [x] single-owner OS model: one owner, no accounts or multi-user permission
   system, with the kernel/user boundary kept as an engineering guardrail.
 
-Arwill has an ARFS v2 mutable core, but the shell does not yet expose general
-creation and removal commands. Arwill does not have append, rename, saved CPU
+Arwill has an ARFS v2 mutable core exposed through bounded shell creation,
+whole-file write, and removal commands. Arwill does not have append, rename, saved CPU
 contexts, preemptive context switching,
 per-process address spaces, ELF program loading, dynamic linking, multi-user
 accounts, or a general-purpose writable storage subsystem.
@@ -402,8 +402,21 @@ driver work, not accidental default access for every ring 3 program.
 
    Scope: persist a fixed mutable manifest, create directories, write complete
    text or binary files, remove entries, and infer reusable contiguous space
-   from the manifest. Shell commands beyond the existing owner-note write are
-   intentionally deferred to the next milestone.
+   from the manifest. Shell exposure was intentionally deferred to the next
+   milestone.
 
    Verified by: clean build and the existing persistent owner-note smoke path,
    which now persists its changed size through the ARFS v2 manifest.
+
+13. [x] ARFS v2 shell mutations
+
+   Status: done in `0.12.0`.
+
+   Scope: expose the existing mutable filesystem contract through canonical
+   `mkdir`, `write`, `writehex`, and `rm` commands. Text and binary files use
+   whole-file writes; directories must be empty before removal.
+
+   Verified by: the QEMU smoke test creates a directory plus text and binary
+   files, reboots, verifies their persisted type, size, and contents, executes
+   the stored AWP application, removes the entries, and verifies that the first
+   released data sector is reused.

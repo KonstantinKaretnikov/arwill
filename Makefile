@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.11.0
+PROJECT_VERSION := 0.12.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -62,7 +62,7 @@ SOURCES := \
 
 OBJECTS := $(SOURCES:%.c=$(OBJ_DIR)/%.o)
 
-.PHONY: setup build run check clean check-tools check-artifacts smoke
+.PHONY: setup build run check clean check-tools check-artifacts smoke FORCE
 
 setup:
 	@scripts/setup_limine.sh
@@ -116,8 +116,10 @@ $(ISO): $(KERNEL) platform/qemu/limine.conf third_party/limine/limine
 		$(ISO_ROOT) -o $(ISO)
 	third_party/limine/limine bios-install $(ISO)
 
-$(TEST_DISK): scripts/create_test_disk.sh $(HELLO_APP) Makefile
+$(TEST_DISK): scripts/create_test_disk.sh $(HELLO_APP) Makefile FORCE
 	@sh scripts/create_test_disk.sh "$@" "$(PROJECT_VERSION)" "$(HELLO_APP)"
+
+FORCE:
 
 $(HELLO_APP): apps/hello/build.sh Makefile
 	@sh apps/hello/build.sh "$@"

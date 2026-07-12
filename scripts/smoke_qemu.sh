@@ -88,7 +88,7 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.11.0" 2
+    wait_for_primary_log_count "Arwill 0.12.0" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
@@ -173,8 +173,14 @@ run_qemu_to_log() {
     printf 'cat /apps/hello.awp\r'
     wait_for_primary_log "cat: cannot display binary file: /apps/hello.awp"
     sleep 0.1
-    printf 'write /docs/readme nope\r'
-    wait_for_primary_log "write: cannot write: /docs/readme"
+    printf 'mkdir /scratch\r'
+    wait_for_primary_log "mkdir: created /scratch"
+    sleep 0.1
+    printf 'write /scratch/message persistent mutable text\r'
+    wait_for_primary_log "write: wrote 23 bytes to /scratch/message"
+    sleep 0.1
+    printf 'writehex /scratch/data.bin 0001027f80feff\r'
+    wait_for_primary_log "writehex: wrote 7 bytes to /scratch/data.bin"
     sleep 0.1
     printf 'write /owner/note owner note persisted across reboot\r'
     wait_for_primary_log "write: wrote 34 bytes to /owner/note"
@@ -210,7 +216,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.11.0"
+    wait_for_primary_log "version: 0.12.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -298,7 +304,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.11.0"
+check_line "Arwill 0.12.0"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -318,11 +324,14 @@ check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.11.0"
+check_line "Arwill 0.12.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
-check_line "write [path] [text] overwrite a writable text file"
+check_line "mkdir [path] create a directory"
+check_line "write [path] [text] create or overwrite a text file"
+check_line "writehex [path] [hex] create or overwrite a binary file"
+check_line "rm [path] remove a file or empty directory"
 check_line "meminfo    show memory map and allocators"
 check_line "heaptest   exercise kernel heap allocation"
 check_line "devices    list detected devices"
@@ -337,7 +346,7 @@ check_line "run [name] launch a built-in kernel process"
 check_line "exec [path] run a stored program image"
 check_line "step       run one cooperative process step"
 check_line "Up/Down    browse command history"
-check_absent "dir [path]"
+check_absent "  dir [path]  list the current filesystem"
 check_absent "info [path]"
 check_absent "poweroff"
 check_line "memory map:"
@@ -412,7 +421,9 @@ check_line "owner/"
 check_line "apps/"
 check_line "system/"
 check_line "cat: cannot display binary file: /apps/hello.awp"
-check_line "write: cannot write: /docs/readme"
+check_line "mkdir: created /scratch"
+check_line "write: wrote 23 bytes to /scratch/message"
+check_line "writehex: wrote 7 bytes to /scratch/data.bin"
 check_line "write: wrote 34 bytes to /owner/note"
 check_line "owner note persisted across reboot"
 check_line "path: /owner/note"
@@ -425,11 +436,11 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.11.0"
+check_line "version: 0.12.0"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
-check_line "writable: /owner/note"
+check_line "writable: ARFS v2 mutable core"
 check_line "cat: no such file: /docs/missing"
 check_line "Arwill:/boot/limine> "
 check_line "Arwill:/boot> exit"
@@ -443,6 +454,43 @@ check_line "status: powering off"
     sleep 0.1
     printf 'cat /owner/note\r'
     wait_for_reboot_log "owner note persisted across reboot"
+    sleep 0.1
+    printf 'cat /scratch/message\r'
+    wait_for_reboot_log "persistent mutable text"
+    sleep 0.1
+    printf 'stat /scratch/data.bin\r'
+    wait_for_reboot_log "size: 7 bytes"
+    sleep 0.1
+    printf 'cat /scratch/data.bin\r'
+    wait_for_reboot_log "cat: cannot display binary file: /scratch/data.bin"
+    sleep 0.1
+    printf 'exec /apps/hello.awp\r'
+    wait_for_reboot_log "awp hello from storage"
+    wait_for_reboot_log "exec: exited 9"
+    sleep 0.1
+    printf 'rm /scratch\r'
+    wait_for_reboot_log "rm: cannot remove: /scratch"
+    sleep 0.1
+    printf 'rm /scratch/message\r'
+    wait_for_reboot_log "rm: removed /scratch/message"
+    sleep 0.1
+    printf 'rm /scratch/data.bin\r'
+    wait_for_reboot_log "rm: removed /scratch/data.bin"
+    sleep 0.1
+    printf 'write /scratch/reused reused sector\r'
+    wait_for_reboot_log "write: wrote 13 bytes to /scratch/reused"
+    sleep 0.1
+    printf 'cat /scratch/reused\r'
+    wait_for_reboot_log "reused sector"
+    sleep 0.1
+    printf 'rm /scratch/reused\r'
+    wait_for_reboot_log "rm: removed /scratch/reused"
+    sleep 0.1
+    printf 'rm /scratch\r'
+    wait_for_reboot_log "rm: removed /scratch"
+    sleep 0.1
+    printf 'ls /scratch\r'
+    wait_for_reboot_log "ls: no such directory: /scratch"
     sleep 0.1
     printf 'exit\r'
     ) | run_qemu_to_log "$reboot_serial_log"
@@ -495,6 +543,34 @@ if ! grep -F -q "owner note persisted across reboot" "$reboot_serial_log"; then
     echo "--- reboot serial log ---" >&2
     cat "$reboot_serial_log" >&2
     echo "-------------------------" >&2
+    exit 1
+fi
+
+for expected in \
+    "persistent mutable text" \
+    "cat: cannot display binary file: /scratch/data.bin" \
+    "awp hello from storage" \
+    "rm: cannot remove: /scratch" \
+    "write: wrote 13 bytes to /scratch/reused" \
+    "rm: removed /scratch" \
+    "ls: no such directory: /scratch"
+do
+    if ! grep -F -q "$expected" "$reboot_serial_log"; then
+        echo "missing reboot mutable-filesystem output: $expected" >&2
+        cat "$reboot_serial_log" >&2
+        exit 1
+    fi
+done
+
+reused_data=$(dd if="$test_disk" bs=512 skip=14 count=1 2>/dev/null | LC_ALL=C tr -d '\000')
+if [ "$reused_data" != "reused sector" ]; then
+    echo "released ARFS data sector was not reused as expected" >&2
+    exit 1
+fi
+
+binary_hex=$(od -An -tx1 -N7 -j $((15 * 512)) "$test_disk" | tr -d ' \n')
+if [ "$binary_hex" != "0001027f80feff" ]; then
+    echo "persisted ARFS binary contents differ: $binary_hex" >&2
     exit 1
 fi
 
