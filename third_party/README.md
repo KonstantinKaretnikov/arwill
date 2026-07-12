@@ -12,3 +12,8 @@ infrastructure used to load the Arwill kernel in QEMU.
 Limine is licensed separately. The setup script copies the Limine protocol
 license into `third_party/limine/LIMINE-PROTOCOL-LICENSE` and leaves the
 binary package license in `third_party/limine/LICENSE`.
+
+`third_party/bearssl_sha256/` contains a 572-line, purpose-built SHA-256
+subset: three BearSSL 0.6 source files (only trailing spaces normalized), the BearSSL MIT license,
+an Arwill compatibility header, and exact provenance. It intentionally does
+not contain BearSSL's TLS, X.509, or general public headers.

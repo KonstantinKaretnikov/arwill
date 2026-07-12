@@ -4,6 +4,7 @@
 #include <arwill/identity.h>
 #include <arwill/kernel/block_device.h>
 #include <arwill/kernel/console.h>
+#include <arwill/kernel/crypto.h>
 #include <arwill/kernel/clock.h>
 #include <arwill/kernel/cpu.h>
 #include <arwill/kernel/device.h>
@@ -61,6 +62,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "tcpcheck", .completion = shell_completion_none },
     { .name = "tcplisten", .completion = shell_completion_none },
     { .name = "tcpinfo", .completion = shell_completion_none },
+    { .name = "cryptocheck", .completion = shell_completion_none },
     { .name = "pwd", .completion = shell_completion_none },
     { .name = "cd", .completion = shell_completion_directory_path },
     { .name = "clear", .completion = shell_completion_none },
@@ -763,6 +765,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  tcpcheck   exercise the TCP listener handshake");
     arwill_console_write_line(console, "  tcplisten  poll for TCP port 22 connections");
     arwill_console_write_line(console, "  tcpinfo    show TCP port 22 listener state");
+    arwill_console_write_line(console, "  cryptocheck verify the SHA-256 primitive");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
@@ -2503,6 +2506,28 @@ static void run_command(
         arwill_console_write(console, ", ssh banners: ");
         write_uint64_decimal(console, ipv4->ssh_banners_sent);
         arwill_console_write_line(console, "");
+        return;
+    }
+
+    if (string_equals(line, "cryptocheck")) {
+        static const uint8_t expected[arwill_sha256_size] = {
+            0xbaU, 0x78U, 0x16U, 0xbfU, 0x8fU, 0x01U, 0xcfU, 0xeaU,
+            0x41U, 0x41U, 0x40U, 0xdeU, 0x5dU, 0xaeU, 0x22U, 0x23U,
+            0xb0U, 0x03U, 0x61U, 0xa3U, 0x96U, 0x17U, 0x7aU, 0x9cU,
+            0xb4U, 0x10U, 0xffU, 0x61U, 0xf2U, 0x00U, 0x15U, 0xadU,
+        };
+        uint8_t digest[arwill_sha256_size];
+        int matches = 1;
+
+        arwill_crypto_sha256("abc", 3U, digest);
+        for (size_t index = 0; index < arwill_sha256_size; index++) {
+            if (digest[index] != expected[index]) {
+                matches = 0;
+            }
+        }
+
+        arwill_console_write_line(console, matches ?
+            "cryptocheck: sha256 abc passed" : "cryptocheck: sha256 abc failed");
         return;
     }
 
