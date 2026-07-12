@@ -55,6 +55,7 @@ SOURCES := \
 	kernel/process.c \
 	kernel/scheduler.c \
 	kernel/shell.c \
+	kernel/tcp.c \
 	kernel/user.c \
 	arch/x86_64/boot/framebuffer_console.c \
 	arch/x86_64/boot/entry.c \

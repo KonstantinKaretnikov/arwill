@@ -483,6 +483,8 @@ driver work, not accidental default access for every ring 3 program.
 
 19. [ ] TCP and socket foundation
 
-   Goal: provide one bounded TCP listener suitable for a later owner-only SSH
-   service, including connection state, checksums, retransmission, and a small
-   kernel socket contract.
+   Status: started: port-22 listener handshake state is covered by `tcpcheck`.
+
+   Goal: wire the listener to IPv4 TCP packet parsing, checksums,
+   retransmission, and a small kernel socket contract for a later owner-only
+   SSH service.

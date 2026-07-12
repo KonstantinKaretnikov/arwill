@@ -16,6 +16,7 @@
 #include <arwill/kernel/process.h>
 #include <arwill/kernel/scheduler.h>
 #include <arwill/kernel/shell.h>
+#include <arwill/kernel/tcp.h>
 #include <arwill/kernel/user.h>
 
 enum {
@@ -57,6 +58,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "netcfg", .completion = shell_completion_none },
     { .name = "arping", .completion = shell_completion_none },
     { .name = "ping", .completion = shell_completion_none },
+    { .name = "tcpcheck", .completion = shell_completion_none },
     { .name = "pwd", .completion = shell_completion_none },
     { .name = "cd", .completion = shell_completion_directory_path },
     { .name = "clear", .completion = shell_completion_none },
@@ -756,6 +758,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  netcfg     show fixed IPv4 network configuration");
     arwill_console_write_line(console, "  arping     transmit an ARP request to the gateway");
     arwill_console_write_line(console, "  ping       send one ICMP echo to the gateway");
+    arwill_console_write_line(console, "  tcpcheck   exercise the TCP listener handshake");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
@@ -2422,6 +2425,38 @@ static void run_command(
             return;
         }
         arwill_console_write_line(console, "ping: reply received");
+        return;
+    }
+
+    if (string_equals(line, "tcpcheck")) {
+        struct arwill_tcp_listener listener;
+        struct arwill_tcp_segment syn;
+        struct arwill_tcp_segment reply;
+        struct arwill_tcp_segment ack;
+
+        arwill_tcp_listener_init(&listener, 22U, 0x41520000U);
+        syn.source_port = 4242U;
+        syn.destination_port = 22U;
+        syn.sequence = 100U;
+        syn.acknowledgement = 0U;
+        syn.flags = arwill_tcp_flag_syn;
+        if (!arwill_tcp_listener_receive(&listener, &syn, &reply) ||
+            reply.flags != (arwill_tcp_flag_syn | arwill_tcp_flag_ack) ||
+            reply.acknowledgement != 101U) {
+            arwill_console_write_line(console, "tcpcheck: SYN/SYN-ACK failed");
+            return;
+        }
+        ack.source_port = syn.source_port;
+        ack.destination_port = 22U;
+        ack.sequence = 101U;
+        ack.acknowledgement = reply.sequence + 1U;
+        ack.flags = arwill_tcp_flag_ack;
+        if (!arwill_tcp_listener_receive(&listener, &ack, &reply)) {
+            arwill_console_write_line(console, "tcpcheck: ACK failed");
+            return;
+        }
+        arwill_console_write(console, "tcpcheck: listener state ");
+        arwill_console_write_line(console, arwill_tcp_state_name(listener.state));
         return;
     }
 
