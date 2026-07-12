@@ -87,6 +87,7 @@ static int calculate(const char *text, size_t length, long *result) {
 
 int calculator_main(void) {
     static const char prompt[] = "calc> ";
+    static const char equals[] = "=";
     static const char interrupted[] = "^C\n";
     static const char error[] = "error\n";
     char input[64];
@@ -117,6 +118,7 @@ int calculator_main(void) {
             continue;
         }
 
+        syscall_write(equals, text_length(equals));
         const size_t output_length = format_number(output, result);
         syscall_write(output, output_length);
     }
