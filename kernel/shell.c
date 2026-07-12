@@ -11,6 +11,7 @@
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/interrupts.h>
 #include <arwill/kernel/memory.h>
+#include <arwill/kernel/network.h>
 #include <arwill/kernel/power.h>
 #include <arwill/kernel/process.h>
 #include <arwill/kernel/scheduler.h>
@@ -51,6 +52,8 @@ static const struct shell_command shell_commands[] = {
     { .name = "version", .completion = shell_completion_none },
     { .name = "uptime", .completion = shell_completion_none },
     { .name = "pciinfo", .completion = shell_completion_none },
+    { .name = "netinfo", .completion = shell_completion_none },
+    { .name = "netprobe", .completion = shell_completion_none },
     { .name = "pwd", .completion = shell_completion_none },
     { .name = "cd", .completion = shell_completion_directory_path },
     { .name = "clear", .completion = shell_completion_none },
@@ -418,6 +421,16 @@ static void write_uint64_hex(const struct arwill_console *console, uint64_t valu
     arwill_console_write(console, text);
 }
 
+static void write_uint8_hex(const struct arwill_console *console, uint8_t value) {
+    static const char digits[] = "0123456789abcdef";
+    char text[3];
+
+    text[0] = digits[(value >> 4U) & 0xfU];
+    text[1] = digits[value & 0xfU];
+    text[2] = '\0';
+    arwill_console_write(console, text);
+}
+
 static uint64_t saturating_add_uint64(uint64_t left, uint64_t right) {
     if (left > UINT64_MAX - right) {
         return UINT64_MAX;
@@ -735,6 +748,8 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  version    show kernel version");
     arwill_console_write_line(console, "  uptime     show monotonic time since boot");
     arwill_console_write_line(console, "  pciinfo    list discovered PCI devices");
+    arwill_console_write_line(console, "  netinfo    show network device diagnostics");
+    arwill_console_write_line(console, "  netprobe   transmit a raw Ethernet diagnostic frame");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
@@ -2263,6 +2278,7 @@ static void run_command(
     const struct arwill_power *power,
     struct arwill_process_manager *processes,
     const struct arwill_pci_bus *pci,
+    const struct arwill_network_device *network,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
     const struct arwill_clock *clock,
@@ -2303,6 +2319,10 @@ static void run_command(
                 write_uint64_hex(console, device->vendor_id);
                 arwill_console_write(console, " device ");
                 write_uint64_hex(console, device->device_id);
+                arwill_console_write(console, " bar0 ");
+                write_uint64_hex(console, device->bars[0]);
+                arwill_console_write(console, " bar1 ");
+                write_uint64_hex(console, device->bars[1]);
                 arwill_console_write(console, " class ");
                 write_uint64_hex(console, device->class_code);
                 arwill_console_write(console, "/");
@@ -2310,6 +2330,63 @@ static void run_command(
                 arwill_console_write_line(console, "");
             }
         }
+        return;
+    }
+
+    if (string_equals(line, "netinfo")) {
+        uint8_t mac[arwill_network_mac_length];
+
+        arwill_console_write(console, "network: ");
+        if (network == 0 || network->name == 0) {
+            arwill_console_write_line(console, "unavailable");
+            return;
+        }
+        arwill_console_write_line(console, network->name);
+        arwill_console_write(console, "mac: ");
+        if (!arwill_network_read_mac(network, mac)) {
+            arwill_console_write_line(console, "unavailable");
+            return;
+        }
+        for (size_t index = 0; index < arwill_network_mac_length; index++) {
+            if (index != 0U) {
+                arwill_console_write(console, ":");
+            }
+            write_uint8_hex(console, mac[index]);
+        }
+        arwill_console_write_line(console, "");
+        arwill_console_write_line(console, "frame path: tx/rx bounded polling ready");
+        return;
+    }
+
+    if (string_equals(line, "netprobe")) {
+        uint8_t mac[arwill_network_mac_length];
+        uint8_t frame[60];
+        static const char payload[] = "ARWILL-NETWORK-FRAME-TEST";
+        const size_t payload_offset = 14U;
+
+        if (network == 0 || !arwill_network_read_mac(network, mac)) {
+            arwill_console_write_line(console, "netprobe: network unavailable");
+            return;
+        }
+        for (size_t index = 0; index < sizeof(frame); index++) {
+            frame[index] = 0;
+        }
+        for (size_t index = 0; index < arwill_network_mac_length; index++) {
+            frame[index] = 0xffU;
+            frame[index + arwill_network_mac_length] = mac[index];
+        }
+        frame[12] = 0x88U;
+        frame[13] = 0xb5U;
+        for (size_t index = 0; index + 1U < sizeof(payload); index++) {
+            frame[payload_offset + index] = (uint8_t)payload[index];
+        }
+        if (!arwill_network_send_frame(network, frame, sizeof(frame))) {
+            arwill_console_write_line(console, "netprobe: transmit failed");
+            return;
+        }
+        arwill_console_write(console, "netprobe: transmitted ");
+        write_size_decimal(console, sizeof(frame));
+        arwill_console_write_line(console, " bytes");
         return;
     }
 
@@ -2464,6 +2541,7 @@ void arwill_shell_run(
     const struct arwill_power *power,
     struct arwill_process_manager *processes,
     const struct arwill_pci_bus *pci,
+    const struct arwill_network_device *network,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
     const struct arwill_clock *clock,
@@ -2528,6 +2606,7 @@ void arwill_shell_run(
                 power,
                 processes,
                 pci,
+                network,
                 block_device,
                 interrupts,
                 clock,

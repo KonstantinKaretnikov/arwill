@@ -79,6 +79,8 @@ const char *arwill_device_kind_name(enum arwill_device_kind kind) {
             return "interrupts";
         case arwill_device_kind_user_runtime:
             return "user";
+        case arwill_device_kind_network:
+            return "network";
     }
 
     return "unknown";

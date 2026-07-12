@@ -21,7 +21,7 @@ QEMU_MACHINE := pc
 QEMU_POWEROFF_EXIT_STATUS := 33
 QEMU_POWEROFF_ARGS := -device isa-debug-exit,iobase=0xf4,iosize=0x04
 QEMU_STORAGE_ARGS := -drive file=$(TEST_DISK),format=raw,if=ide,index=0,media=disk
-QEMU_NETWORK_ARGS := -netdev user,id=net0 -device e1000,netdev=net0
+QEMU_NETWORK_ARGS := -netdev user,id=net0 -device e1000,netdev=net0,mac=52:54:00:12:34:56
 
 CFLAGS := --target=x86_64-elf
 CFLAGS += -std=c11 -ffreestanding -fno-stack-protector -fno-stack-check
@@ -48,6 +48,7 @@ SOURCES := \
 	kernel/input.c \
 	kernel/main.c \
 	kernel/memory.c \
+	kernel/network.c \
 	kernel/pci.c \
 	kernel/power.c \
 	kernel/process.c \
@@ -62,6 +63,7 @@ SOURCES := \
 	arch/x86_64/cpu/pci.c \
 	arch/x86_64/cpu/user_mode.c \
 	platform/qemu/x86_64/ata_pio.c \
+	platform/qemu/x86_64/e1000.c \
 	platform/qemu/x86_64/power.c \
 	platform/qemu/x86_64/serial_console.c
 

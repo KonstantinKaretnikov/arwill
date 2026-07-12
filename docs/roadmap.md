@@ -458,7 +458,20 @@ driver work, not accidental default access for every ring 3 program.
 
    Verified by: smoke discovery of Intel vendor `8086`, device `100e`.
 
-17. [ ] QEMU Ethernet driver
+17. [x] QEMU Ethernet driver
 
-   Goal: bind the discovered e1000 and implement bounded frame TX/RX through a
-   replaceable network-device contract.
+   Status: done in `0.14.0`.
+
+   Scope: bind the discovered e1000, map its MMIO BAR, enable PCI bus mastering,
+   and implement bounded frame TX/RX through a replaceable network-device
+   contract. `netinfo` reports the deterministic MAC and `netprobe` sends a
+   minimum-size broadcast frame.
+
+   Verified by: QEMU smoke transmission of a 60-byte Ethernet diagnostic
+   frame. Interrupt-driven networking, sockets, and IP configuration remain
+   out of scope for this milestone.
+
+18. [ ] ARP/IPv4/ICMP foundation
+
+   Goal: add a small stateless network layer above Ethernet for one fixed QEMU
+   IPv4 address, ARP resolution, and ICMP echo requests.

@@ -75,7 +75,7 @@ run_qemu_to_log() {
         -serial stdio -monitor none -display none -no-reboot \
         -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
         -drive file="$test_disk",format=raw,if=ide,index=0,media=disk \
-        -netdev user,id=net0 -device e1000,netdev=net0 \
+        -netdev user,id=net0 -device e1000,netdev=net0,mac=52:54:00:12:34:56 \
         > "$log_file" 2>&1
 }
 
@@ -97,6 +97,14 @@ run_qemu_to_log() {
     printf 'pciinfo\r'
     wait_for_primary_log "pci: x86_64 configuration mechanism 1"
     wait_for_primary_log "vendor 0x0000000000008086 device 0x000000000000100e"
+    sleep 0.1
+    printf 'netinfo\r'
+    wait_for_primary_log "network: qemu e1000"
+    wait_for_primary_log "mac: 52:54:00:12:34:56"
+    wait_for_primary_log "frame path: tx/rx bounded polling ready"
+    sleep 0.1
+    printf 'netprobe\r'
+    wait_for_primary_log "netprobe: transmitted 60 bytes"
     sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
@@ -336,6 +344,12 @@ check_line "uptime: "
 check_line "pciinfo    list discovered PCI devices"
 check_line "pci: x86_64 configuration mechanism 1"
 check_line "vendor 0x0000000000008086 device 0x000000000000100e"
+check_line "netinfo    show network device diagnostics"
+check_line "netprobe   transmit a raw Ethernet diagnostic frame"
+check_line "network: qemu e1000"
+check_line "mac: 52:54:00:12:34:56"
+check_line "frame path: tx/rx bounded polling ready"
+check_line "netprobe: transmitted 60 bytes"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"

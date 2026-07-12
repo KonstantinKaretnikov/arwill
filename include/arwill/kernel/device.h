@@ -15,7 +15,8 @@ enum arwill_device_kind {
     arwill_device_kind_memory,
     arwill_device_kind_power,
     arwill_device_kind_interrupts,
-    arwill_device_kind_user_runtime
+    arwill_device_kind_user_runtime,
+    arwill_device_kind_network
 };
 
 struct arwill_device_entry {

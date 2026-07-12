@@ -28,6 +28,21 @@ static uint32_t config_read32(uint8_t slot, uint8_t function, uint8_t offset) {
     return arwill_x86_64_in32(pci_config_data);
 }
 
+static void config_write32(uint8_t slot, uint8_t function, uint8_t offset, uint32_t value) {
+    arwill_x86_64_out32(pci_config_address, config_address(slot, function, offset));
+    arwill_x86_64_out32(pci_config_data, value);
+}
+
+int arwill_x86_64_pci_enable_bus_master(const struct arwill_pci_device *device) {
+    if (device == 0) {
+        return 0;
+    }
+
+    const uint32_t command = config_read32(device->slot, device->function, 0x04);
+    config_write32(device->slot, device->function, 0x04, command | 0x00000007U);
+    return (config_read32(device->slot, device->function, 0x04) & 0x00000004U) != 0U;
+}
+
 static void record_function(
     struct arwill_pci_bus *bus,
     uint8_t slot,

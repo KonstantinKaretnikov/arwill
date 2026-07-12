@@ -158,8 +158,9 @@ value is available to AWP programs through syscall `4` (`clock`). This is not
 calendar time: Arwill still has no RTC/CMOS reader, date, timezone, or NTP.
 
 `pciinfo` lists the bounded PCI scan used to discover platform devices. The
-current QEMU path attaches an Intel e1000 NIC; packet transmission is not
-implemented yet.
+current QEMU path attaches an Intel e1000 NIC. `netinfo` reports its fixed
+diagnostic MAC and `netprobe` transmits a bounded broadcast Ethernet frame;
+ARP, IP, sockets, and SSH are not implemented yet.
 
 `userinfo` displays the current x86-64 user-mode setup, including HHDM, GDT,
 TSS, syscall-gate, run, syscall, byte, and bad-syscall counters.

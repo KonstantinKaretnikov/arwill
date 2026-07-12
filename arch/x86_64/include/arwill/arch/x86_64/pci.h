@@ -5,4 +5,6 @@
 
 void arwill_x86_64_pci_scan(struct arwill_pci_bus *bus);
 
+int arwill_x86_64_pci_enable_bus_master(const struct arwill_pci_device *device);
+
 #endif

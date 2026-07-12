@@ -15,6 +15,7 @@
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/pci.h>
 #include <arwill/platform/qemu/ata_pio.h>
+#include <arwill/platform/qemu/e1000.h>
 #include <arwill/platform/qemu/power.h>
 #include <arwill/platform/qemu/serial_console.h>
 
@@ -109,6 +110,8 @@ void arwill_limine_entry(void) {
     const struct arwill_user_runtime *user_runtime =
         arwill_x86_64_user_mode_init(&arwill_limine_memory, hhdm_offset, input, clock);
     const struct arwill_interrupts *interrupts = arwill_x86_64_interrupts_init();
+    const struct arwill_network_device *network =
+        arwill_qemu_e1000_init(&arwill_limine_pci, &arwill_limine_memory, hhdm_offset);
 
     (void)arwill_device_register(
         &arwill_limine_devices,
@@ -173,6 +176,13 @@ void arwill_limine_entry(void) {
         user_runtime == 0 || user_runtime->name == 0 ? "none" : user_runtime->name,
         user_runtime == 0 ? "unavailable" : "ready"
     );
+    (void)arwill_device_register(
+        &arwill_limine_devices,
+        "net0",
+        arwill_device_kind_network,
+        network == 0 || network->name == 0 ? "none" : network->name,
+        network == 0 ? "unavailable" : "ready"
+    );
 
     if (filesystem == 0) {
         filesystem = arwill_boot_catalog_filesystem();
@@ -184,6 +194,7 @@ void arwill_limine_entry(void) {
         filesystem,
         &arwill_limine_memory,
         &arwill_limine_pci,
+        network,
         power,
         block_device,
         interrupts,
