@@ -205,10 +205,10 @@ int arwill_ipv4_ping_gateway(struct arwill_ipv4_stack *stack) {
 static uint16_t tcp_checksum(const uint8_t *ip, const uint8_t *tcp, size_t length) {
     uint32_t sum = 6U + (uint32_t)length;
 
-    for (size_t index = 12U; index < 20U; index += 2U) {
-        sum += get16(ip, index);
-        sum += get16(ip, index + 4U);
-    }
+    sum += get16(ip, 12U);
+    sum += get16(ip, 14U);
+    sum += get16(ip, 16U);
+    sum += get16(ip, 18U);
     for (size_t index = 0; index + 1U < length; index += 2U) {
         sum += get16(tcp, index);
     }
