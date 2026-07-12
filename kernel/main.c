@@ -34,6 +34,7 @@ void arwill_kernel_start(
     arwill_console_write_line(console, "platform: " ARWILL_TARGET_PLATFORM);
     arwill_console_write_line(console, "console: serial");
     arwill_console_write_line(console, "input: serial");
+    arwill_console_write_line(console, "owner: " ARWILL_OWNER_MODEL);
     arwill_console_write_line(console, "shell: ready");
     arwill_console_write(console, "filesystem: ");
     if (filesystem == 0 || filesystem->name == 0) {

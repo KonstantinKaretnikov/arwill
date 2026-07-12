@@ -6,10 +6,11 @@
 #endif
 
 #ifndef ARWILL_PROJECT_VERSION
-#define ARWILL_PROJECT_VERSION "0.5.0"
+#define ARWILL_PROJECT_VERSION "0.5.1"
 #endif
 
 #define ARWILL_TARGET_ARCHITECTURE "x86_64"
 #define ARWILL_TARGET_PLATFORM "qemu"
+#define ARWILL_OWNER_MODEL "single-owner"
 
 #endif

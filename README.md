@@ -15,7 +15,7 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.5.0`
+Version: `0.5.1`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
@@ -28,6 +28,10 @@ The x86-64/QEMU path now installs an IDT, remaps the legacy PIC, configures the
 PIT timer, and exposes interrupt, timer, and scheduler tick diagnostics. It can
 also enter ring 3 for tiny built-in user programs, handle `int 0x80` syscalls
 for `write` and `exit`, and report their exit status through `ps`.
+
+Arwill is a single-owner OS: there are no login accounts, roles, or multi-user
+permission model. The owner has full system control, while the kernel/user
+boundary remains as an engineering guardrail around ordinary ring 3 programs.
 
 ## Supported Host and Target
 
@@ -97,6 +101,7 @@ irqinfo
 irqprobe
 schedinfo
 userinfo
+ownerinfo
 ps
 run [name]
 exit
@@ -126,6 +131,10 @@ scheduler foundation.
 
 `userinfo` displays the current x86-64 user-mode setup, including HHDM, GDT,
 TSS, syscall-gate, run, syscall, byte, and bad-syscall counters.
+
+`ownerinfo` displays Arwill's single-owner model: no accounts, full owner
+control, ordinary ring 3 programs through syscalls, and privileged work through
+explicit kernel or driver code.
 
 `run [name]` launches one of the built-in cooperative kernel processes:
 `hello`, `counter`, `userhello`, or `userbad`. `userhello` enters ring 3 and
@@ -161,11 +170,12 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.5.0
+Arwill 0.5.1
 architecture: x86_64
 platform: qemu
 console: serial
 input: serial
+owner: single-owner
 shell: ready
 filesystem: arfs read-only disk
 block: qemu ata pio

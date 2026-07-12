@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.5.0`.
+Status: `0.5.1`.
 
 Arwill already has:
 
@@ -28,7 +28,8 @@ Arwill already has:
 - [x] QEMU serial console output and blocking serial input;
 - [x] a serial shell with canonical commands only: `help`, `version`, `pwd`,
   `cd`, `clear`, `ls`, `cat`, `stat`, `meminfo`, `blkinfo`, `irqinfo`,
-  `irqprobe`, `schedinfo`, `userinfo`, `ps`, `run`, `exit`, and `halt`;
+  `irqprobe`, `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`, `exit`, and
+  `halt`;
 - [x] shell current directory state, path resolution, Tab completion, command
   history, and Russian-layout command-entry normalization;
 - [x] a static read-only boot catalog used by `ls`, `cd`, `cat`, `stat`, and
@@ -49,10 +50,24 @@ Arwill already has:
 - [x] minimal x86-64 ring 3 user-mode entry with GDT, TSS, HHDM-backed user
   mappings, `int 0x80` syscalls for `write` and `exit`, and process-table exit
   status for built-in user programs.
+- [x] single-owner OS model: one owner, no accounts or multi-user permission
+  system, with the kernel/user boundary kept as an engineering guardrail.
 
 Arwill does not yet have block writes, saved task contexts, preemptive context
-switching, per-process address spaces, ELF program loading, or writable
-persistent storage.
+switching, per-process address spaces, ELF program loading, multi-user
+accounts, or writable persistent storage.
+
+## Product Direction
+
+Arwill is intentionally a single-owner operating system. The owner should be
+able to control the whole machine directly. Arwill should not grow Unix-style
+multi-user accounts, groups, or role permissions unless a future ADR explicitly
+changes that direction.
+
+The kernel/user boundary still matters. It is not meant to restrict the owner;
+it is meant to keep ordinary programs from accidentally corrupting the kernel,
+storage, or hardware state. Privileged access should be explicit kernel or
+driver work, not accidental default access for every ring 3 program.
 
 ## Milestones
 
@@ -191,6 +206,28 @@ persistent storage.
 
    Definition of done: Arwill can run a separate ring 3 user-mode program with
    a clear first kernel/user syscall boundary.
+
+5a. [x] Single-owner OS model
+
+   Status: done in `0.5.1`.
+
+   Goal: make the ownership model explicit before adding more user-mode and
+   storage behavior.
+
+   Scope:
+
+   - document that Arwill has one owner and no account system;
+   - keep the owner fully in control of the machine;
+   - keep ring 3 as a safety boundary for ordinary programs, not as a
+     multi-user permissions mechanism;
+   - expose the model through startup output and `ownerinfo`;
+   - record the decision as an ADR.
+
+   Verified by:
+
+   - smoke test observes `owner: single-owner`;
+   - smoke test runs `ownerinfo`;
+   - docs and AGENTS distinguish CPU user mode from OS user accounts.
 
 6. [ ] Writable filesystem
 

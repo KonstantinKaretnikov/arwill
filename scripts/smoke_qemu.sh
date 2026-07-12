@@ -62,7 +62,7 @@ rm -f "$serial_log" "$qemu_status_log"
     wait_for_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_log_count "Arwill 0.5.0" 2
+    wait_for_log_count "Arwill 0.5.1" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_log_count "Arwill:/> " 4
@@ -100,6 +100,9 @@ rm -f "$serial_log" "$qemu_status_log"
     printf 'useri\t\r'
     wait_for_log "bad syscalls: 1"
     sleep 0.1
+    printf 'owneri\t\r'
+    wait_for_log "owner model: single-owner"
+    sleep 0.1
     printf 'ps\r'
     wait_for_log "pid state runs exit name"
     wait_for_log "finished"
@@ -132,7 +135,7 @@ rm -f "$serial_log" "$qemu_status_log"
     wait_for_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_log "version: 0.5.0"
+    wait_for_log "version: 0.5.1"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_log "type: text file"
@@ -224,11 +227,12 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.5.0"
+check_line "Arwill 0.5.1"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
 check_line "input: serial"
+check_line "owner: single-owner"
 check_line "shell: ready"
 check_line "filesystem: arfs read-only disk"
 check_line "block: qemu ata pio"
@@ -242,7 +246,7 @@ check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.5.0"
+check_line "Arwill 0.5.1"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -252,6 +256,7 @@ check_line "irqinfo    show interrupt and timer diagnostics"
 check_line "irqprobe   trigger a safe breakpoint exception"
 check_line "schedinfo  show scheduler tick diagnostics"
 check_line "userinfo   show user-mode diagnostics"
+check_line "ownerinfo  show the OS ownership model"
 check_line "ps         show kernel process table"
 check_line "run [name] launch a built-in kernel process"
 check_line "Up/Down    browse command history"
@@ -291,6 +296,11 @@ check_line "tss: loaded"
 check_line "syscall gate: loaded"
 check_line "runs: 2"
 check_line "bad syscalls: 1"
+check_line "owner model: single-owner"
+check_line "accounts: none"
+check_line "owner access: full system control"
+check_line "kernel boundary: ring 3 programs use syscalls"
+check_line "privileged code: explicit kernel or driver work"
 check_line "pid state runs exit name"
 check_line "2 finished 1 7 userhello"
 check_line "3 finished 1 127 userbad"
@@ -306,7 +316,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.5.0"
+check_line "version: 0.5.1"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed read-only filesystem"

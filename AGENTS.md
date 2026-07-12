@@ -36,6 +36,10 @@ Rules for future work:
   user-mode demos using the first `int 0x80` syscall ABI. Arwill still does not
   have a general ELF loader, per-process address spaces, saved task contexts, or
   preemptive user scheduling.
+- Treat Arwill as a single-owner OS. Do not introduce login accounts, groups,
+  roles, or multi-user permission checks unless a later ADR explicitly changes
+  this direction. The owner has full system control; ring 3 is an engineering
+  guardrail for ordinary programs, not an account boundary.
 - When a durable workflow agreement is made with the project owner, update this
   file or another appropriate document in the same change so future sessions do
   not need to rediscover it.

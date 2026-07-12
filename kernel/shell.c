@@ -59,6 +59,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "irqprobe", .completion = shell_completion_none },
     { .name = "schedinfo", .completion = shell_completion_none },
     { .name = "userinfo", .completion = shell_completion_none },
+    { .name = "ownerinfo", .completion = shell_completion_none },
     { .name = "ps", .completion = shell_completion_none },
     { .name = "run", .completion = shell_completion_process },
     { .name = "exit", .completion = shell_completion_none },
@@ -732,6 +733,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  irqprobe   trigger a safe breakpoint exception");
     arwill_console_write_line(console, "  schedinfo  show scheduler tick diagnostics");
     arwill_console_write_line(console, "  userinfo   show user-mode diagnostics");
+    arwill_console_write_line(console, "  ownerinfo  show the OS ownership model");
     arwill_console_write_line(console, "  ps         show kernel process table");
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
     arwill_console_write_line(console, "  exit       power off the machine");
@@ -1230,6 +1232,14 @@ static void print_user_info(
     arwill_console_write(console, "bad syscalls: ");
     write_uint64_decimal(console, stats.bad_syscalls);
     arwill_console_write_line(console, "");
+}
+
+static void print_owner_info(const struct arwill_console *console) {
+    arwill_console_write_line(console, "owner model: " ARWILL_OWNER_MODEL);
+    arwill_console_write_line(console, "accounts: none");
+    arwill_console_write_line(console, "owner access: full system control");
+    arwill_console_write_line(console, "kernel boundary: ring 3 programs use syscalls");
+    arwill_console_write_line(console, "privileged code: explicit kernel or driver work");
 }
 
 static uint32_t shell_hello_process(const struct arwill_process_runtime *runtime) {
@@ -1928,6 +1938,11 @@ static void run_command(
 
     if (string_equals(line, "userinfo")) {
         print_user_info(console, user_runtime);
+        return;
+    }
+
+    if (string_equals(line, "ownerinfo")) {
+        print_owner_info(console);
         return;
     }
 

@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.5.0 has one executable path:
+Arwill 0.5.1 has one executable path:
 
 ```text
 Limine bootloader
@@ -10,6 +10,7 @@ Limine bootloader
   -> QEMU serial I/O block
   -> QEMU ATA PIO block-device initialization
   -> ARFS read-only filesystem mount from the raw test disk
+  -> single-owner model publication
   -> x86-64 GDT, TSS, and user runtime initialization
   -> x86-64 IDT, PIC, and PIT timer initialization
   -> architecture-independent kernel startup
@@ -54,7 +55,7 @@ Shell:
 - Lives in `kernel/shell.c`.
 - Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
   `cat`, `stat`, `meminfo`, `blkinfo`, `irqinfo`, `irqprobe`, `schedinfo`,
-  `userinfo`, `ps`, `run`, `exit`, and `halt`.
+  `userinfo`, `ownerinfo`, `ps`, `run`, `exit`, and `halt`.
 - Keeps one canonical command name per operation; alias commands are not
   accepted.
 - Holds the current working directory as local shell state.
@@ -66,6 +67,17 @@ Shell:
   it does not support Cyrillic text entry yet.
 - Depends on block device, console, input, filesystem, memory, process, power,
   interrupts, scheduler, user runtime, and CPU idle contracts.
+
+Ownership model:
+
+- Arwill is a single-owner OS.
+- There are no login accounts, role databases, user IDs, groups, or multi-user
+  permission checks.
+- The owner has full system control by design.
+- The kernel/user CPU boundary is retained as an engineering boundary: ordinary
+  ring 3 programs use syscalls, while privileged access is added deliberately as
+  kernel or driver work.
+- `ownerinfo` exposes this model in the shell.
 
 Block device contract:
 
@@ -141,6 +153,7 @@ User runtime:
 - This is not a general program loader. There is no ELF loader, file-backed
   executable, per-process page table, argument passing, heap, signal model, or
   preemptive user scheduling yet.
+- "User" here means CPU user mode, not an Arwill account model.
 
 Power contract:
 
