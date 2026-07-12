@@ -115,6 +115,31 @@ int arwill_ipv4_send_arp_request(const struct arwill_ipv4_stack *stack,
     return arwill_network_send_frame(stack->network, frame, sizeof(frame));
 }
 
+static int send_arp_reply(struct arwill_ipv4_stack *stack, const uint8_t *request) {
+    uint8_t frame[60];
+
+    for (size_t index = 0; index < sizeof(frame); index++) {
+        frame[index] = 0;
+    }
+    for (size_t index = 0; index < arwill_network_mac_length; index++) {
+        frame[index] = request[22U + index];
+        frame[6U + index] = stack->mac[index];
+        frame[22U + index] = stack->mac[index];
+        frame[32U + index] = request[22U + index];
+    }
+    put16(frame, 12U, 0x0806U);
+    put16(frame, 14U, 1U);
+    put16(frame, 16U, 0x0800U);
+    frame[18] = 6U;
+    frame[19] = 4U;
+    put16(frame, 20U, 2U);
+    for (size_t index = 0; index < 4U; index++) {
+        frame[28U + index] = stack->address[index];
+        frame[38U + index] = request[28U + index];
+    }
+    return arwill_network_send_frame(stack->network, frame, sizeof(frame));
+}
+
 static int resolve_gateway(struct arwill_ipv4_stack *stack) {
     uint8_t frame[arwill_network_frame_capacity];
     size_t length = 0;
@@ -273,8 +298,14 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
     if (stack == 0 || stack->network == 0) {
         return 0;
     }
-    if (!arwill_network_poll_frame(stack->network, frame, sizeof(frame), &length) ||
-        length < 54U || get16(frame, 12U) != 0x0800U || frame[14] != 0x45U ||
+    if (!arwill_network_poll_frame(stack->network, frame, sizeof(frame), &length)) {
+        return 0;
+    }
+    if (length >= 42U && get16(frame, 12U) == 0x0806U && get16(frame, 20U) == 1U &&
+        same_bytes(frame + 38U, stack->address, 4U)) {
+        return send_arp_reply(stack, frame);
+    }
+    if (length < 54U || get16(frame, 12U) != 0x0800U || frame[14] != 0x45U ||
         frame[23] != 6U || !same_bytes(frame + 30U, stack->address, 4U)) {
         return 0;
     }
