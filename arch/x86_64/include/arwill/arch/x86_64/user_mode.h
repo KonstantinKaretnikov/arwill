@@ -5,6 +5,7 @@
 
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/input.h>
+#include <arwill/kernel/clock.h>
 #include <arwill/kernel/user.h>
 
 struct arwill_x86_64_user_run_state {
@@ -14,7 +15,8 @@ struct arwill_x86_64_user_run_state {
 const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     struct arwill_memory *memory,
     uint64_t hhdm_offset,
-    const struct arwill_input *input
+    const struct arwill_input *input,
+    const struct arwill_clock *clock
 );
 
 void arwill_x86_64_user_enter(

@@ -100,9 +100,10 @@ void arwill_limine_entry(void) {
     const struct arwill_filesystem *filesystem = arwill_arfs_mount(block_device);
     const struct limine_hhdm_response *hhdm = arwill_limine_hhdm_response();
     const uint64_t hhdm_offset = hhdm == 0 ? 0 : hhdm->offset;
+    const struct arwill_clock *clock = arwill_x86_64_pit_clock();
     (void)arwill_kernel_heap_init(&arwill_limine_memory, hhdm_offset, 4);
     const struct arwill_user_runtime *user_runtime =
-        arwill_x86_64_user_mode_init(&arwill_limine_memory, hhdm_offset, input);
+        arwill_x86_64_user_mode_init(&arwill_limine_memory, hhdm_offset, input, clock);
     const struct arwill_interrupts *interrupts = arwill_x86_64_interrupts_init();
 
     (void)arwill_device_register(
@@ -181,6 +182,7 @@ void arwill_limine_entry(void) {
         power,
         block_device,
         interrupts,
+        clock,
         user_runtime,
         &arwill_limine_devices
     );

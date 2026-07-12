@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.12.0
+PROJECT_VERSION := 0.13.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -39,6 +39,7 @@ SOURCES := \
 	kernel/arfs.c \
 	kernel/boot_catalog.c \
 	kernel/block_device.c \
+	kernel/clock.c \
 	kernel/console.c \
 	kernel/device.c \
 	kernel/filesystem.c \

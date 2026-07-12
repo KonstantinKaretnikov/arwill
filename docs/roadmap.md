@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.12.0`.
+Status: `0.13.0`.
 
 Arwill already has:
 
@@ -26,10 +26,11 @@ Arwill already has:
 - [x] a buildable bootable ISO and `make check` with a bounded QEMU serial smoke
   test;
 - [x] QEMU serial console output and blocking serial input;
-- [x] a serial shell with canonical commands only: `help`, `version`, `pwd`,
-  `cd`, `clear`, `ls`, `cat`, `write`, `stat`, `meminfo`, `blkinfo`,
-  `heaptest`, `irqinfo`, `irqprobe`, `schedinfo`, `userinfo`, `ownerinfo`,
-  `ps`, `run`, `step`, `exit`, and `halt`;
+- [x] a serial shell with canonical commands only: `help`, `version`, `uptime`,
+  `pwd`, `cd`, `clear`, `ls`, `cat`, `mkdir`, `write`, `writehex`, `rm`,
+  `stat`, `meminfo`, `blkinfo`, `heaptest`, `irqinfo`, `irqprobe`,
+  `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`, `exec`, `step`, `exit`,
+  and `halt`;
 - [x] shell current directory state, path resolution, Tab completion, command
   history, and Russian-layout command-entry normalization;
 - [x] a static read-only boot catalog used by `ls`, `cd`, `cat`, `stat`, and
@@ -54,8 +55,9 @@ Arwill already has:
   breakpoint exception diagnostic;
 - [x] scheduler tick accounting exposed through `schedinfo`;
 - [x] minimal x86-64 ring 3 user-mode entry with GDT, TSS, HHDM-backed user
-  mappings, `int 0x80` syscalls for `write` and `exit`, and process-table exit
-  status for built-in user programs.
+  mappings, `int 0x80` syscalls for `write`, `exit`, `read`, and `clock`, and
+  process-table exit status for built-in user programs;
+- [x] a PIT-backed monotonic clock exposed through `uptime` and syscall `4`;
 - [x] single-owner OS model: one owner, no accounts or multi-user permission
   system, with the kernel/user boundary kept as an engineering guardrail.
 
@@ -430,3 +432,16 @@ driver work, not accidental default access for every ring 3 program.
    process scheduling, or a language runtime.
 
    Verified by: smoke execution of `12*7`, observing `84` and a clean exit.
+
+15. [x] Monotonic timekeeping v1
+
+   Status: done in `0.13.0`.
+
+   Scope: add an architecture-independent clock contract backed by the 100 Hz
+   x86-64 PIT counter, expose monotonic milliseconds through `uptime`, and add
+   syscall `4` (`clock`) for AWP programs.
+
+   Verified by: the QEMU smoke test observes two increasing `uptime` values,
+   including one after ring 3 and stored AWP execution, and runs a temporary AWP
+   syscall probe. RTC/CMOS calendar time, dates, timezones, NTP, and process
+   timers remain out of scope.

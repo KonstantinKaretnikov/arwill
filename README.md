@@ -15,7 +15,7 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.12.0`
+Version: `0.13.0`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
@@ -32,7 +32,8 @@ reuse of released contiguous space.
 The x86-64/QEMU path now installs an IDT, remaps the legacy PIC, configures the
 PIT timer, and exposes interrupt, timer, and scheduler tick diagnostics. It can
 also enter ring 3 for tiny built-in user programs, handle `int 0x80` syscalls
-for `write` and `exit`, and report their exit status through `ps`.
+for output, exit, serial input, and monotonic time, and report their exit status
+through `ps`.
 
 Arwill is a single-owner OS: there are no login accounts, roles, or multi-user
 permission model. The owner has full system control, while the kernel/user
@@ -94,6 +95,7 @@ Available shell commands:
 ```text
 help
 version
+uptime
 pwd
 cd [path]
 clear
@@ -150,6 +152,10 @@ and a sample string read from LBA 1 of the deterministic test disk image.
 handled. `schedinfo` displays the current timer tick accounting for the first
 scheduler foundation.
 
+`uptime` displays monotonic milliseconds since PIT initialization. The same
+value is available to AWP programs through syscall `4` (`clock`). This is not
+calendar time: Arwill still has no RTC/CMOS reader, date, timezone, or NTP.
+
 `userinfo` displays the current x86-64 user-mode setup, including HHDM, GDT,
 TSS, syscall-gate, run, syscall, byte, and bad-syscall counters.
 
@@ -205,7 +211,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.12.0
+Arwill 0.13.0
 architecture: x86_64
 platform: qemu
 console: serial

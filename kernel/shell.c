@@ -4,6 +4,7 @@
 #include <arwill/identity.h>
 #include <arwill/kernel/block_device.h>
 #include <arwill/kernel/console.h>
+#include <arwill/kernel/clock.h>
 #include <arwill/kernel/cpu.h>
 #include <arwill/kernel/device.h>
 #include <arwill/kernel/filesystem.h>
@@ -48,6 +49,7 @@ struct shell_command {
 static const struct shell_command shell_commands[] = {
     { .name = "help", .completion = shell_completion_none },
     { .name = "version", .completion = shell_completion_none },
+    { .name = "uptime", .completion = shell_completion_none },
     { .name = "pwd", .completion = shell_completion_none },
     { .name = "cd", .completion = shell_completion_directory_path },
     { .name = "clear", .completion = shell_completion_none },
@@ -730,6 +732,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "commands:");
     arwill_console_write_line(console, "  help       show commands");
     arwill_console_write_line(console, "  version    show kernel version");
+    arwill_console_write_line(console, "  uptime     show monotonic time since boot");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
@@ -763,6 +766,15 @@ static void print_version(const struct arwill_console *console) {
     arwill_console_write(console, ARWILL_PROJECT_NAME);
     arwill_console_write(console, " ");
     arwill_console_write_line(console, ARWILL_PROJECT_VERSION);
+}
+
+static void print_uptime(
+    const struct arwill_console *console,
+    const struct arwill_clock *clock
+) {
+    arwill_console_write(console, "uptime: ");
+    write_uint64_decimal(console, arwill_clock_monotonic_milliseconds(clock));
+    arwill_console_write_line(console, " ms");
 }
 
 static void print_listing(
@@ -2250,6 +2262,7 @@ static void run_command(
     struct arwill_process_manager *processes,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
+    const struct arwill_clock *clock,
     const struct arwill_user_runtime *user_runtime,
     const struct arwill_device_registry *devices,
     struct shell_process_context *process_context,
@@ -2267,6 +2280,11 @@ static void run_command(
 
     if (string_equals(line, "version")) {
         print_version(console);
+        return;
+    }
+
+    if (string_equals(line, "uptime")) {
+        print_uptime(console, clock);
         return;
     }
 
@@ -2422,6 +2440,7 @@ void arwill_shell_run(
     struct arwill_process_manager *processes,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
+    const struct arwill_clock *clock,
     const struct arwill_user_runtime *user_runtime,
     const struct arwill_device_registry *devices
 ) {
@@ -2484,6 +2503,7 @@ void arwill_shell_run(
                 processes,
                 block_device,
                 interrupts,
+                clock,
                 user_runtime,
                 devices,
                 &process_context,

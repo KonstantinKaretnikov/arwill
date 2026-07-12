@@ -33,7 +33,8 @@ Rules for future work:
   later ADR explicitly reverses ADR-0015.
 - Distinguish process kinds precisely. `hello` and `counter` are cooperative
   kernel-managed built-ins. `userhello` and `userbad` are narrow ring 3
-  user-mode demos using the first `int 0x80` syscall ABI. Arwill still does not
+  user-mode demos using the first `int 0x80` syscall ABI (`write`, `exit`,
+  `read`, and `clock`). Arwill still does not
   have a general ELF loader, per-process address spaces, saved CPU contexts,
   independent kernel stacks, or preemptive user scheduling. Current cooperative
   yield saves explicit process progress only, not a hardware execution context.
@@ -54,6 +55,9 @@ Rules for future work:
 - Treat the current framebuffer text console as a serial-output mirror. It is
   not a graphics subsystem, terminal emulator, windowing layer, or input focus
   model.
+- Treat the current clock as a PIT-backed monotonic millisecond counter with
+  10 ms resolution. It is uptime since timer initialization, not RTC/CMOS
+  calendar time, a date service, a timezone model, NTP, or process timers.
 - Treat Arwill Program v1 as the first tiny stored executable format. It uses
   the `AWP1` magic, `.awp` extension, and `/apps` directory. It
   is not ELF, POSIX process loading, dynamic linking, argument passing,

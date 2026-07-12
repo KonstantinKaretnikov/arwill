@@ -5,6 +5,7 @@
 #include <arwill/arch/x86_64/io.h>
 #include <arwill/arch/x86_64/user_mode.h>
 #include <arwill/kernel/interrupts.h>
+#include <arwill/kernel/clock.h>
 #include <arwill/kernel/scheduler.h>
 
 enum {
@@ -66,6 +67,31 @@ struct x86_64_interrupt_context {
 
 static struct idt_entry idt[idt_entry_count];
 static struct x86_64_interrupt_context interrupt_context;
+
+static uint64_t pit_clock_monotonic_milliseconds(void *context) {
+    const struct x86_64_interrupt_context *interrupts =
+        (const struct x86_64_interrupt_context *)context;
+
+    if (interrupts == 0) {
+        return 0;
+    }
+
+    const uint64_t ticks = interrupts->timer_ticks;
+    const uint64_t seconds = ticks / timer_hz;
+
+    if (seconds > UINT64_MAX / 1000U) {
+        return UINT64_MAX;
+    }
+
+    return (seconds * 1000U) +
+        (((ticks % timer_hz) * 1000U) / timer_hz);
+}
+
+static const struct arwill_clock pit_clock = {
+    .name = "x86_64 pit monotonic",
+    .context = &interrupt_context,
+    .monotonic_milliseconds = pit_clock_monotonic_milliseconds,
+};
 
 static uint16_t read_code_segment(void) {
     uint16_t segment = 0;
@@ -234,4 +260,8 @@ const struct arwill_interrupts *arwill_x86_64_interrupts_init(void) {
     interrupt_context.timer_configured = 1;
 
     return &interrupts;
+}
+
+const struct arwill_clock *arwill_x86_64_pit_clock(void) {
+    return &pit_clock;
 }

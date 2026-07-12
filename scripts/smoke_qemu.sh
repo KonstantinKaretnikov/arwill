@@ -88,7 +88,10 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.12.0" 2
+    wait_for_primary_log_count "Arwill 0.13.0" 2
+    sleep 0.1
+    printf 'uptime\r'
+    wait_for_primary_log_count "uptime: " 1
     sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
@@ -185,6 +188,9 @@ run_qemu_to_log() {
     printf 'irqinfo\r'
     wait_for_primary_log_count "timer observed: yes" 2
     sleep 0.1
+    printf 'uptime\r'
+    wait_for_primary_log_count "uptime: " 2
+    sleep 0.1
     printf 'cat /apps/hello.awp\r'
     wait_for_primary_log "cat: cannot display binary file: /apps/hello.awp"
     sleep 0.1
@@ -231,7 +237,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.12.0"
+    wait_for_primary_log "version: 0.13.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -319,7 +325,9 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.12.0"
+check_line "Arwill 0.13.0"
+check_line "uptime     show monotonic time since boot"
+check_line "uptime: "
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -339,7 +347,7 @@ check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.12.0"
+check_line "Arwill 0.13.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -455,7 +463,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.12.0"
+check_line "version: 0.13.0"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
@@ -464,6 +472,14 @@ check_line "cat: no such file: /docs/missing"
 check_line "Arwill:/boot/limine> "
 check_line "Arwill:/boot> exit"
 check_line "status: powering off"
+
+uptime_values=$(sed -n 's/.*uptime: \([0-9][0-9]*\) ms.*/\1/p' "$serial_log")
+set -- $uptime_values
+if [ "$#" -lt 2 ] || [ "$2" -le "$1" ]; then
+    echo "monotonic uptime did not increase" >&2
+    cat "$serial_log" >&2
+    exit 1
+fi
 
 (
     set +e
@@ -495,6 +511,15 @@ check_line "status: powering off"
     sleep 0.1
     printf 'rm /scratch/data.bin\r'
     wait_for_reboot_log "rm: removed /scratch/data.bin"
+    sleep 0.1
+    printf 'writehex /c 41575031100000001700000000000000b804000000cd8031ff4885c0400f94c7b802000000cd80\r'
+    wait_for_reboot_log "writehex: wrote 39 bytes to /c"
+    sleep 0.1
+    printf 'exec /c\r'
+    wait_for_reboot_log "exec: exited 0"
+    sleep 0.1
+    printf 'rm /c\r'
+    wait_for_reboot_log "rm: removed /c"
     sleep 0.1
     printf 'write /scratch/reused reused sector\r'
     wait_for_reboot_log "write: wrote 13 bytes to /scratch/reused"
@@ -570,6 +595,9 @@ for expected in \
     "cat: cannot display binary file: /scratch/data.bin" \
     "awp hello from storage" \
     "rm: cannot remove: /scratch" \
+    "writehex: wrote 39 bytes to /c" \
+    "exec: exited 0" \
+    "rm: removed /c" \
     "write: wrote 13 bytes to /scratch/reused" \
     "rm: removed /scratch" \
     "ls: no such directory: /scratch"

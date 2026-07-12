@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.12.0 has one executable path:
+Arwill 0.13.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -156,6 +156,15 @@ Interrupt controller contract:
   LAPIC timer, IRQ routing model, nested interrupt policy, or generic device
   interrupt registration yet.
 
+Clock contract:
+
+- Public contract lives in `include/arwill/kernel/clock.h`.
+- The x86-64 implementation converts the 100 Hz PIT counter to monotonic
+  milliseconds with 10 ms resolution.
+- `uptime` and user syscall `4` expose the same value.
+- RTC/CMOS calendar time, dates, timezones, NTP, and process timers remain
+  absent.
+
 Scheduler foundation:
 
 - Public contract lives in `include/arwill/kernel/scheduler.h`.
@@ -179,8 +188,8 @@ User runtime:
   loads a TSS with an `rsp0` stack for privilege transitions, maps one user code
   page and one user stack page, and enters ring 3 with `iretq`.
 - The first syscall ABI uses `int 0x80`: syscall `1` writes bytes to the serial
-  console through the console contract, and syscall `2` exits with a status
-  code.
+  console, syscall `2` exits with a status code, syscall `3` reads serial input,
+  and syscall `4` returns monotonic milliseconds since PIT initialization.
 - `run userhello` executes a tiny generated user program that writes
   `user hello: hello from ring 3` through syscall `write` and exits with code
   `7`.

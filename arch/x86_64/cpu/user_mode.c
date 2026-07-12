@@ -3,6 +3,7 @@
 
 #include <arwill/arch/x86_64/user_mode.h>
 #include <arwill/kernel/console.h>
+#include <arwill/kernel/clock.h>
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/user.h>
@@ -26,6 +27,7 @@ enum {
     syscall_write = 1,
     syscall_exit = 2,
     syscall_read = 3,
+    syscall_clock = 4,
     user_code_message_offset = 0x100,
     user_write_limit = 256,
     bad_syscall_exit_code = 127
@@ -122,6 +124,7 @@ struct x86_64_user_context {
     uint64_t bad_syscalls;
     const struct arwill_console *active_console;
     const struct arwill_input *input;
+    const struct arwill_clock *clock;
     struct arwill_x86_64_user_run_state run_state;
     uint64_t active_code_base;
     uint64_t active_code_size;
@@ -728,6 +731,11 @@ static int arwill_x86_64_user_handle_syscall(
         return 0;
     }
 
+    if (registers->rax == syscall_clock) {
+        registers->rax = arwill_clock_monotonic_milliseconds(user_context.clock);
+        return 0;
+    }
+
     user_context.bad_syscalls++;
     user_context.active_exit_code = bad_syscall_exit_code;
     user_context.active_status = "bad syscall";
@@ -933,7 +941,8 @@ static const struct arwill_user_runtime user_runtime = {
 const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     struct arwill_memory *memory,
     uint64_t hhdm_offset,
-    const struct arwill_input *input
+    const struct arwill_input *input,
+    const struct arwill_clock *clock
 ) {
     user_context.memory = memory;
     user_context.hhdm_offset = hhdm_offset;
@@ -947,6 +956,7 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     user_context.bytes_written = 0;
     user_context.bad_syscalls = 0;
     user_context.input = input;
+    user_context.clock = clock;
     clear_run_state(&user_context);
 
     initialize_gdt();
