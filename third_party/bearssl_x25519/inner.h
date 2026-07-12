@@ -49,6 +49,18 @@ static inline uint32_t MUX(uint32_t control, uint32_t if_true, uint32_t if_false
     return if_false ^ ((uint32_t)(0U - control) & (if_true ^ if_false));
 }
 
+static inline uint32_t EQ(uint32_t left, uint32_t right) {
+    const uint32_t difference = left ^ right;
+
+    return NOT((difference | (uint32_t)(0U - difference)) >> 31U);
+}
+
+static inline uint32_t NEQ(uint32_t left, uint32_t right) {
+    const uint32_t difference = left ^ right;
+
+    return (difference | (uint32_t)(0U - difference)) >> 31U;
+}
+
 void br_ccopy(uint32_t control, void *destination, const void *source, size_t length);
 
 #define CCOPY br_ccopy

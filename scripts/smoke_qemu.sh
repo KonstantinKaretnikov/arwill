@@ -129,6 +129,7 @@ run_qemu_to_log() {
     printf 'cryptocheck\r'
     wait_for_primary_log "cryptocheck: sha256 abc passed"
     wait_for_primary_log "cryptocheck: x25519 rfc7748 passed"
+    wait_for_primary_log "cryptocheck: p256 generator passed"
     sleep 0.1
     printf 'entropyinfo\r'
     wait_for_primary_log "sample: acquired 32 bytes"
@@ -398,6 +399,7 @@ check_line "tcplisten: frames 0, state listen"
 check_line "tcp: port 22, state listen"
 check_line "cryptocheck: sha256 abc passed"
 check_line "cryptocheck: x25519 rfc7748 passed"
+check_line "cryptocheck: p256 generator passed"
 check_line "entropy: x86_64 rdrand"
 check_line "available: yes"
 check_line "sample: acquired 32 bytes"

@@ -496,5 +496,6 @@ driver work, not accidental default access for every ring 3 program.
    fail-closed x86-64/QEMU entropy source are implemented and smoke-tested per
    ADR-0038. X25519 is implemented and checked against RFC 7748. SSH binary
    framing and bidirectional KEXINIT are verified with OpenSSH 10.2, which now
-   reaches `expecting SSH2_MSG_KEX_ECDH_REPLY`. Remaining algorithms are P-256
-   ECDSA host authentication and ChaCha20-Poly1305.
+   reaches `expecting SSH2_MSG_KEX_ECDH_REPLY`. P-256 public-point derivation
+   is also checked against the standard generator. Remaining crypto work is
+   ECDSA signing and ChaCha20-Poly1305.

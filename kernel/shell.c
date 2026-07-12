@@ -2556,8 +2556,23 @@ static void run_command(
             0x32U, 0xecU, 0xcfU, 0x03U, 0x49U, 0x1cU, 0x71U, 0xf7U,
             0x54U, 0xb4U, 0x07U, 0x55U, 0x77U, 0xa2U, 0x85U, 0x52U,
         };
+        static const uint8_t p256_scalar[arwill_p256_scalar_size] = {
+            [arwill_p256_scalar_size - 1] = 1U,
+        };
+        static const uint8_t expected_p256[arwill_p256_point_size] = {
+            0x04U, 0x6bU, 0x17U, 0xd1U, 0xf2U, 0xe1U, 0x2cU, 0x42U,
+            0x47U, 0xf8U, 0xbcU, 0xe6U, 0xe5U, 0x63U, 0xa4U, 0x40U,
+            0xf2U, 0x77U, 0x03U, 0x7dU, 0x81U, 0x2dU, 0xebU, 0x33U,
+            0xa0U, 0xf4U, 0xa1U, 0x39U, 0x45U, 0xd8U, 0x98U, 0xc2U,
+            0x96U, 0x4fU, 0xe3U, 0x42U, 0xe2U, 0xfeU, 0x1aU, 0x7fU,
+            0x9bU, 0x8eU, 0xe7U, 0xebU, 0x4aU, 0x7cU, 0x0fU, 0x9eU,
+            0x16U, 0x2bU, 0xceU, 0x33U, 0x57U, 0x6bU, 0x31U, 0x5eU,
+            0xceU, 0xcbU, 0xb6U, 0x40U, 0x68U, 0x37U, 0xbfU, 0x51U,
+            0xf5U,
+        };
         uint8_t digest[arwill_sha256_size];
         uint8_t x25519_output[arwill_x25519_size];
+        uint8_t p256_output[arwill_p256_point_size];
         int sha256_matches = 1;
         int x25519_matches;
 
@@ -2584,6 +2599,16 @@ static void run_command(
         arwill_console_write_line(console, x25519_matches ?
             "cryptocheck: x25519 rfc7748 passed" :
             "cryptocheck: x25519 rfc7748 failed");
+
+        int p256_matches = arwill_crypto_p256_public(p256_output, p256_scalar);
+        for (size_t index = 0; index < arwill_p256_point_size; index++) {
+            if (p256_output[index] != expected_p256[index]) {
+                p256_matches = 0;
+            }
+        }
+        arwill_console_write_line(console, p256_matches ?
+            "cryptocheck: p256 generator passed" :
+            "cryptocheck: p256 generator failed");
         return;
     }
 

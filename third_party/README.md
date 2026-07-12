@@ -21,3 +21,7 @@ not contain BearSSL's TLS, X.509, or general public headers.
 `third_party/bearssl_x25519/` follows the same rule for X25519: one specialized
 Curve25519 implementation plus its constant-time copy helper, with a small
 Arwill compatibility header and exact provenance.
+
+`third_party/bearssl_p256/` contains one specialized P-256 point
+implementation and a narrow public-point adapter. It reuses the constant-time
+copy helper already linked by the X25519 subset.

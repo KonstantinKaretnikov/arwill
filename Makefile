@@ -34,6 +34,7 @@ CFLAGS += -Wmissing-prototypes -Wstrict-prototypes
 CFLAGS += -Iinclude -Iarch/x86_64/include -Iplatform/qemu/include -Ithird_party/limine
 CFLAGS += -Ithird_party/bearssl_sha256
 CFLAGS += -Ithird_party/bearssl_x25519
+CFLAGS += -Ithird_party/bearssl_p256
 CFLAGS += -DARWILL_PROJECT_NAME=\"$(PROJECT_NAME)\"
 CFLAGS += -DARWILL_PROJECT_VERSION=\"$(PROJECT_VERSION)\"
 
@@ -82,14 +83,18 @@ SOURCES += \
 	third_party/bearssl_sha256/enc32be.c \
 	third_party/bearssl_x25519/ec_c25519_m31.c \
 	third_party/bearssl_x25519/ccopy.c \
-	third_party/bearssl_x25519/x25519_adapter.c
+	third_party/bearssl_x25519/x25519_adapter.c \
+	third_party/bearssl_p256/ec_p256_m31.c \
+	third_party/bearssl_p256/p256_adapter.c
 
 OBJECTS := $(SOURCES:%.c=$(OBJ_DIR)/%.o)
 BEARSSL_SHA256_OBJECTS := $(filter $(OBJ_DIR)/third_party/bearssl_sha256/%.o,$(OBJECTS))
 BEARSSL_X25519_OBJECTS := $(filter $(OBJ_DIR)/third_party/bearssl_x25519/%.o,$(OBJECTS))
+BEARSSL_P256_OBJECTS := $(filter $(OBJ_DIR)/third_party/bearssl_p256/%.o,$(OBJECTS))
 
 $(BEARSSL_SHA256_OBJECTS): CFLAGS += -Wno-error=sign-conversion
 $(BEARSSL_X25519_OBJECTS): CFLAGS += -Wno-error=sign-conversion -Wno-error=implicit-int-conversion
+$(BEARSSL_P256_OBJECTS): CFLAGS += -Wno-error=sign-conversion -Wno-error=implicit-int-conversion
 
 .PHONY: setup build run check clean check-tools check-artifacts smoke FORCE
 

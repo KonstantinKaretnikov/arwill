@@ -2,6 +2,7 @@
 
 #include "inner.h"
 #include "x25519_adapter.h"
+#include "p256_adapter.h"
 
 void arwill_crypto_sha256(const void *data, size_t length, uint8_t output[arwill_sha256_size]) {
     br_sha256_context context;
@@ -36,4 +37,11 @@ int arwill_crypto_x25519_public(
     static const uint8_t generator[arwill_x25519_size] = { 9U };
 
     return arwill_crypto_x25519(output, scalar, generator);
+}
+
+int arwill_crypto_p256_public(
+    uint8_t output[arwill_p256_point_size],
+    const uint8_t scalar[arwill_p256_scalar_size]
+) {
+    return bearssl_p256_public(output, scalar);
 }
