@@ -492,5 +492,7 @@ driver work, not accidental default access for every ring 3 program.
 
 20. [ ] Owner-only SSH v2
 
-   Status: cryptographic foundation selected in ADR-0037. First algorithms are
-   Curve25519 ECDH, P-256 ECDSA host authentication, and ChaCha20-Poly1305.
+   Status: cryptographic foundation selected in ADR-0037. SHA-256 and the first
+   fail-closed x86-64/QEMU entropy source are implemented and smoke-tested per
+   ADR-0038. Remaining algorithms are Curve25519 ECDH, P-256 ECDSA host
+   authentication, and ChaCha20-Poly1305.

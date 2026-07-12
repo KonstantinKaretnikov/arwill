@@ -18,6 +18,7 @@ LD_LLD ?= $(if $(BREW_LLD_PREFIX),$(BREW_LLD_PREFIX)/bin/ld.lld,ld.lld)
 XORRISO ?= xorriso
 QEMU ?= qemu-system-x86_64
 QEMU_MACHINE := pc
+QEMU_CPU ?= max
 QEMU_POWEROFF_EXIT_STATUS := 33
 QEMU_POWEROFF_ARGS := -device isa-debug-exit,iobase=0xf4,iosize=0x04
 QEMU_STORAGE_ARGS := -drive file=$(TEST_DISK),format=raw,if=ide,index=0,media=disk
@@ -64,6 +65,7 @@ SOURCES := \
 	arch/x86_64/boot/entry.c \
 	arch/x86_64/boot/limine_requests.c \
 	arch/x86_64/cpu/idle.c \
+	arch/x86_64/cpu/entropy.c \
 	arch/x86_64/cpu/interrupts.c \
 	arch/x86_64/cpu/pci.c \
 	arch/x86_64/cpu/user_mode.c \
@@ -91,7 +93,7 @@ build: check-tools setup $(ISO)
 
 run: build $(TEST_DISK)
 	@set +e; \
-	$(QEMU) -M $(QEMU_MACHINE) -m 128M -cdrom $(ISO) -boot d -serial stdio -monitor none -display none -no-reboot $(QEMU_POWEROFF_ARGS) $(QEMU_STORAGE_ARGS) $(QEMU_NETWORK_ARGS); \
+	$(QEMU) -M $(QEMU_MACHINE) -cpu $(QEMU_CPU) -m 128M -cdrom $(ISO) -boot d -serial stdio -monitor none -display none -no-reboot $(QEMU_POWEROFF_ARGS) $(QEMU_STORAGE_ARGS) $(QEMU_NETWORK_ARGS); \
 	status=$$?; \
 	if [ "$$status" -eq "$(QEMU_POWEROFF_EXIT_STATUS)" ]; then exit 0; fi; \
 	exit "$$status"
@@ -108,7 +110,7 @@ check-artifacts: $(ISO)
 	@scripts/check_artifacts.sh "$(KERNEL)" "$(ISO)"
 
 smoke: $(ISO) $(TEST_DISK)
-	@scripts/smoke_qemu.sh "$(QEMU)" "$(QEMU_MACHINE)" "$(ISO)" "$(TEST_DISK)" "$(SERIAL_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)"
+	@scripts/smoke_qemu.sh "$(QEMU)" "$(QEMU_MACHINE)" "$(QEMU_CPU)" "$(ISO)" "$(TEST_DISK)" "$(SERIAL_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)"
 
 $(KERNEL): $(OBJECTS) arch/x86_64/linker.ld
 	@mkdir -p $(dir $@)

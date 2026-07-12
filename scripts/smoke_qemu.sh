@@ -1,17 +1,18 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 6 ]; then
-    echo "usage: smoke_qemu.sh <qemu-system-x86_64> <machine> <image.iso> <test-disk> <serial-log> <poweroff-exit-status>" >&2
+if [ "$#" -ne 7 ]; then
+    echo "usage: smoke_qemu.sh <qemu-system-x86_64> <machine> <cpu> <image.iso> <test-disk> <serial-log> <poweroff-exit-status>" >&2
     exit 2
 fi
 
 qemu=$1
 machine=$2
-iso=$3
-test_disk=$4
-serial_log=$5
-expected_qemu_status=$6
+cpu=$3
+iso=$4
+test_disk=$5
+serial_log=$6
+expected_qemu_status=$7
 qemu_status_log=$serial_log.status
 reboot_serial_log=$serial_log.reboot
 reboot_status_log=$serial_log.reboot.status
@@ -71,7 +72,7 @@ wait_for_reboot_log() {
 run_qemu_to_log() {
     log_file=$1
 
-    "$qemu" -M "$machine" -m 128M -cdrom "$iso" -boot d \
+    "$qemu" -M "$machine" -cpu "$cpu" -m 128M -cdrom "$iso" -boot d \
         -serial stdio -monitor none -display none -no-reboot \
         -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
         -drive file="$test_disk",format=raw,if=ide,index=0,media=disk \
@@ -127,6 +128,9 @@ run_qemu_to_log() {
     sleep 0.1
     printf 'cryptocheck\r'
     wait_for_primary_log "cryptocheck: sha256 abc passed"
+    sleep 0.1
+    printf 'entropyinfo\r'
+    wait_for_primary_log "sample: acquired 32 bytes"
     sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
@@ -375,6 +379,7 @@ check_line "tcpcheck   exercise the TCP listener handshake"
 check_line "tcplisten  poll for TCP port 22 connections"
 check_line "tcpinfo    show TCP port 22 listener state"
 check_line "cryptocheck verify the SHA-256 primitive"
+check_line "entropyinfo show hardware entropy status"
 check_line "network: qemu e1000"
 check_line "mac: 52:54:00:12:34:56"
 check_line "frame path: tx/rx bounded polling ready"
@@ -387,6 +392,9 @@ check_line "tcpcheck: listener state established"
 check_line "tcplisten: frames 0, state listen"
 check_line "tcp: port 22, state listen"
 check_line "cryptocheck: sha256 abc passed"
+check_line "entropy: x86_64 rdrand"
+check_line "available: yes"
+check_line "sample: acquired 32 bytes"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"

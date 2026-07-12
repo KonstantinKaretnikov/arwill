@@ -8,6 +8,7 @@
 #include <arwill/kernel/clock.h>
 #include <arwill/kernel/cpu.h>
 #include <arwill/kernel/device.h>
+#include <arwill/kernel/entropy.h>
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/interrupts.h>
@@ -63,6 +64,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "tcplisten", .completion = shell_completion_none },
     { .name = "tcpinfo", .completion = shell_completion_none },
     { .name = "cryptocheck", .completion = shell_completion_none },
+    { .name = "entropyinfo", .completion = shell_completion_none },
     { .name = "pwd", .completion = shell_completion_none },
     { .name = "cd", .completion = shell_completion_directory_path },
     { .name = "clear", .completion = shell_completion_none },
@@ -766,6 +768,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  tcplisten  poll for TCP port 22 connections");
     arwill_console_write_line(console, "  tcpinfo    show TCP port 22 listener state");
     arwill_console_write_line(console, "  cryptocheck verify the SHA-256 primitive");
+    arwill_console_write_line(console, "  entropyinfo show hardware entropy status");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
@@ -2528,6 +2531,24 @@ static void run_command(
 
         arwill_console_write_line(console, matches ?
             "cryptocheck: sha256 abc passed" : "cryptocheck: sha256 abc failed");
+        return;
+    }
+
+    if (string_equals(line, "entropyinfo")) {
+        uint8_t sample[32];
+        const int available = arwill_entropy_available();
+
+        arwill_console_write(console, "entropy: ");
+        arwill_console_write_line(console, arwill_entropy_source_name());
+        arwill_console_write(console, "available: ");
+        arwill_console_write_line(console, available ? "yes" : "no");
+        if (!available) {
+            arwill_console_write_line(console, "sample: unavailable");
+            return;
+        }
+
+        arwill_console_write_line(console, arwill_entropy_fill(sample, sizeof(sample)) ?
+            "sample: acquired 32 bytes" : "sample: acquisition failed");
         return;
     }
 
