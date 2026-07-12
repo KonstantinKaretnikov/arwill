@@ -106,6 +106,13 @@ run_qemu_to_log() {
     printf 'netprobe\r'
     wait_for_primary_log "netprobe: transmitted 60 bytes"
     sleep 0.1
+    printf 'netcfg\r'
+    wait_for_primary_log "ipv4: 10.0.2.15/24"
+    wait_for_primary_log "gateway: 10.0.2.2"
+    sleep 0.1
+    printf 'arping\r'
+    wait_for_primary_log "arping: request transmitted to 10.0.2.2"
+    sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
     sleep 0.1
@@ -346,10 +353,15 @@ check_line "pci: x86_64 configuration mechanism 1"
 check_line "vendor 0x0000000000008086 device 0x000000000000100e"
 check_line "netinfo    show network device diagnostics"
 check_line "netprobe   transmit a raw Ethernet diagnostic frame"
+check_line "netcfg     show fixed IPv4 network configuration"
+check_line "arping     transmit an ARP request to the gateway"
 check_line "network: qemu e1000"
 check_line "mac: 52:54:00:12:34:56"
 check_line "frame path: tx/rx bounded polling ready"
 check_line "netprobe: transmitted 60 bytes"
+check_line "ipv4: 10.0.2.15/24"
+check_line "gateway: 10.0.2.2"
+check_line "arping: request transmitted to 10.0.2.2"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"

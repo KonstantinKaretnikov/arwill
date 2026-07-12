@@ -473,5 +473,8 @@ driver work, not accidental default access for every ring 3 program.
 
 18. [ ] ARP/IPv4/ICMP foundation
 
-   Goal: add a small stateless network layer above Ethernet for one fixed QEMU
-   IPv4 address, ARP resolution, and ICMP echo requests.
+   Status: started: fixed configuration and ARP request construction are now
+   present through `netcfg` and `arping`.
+
+   Goal: add ARP reply handling, IPv4 parsing, and ICMP echo requests for one
+   fixed QEMU IPv4 address. DHCP, routing, and sockets remain out of scope.

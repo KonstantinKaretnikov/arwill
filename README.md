@@ -162,6 +162,10 @@ current QEMU path attaches an Intel e1000 NIC. `netinfo` reports its fixed
 diagnostic MAC and `netprobe` transmits a bounded broadcast Ethernet frame;
 ARP, IP, sockets, and SSH are not implemented yet.
 
+`netcfg` shows the fixed QEMU user-network address (`10.0.2.15/24`) and
+gateway (`10.0.2.2`). `arping` constructs and transmits an ARP request for
+that gateway; reply handling and ICMP are still planned.
+
 `userinfo` displays the current x86-64 user-mode setup, including HHDM, GDT,
 TSS, syscall-gate, run, syscall, byte, and bad-syscall counters.
 

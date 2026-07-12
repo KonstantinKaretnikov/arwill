@@ -46,6 +46,7 @@ SOURCES := \
 	kernel/filesystem.c \
 	kernel/interrupts.c \
 	kernel/input.c \
+	kernel/ipv4.c \
 	kernel/main.c \
 	kernel/memory.c \
 	kernel/network.c \

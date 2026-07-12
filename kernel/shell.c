@@ -54,6 +54,8 @@ static const struct shell_command shell_commands[] = {
     { .name = "pciinfo", .completion = shell_completion_none },
     { .name = "netinfo", .completion = shell_completion_none },
     { .name = "netprobe", .completion = shell_completion_none },
+    { .name = "netcfg", .completion = shell_completion_none },
+    { .name = "arping", .completion = shell_completion_none },
     { .name = "pwd", .completion = shell_completion_none },
     { .name = "cd", .completion = shell_completion_directory_path },
     { .name = "clear", .completion = shell_completion_none },
@@ -750,6 +752,8 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  pciinfo    list discovered PCI devices");
     arwill_console_write_line(console, "  netinfo    show network device diagnostics");
     arwill_console_write_line(console, "  netprobe   transmit a raw Ethernet diagnostic frame");
+    arwill_console_write_line(console, "  netcfg     show fixed IPv4 network configuration");
+    arwill_console_write_line(console, "  arping     transmit an ARP request to the gateway");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
@@ -2279,6 +2283,7 @@ static void run_command(
     struct arwill_process_manager *processes,
     const struct arwill_pci_bus *pci,
     const struct arwill_network_device *network,
+    struct arwill_ipv4_stack *ipv4,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
     const struct arwill_clock *clock,
@@ -2387,6 +2392,20 @@ static void run_command(
         arwill_console_write(console, "netprobe: transmitted ");
         write_size_decimal(console, sizeof(frame));
         arwill_console_write_line(console, " bytes");
+        return;
+    }
+
+    if (string_equals(line, "netcfg")) {
+        arwill_ipv4_print_config(ipv4, console);
+        return;
+    }
+
+    if (string_equals(line, "arping")) {
+        if (ipv4 == 0 || !arwill_ipv4_send_arp_request(ipv4, ipv4->gateway)) {
+            arwill_console_write_line(console, "arping: transmit failed");
+            return;
+        }
+        arwill_console_write_line(console, "arping: request transmitted to 10.0.2.2");
         return;
     }
 
@@ -2542,6 +2561,7 @@ void arwill_shell_run(
     struct arwill_process_manager *processes,
     const struct arwill_pci_bus *pci,
     const struct arwill_network_device *network,
+    struct arwill_ipv4_stack *ipv4,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
     const struct arwill_clock *clock,
@@ -2607,6 +2627,7 @@ void arwill_shell_run(
                 processes,
                 pci,
                 network,
+                ipv4,
                 block_device,
                 interrupts,
                 clock,

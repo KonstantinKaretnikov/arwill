@@ -13,6 +13,7 @@
 #include <arwill/kernel/cpu.h>
 #include <arwill/kernel/kernel.h>
 #include <arwill/kernel/memory.h>
+#include <arwill/kernel/ipv4.h>
 #include <arwill/kernel/pci.h>
 #include <arwill/platform/qemu/ata_pio.h>
 #include <arwill/platform/qemu/e1000.h>
@@ -29,6 +30,7 @@ static struct arwill_memory_region arwill_limine_memory_regions[limine_memory_re
 static struct arwill_memory arwill_limine_memory;
 static struct arwill_device_registry arwill_limine_devices;
 static struct arwill_pci_bus arwill_limine_pci;
+static struct arwill_ipv4_stack arwill_limine_ipv4;
 
 static enum arwill_memory_region_type convert_limine_memory_region_type(uint64_t type) {
     switch (type) {
@@ -112,6 +114,8 @@ void arwill_limine_entry(void) {
     const struct arwill_interrupts *interrupts = arwill_x86_64_interrupts_init();
     const struct arwill_network_device *network =
         arwill_qemu_e1000_init(&arwill_limine_pci, &arwill_limine_memory, hhdm_offset);
+    const int ipv4_ready = arwill_ipv4_init(&arwill_limine_ipv4, network);
+    (void)ipv4_ready;
 
     (void)arwill_device_register(
         &arwill_limine_devices,
@@ -195,6 +199,7 @@ void arwill_limine_entry(void) {
         &arwill_limine_memory,
         &arwill_limine_pci,
         network,
+        &arwill_limine_ipv4,
         power,
         block_device,
         interrupts,

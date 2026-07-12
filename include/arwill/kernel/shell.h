@@ -13,6 +13,7 @@
 #include <arwill/kernel/process.h>
 #include <arwill/kernel/pci.h>
 #include <arwill/kernel/network.h>
+#include <arwill/kernel/ipv4.h>
 #include <arwill/kernel/user.h>
 
 void arwill_shell_run(
@@ -24,6 +25,7 @@ void arwill_shell_run(
     struct arwill_process_manager *processes,
     const struct arwill_pci_bus *pci,
     const struct arwill_network_device *network,
+    struct arwill_ipv4_stack *ipv4,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
     const struct arwill_clock *clock,
