@@ -104,10 +104,10 @@ int calculator_main(void) {
                 syscall_write(interrupted, text_length(interrupted));
                 return 130;
             }
-            syscall_write(&input[length], 1U);
             if (input[length] == '\n' || input[length] == '\r') {
                 break;
             }
+            syscall_write(&input[length], 1U);
             length++;
         }
 
