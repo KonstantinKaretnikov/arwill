@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.6.0 has one executable path:
+Arwill 0.7.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -24,6 +24,7 @@ Limine bootloader
   -> interrupt/timer diagnostics when irqinfo or irqprobe is requested
   -> scheduler tick diagnostics when schedinfo is requested
   -> cooperative built-in kernel process launch when run is requested
+  -> yielded cooperative process continuation when step is requested
   -> user page mapping and built-in ring 3 user program launch when userhello
      or userbad is run
   -> QEMU debug-exit poweroff when exit is requested
@@ -56,7 +57,8 @@ Shell:
 - Lives in `kernel/shell.c`.
 - Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
   `cat`, `write`, `stat`, `meminfo`, `blkinfo`, `irqinfo`, `irqprobe`,
-  `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`, `exit`, and `halt`.
+  `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`, `step`, `exit`, and
+  `halt`.
 - Keeps one canonical command name per operation; alias commands are not
   accepted.
 - Holds the current working directory as local shell state.
@@ -96,15 +98,18 @@ Process manager:
 - Implementation lives in `kernel/process.c`.
 - Owns a fixed-size table of kernel-managed processes with PID, state, run
   count, and exit code.
-- The first scheduler behavior is cooperative and run-to-completion: the shell
-  can spawn a built-in kernel process with `run [name]`, then the process
-  manager runs ready entries synchronously.
+- The first scheduler behavior is cooperative: the shell can spawn a built-in
+  kernel process with `run [name]`, then the process manager runs ready entries
+  synchronously.
+- Process entries can finish or yield. A yielded process returns to the ready
+  state and can be continued with `step`; the first saved progress value is the
+  process run count.
 - Built-in `userhello` and `userbad` process entries enter ring 3 through the
   user runtime and return user exit status to this same process table.
 - `ps` displays the process table.
 - The process manager is still not a full scheduler. It does not own separate
-  address spaces, ELF program loading, saved task contexts, or preemptive
-  context switching.
+  address spaces, ELF program loading, saved CPU contexts, independent kernel
+  stacks, or preemptive context switching.
 
 Interrupt controller contract:
 

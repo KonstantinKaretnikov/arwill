@@ -18,10 +18,21 @@ enum arwill_process_state {
 struct arwill_process_runtime {
     uint32_t pid;
     const char *name;
+    uint64_t run_count;
     void *context;
 };
 
-typedef uint32_t (*arwill_process_entry)(
+enum arwill_process_result_state {
+    arwill_process_result_finished,
+    arwill_process_result_yielded
+};
+
+struct arwill_process_result {
+    enum arwill_process_result_state state;
+    uint32_t exit_code;
+};
+
+typedef struct arwill_process_result (*arwill_process_entry)(
     const struct arwill_process_runtime *runtime
 );
 
@@ -51,6 +62,10 @@ int arwill_process_spawn(
 );
 
 size_t arwill_process_run_ready(struct arwill_process_manager *manager);
+
+struct arwill_process_result arwill_process_finish(uint32_t exit_code);
+
+struct arwill_process_result arwill_process_yield(void);
 
 const struct arwill_process *arwill_process_table(
     const struct arwill_process_manager *manager

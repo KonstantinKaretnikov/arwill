@@ -34,8 +34,9 @@ Rules for future work:
 - Distinguish process kinds precisely. `hello` and `counter` are cooperative
   kernel-managed built-ins. `userhello` and `userbad` are narrow ring 3
   user-mode demos using the first `int 0x80` syscall ABI. Arwill still does not
-  have a general ELF loader, per-process address spaces, saved task contexts, or
-  preemptive user scheduling.
+  have a general ELF loader, per-process address spaces, saved CPU contexts,
+  independent kernel stacks, or preemptive user scheduling. Current cooperative
+  yield saves explicit process progress only, not a hardware execution context.
 - Treat Arwill as a single-owner OS. Do not introduce login accounts, groups,
   roles, or multi-user permission checks unless a later ADR explicitly changes
   this direction. The owner has full system control; ring 3 is an engineering

@@ -15,13 +15,14 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.6.0`
+Version: `0.7.0`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
 The shell can read terminal keyboard input through QEMU serial I/O, inspect a
 boot memory map, report the first physical page allocator state, and launch
-small cooperative kernel processes. Arwill can also read sectors from a
+small cooperative kernel processes that can yield and continue on later shell
+steps. Arwill can also read sectors from a
 QEMU-attached raw test disk through an ATA PIO block-device driver and serve
 shell filesystem commands from a storage-backed ARFS image. ARFS now supports a
 first persistent writable owner note at `/owner/note`.
@@ -106,6 +107,7 @@ userinfo
 ownerinfo
 ps
 run [name]
+step
 exit
 halt
 ```
@@ -143,14 +145,15 @@ control, ordinary ring 3 programs through syscalls, and privileged work through
 explicit kernel or driver code.
 
 `run [name]` launches one of the built-in cooperative kernel processes:
-`hello`, `counter`, `userhello`, or `userbad`. `userhello` enters ring 3 and
-prints through the `write` syscall before exiting with code `7`. `userbad`
+`hello`, `counter`, `userhello`, or `userbad`. `counter` yields between its
+three visible steps and can be continued with `step`. `userhello` enters ring 3
+and prints through the `write` syscall before exiting with code `7`. `userbad`
 enters ring 3 and makes an unknown syscall, which exits with code `127`
 without crashing the kernel. `ps` shows the process table with PID, state, run
 count, exit code, and name.
 
 These are still narrow built-in programs. Arwill does not yet have ELF program
-loading, per-process address spaces, saved task contexts, or preemptive context
+loading, per-process address spaces, saved CPU contexts, or preemptive context
 switching.
 
 `exit` powers off the current QEMU session. `halt` remains available as a CPU
@@ -176,7 +179,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.6.0
+Arwill 0.7.0
 architecture: x86_64
 platform: qemu
 console: serial

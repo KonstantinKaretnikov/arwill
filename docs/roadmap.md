@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.6.0`.
+Status: `0.7.0`.
 
 Arwill already has:
 
@@ -45,7 +45,7 @@ Arwill already has:
   counters;
 - [x] QEMU debug-exit poweroff through `exit`;
 - [x] cooperative kernel-managed processes with PID, state, run count, exit
-  code, `run [name]`, and `ps`;
+  code, `run [name]`, cooperative `step`, and `ps`;
 - [x] x86-64 IDT setup, legacy PIC remap, PIT timer interrupts, and a safe
   breakpoint exception diagnostic;
 - [x] scheduler tick accounting exposed through `schedinfo`;
@@ -56,9 +56,10 @@ Arwill already has:
   system, with the kernel/user boundary kept as an engineering guardrail.
 
 Arwill does not yet have general filesystem allocation, arbitrary file create,
-append, delete, rename, saved task contexts, preemptive context switching,
-per-process address spaces, ELF program loading, multi-user accounts, or a
-general-purpose writable storage subsystem.
+append, delete, rename, saved CPU contexts, preemptive context switching,
+kernel heap allocation, device registry, framebuffer text console, per-process
+address spaces, program image loading from storage, ELF program loading,
+multi-user accounts, or a general-purpose writable storage subsystem.
 
 ## Product Direction
 
@@ -79,8 +80,8 @@ driver work, not accidental default access for every ring 3 program.
    Status: done in `0.1.0`.
 
    Arwill can launch built-in cooperative kernel processes with `run [name]`
-   and inspect them with `ps`. These are kernel-managed run-to-completion work
-   units, not user-space processes.
+   and inspect them with `ps`. These began as kernel-managed run-to-completion
+   work units, not user-space processes.
 
    Verified by: QEMU smoke test for `run hello`, process output, `ps`, and
    successful `exit` poweroff.
@@ -155,7 +156,7 @@ driver work, not accidental default access for every ring 3 program.
    Status: done in `0.4.0`.
 
    Goal: create the interrupt and timer foundation needed to move beyond
-   shell-triggered run-to-completion kernel processes in later milestones.
+   shell-triggered cooperative kernel processes in later milestones.
 
    Scope:
 
@@ -259,3 +260,90 @@ driver work, not accidental default access for every ring 3 program.
 
    Definition of done: Arwill can persist a small file change to a QEMU disk
    image and observe it again after reboot.
+
+7. [x] Cooperative yield and saved process progress
+
+   Status: done in `0.7.0` as an explicit process-result contract.
+
+   Goal: let simple built-in processes pause and continue without introducing
+   preemptive scheduling or CPU context switching.
+
+   Scope:
+
+   - change process entries to return either `finished` or `yielded`;
+   - keep yielded processes in the ready state;
+   - expose `step` as the shell command that runs one ready cooperative step;
+   - use `run_count` as the first saved progress value for tiny built-ins;
+   - keep saved CPU register contexts, separate kernel stacks, preemption, and
+     user-space scheduling out of scope.
+
+   Verified by:
+
+   - smoke test launches `run counter`;
+   - `counter` prints step `1/3` and remains ready;
+   - smoke test runs `step` twice and observes steps `2/3` and `3/3`;
+   - `ps` shows the yielded process as ready and later finished.
+
+   Definition of done: a cooperative kernel process can yield, remain visible
+   as ready, and continue later from explicit saved progress.
+
+8. [ ] Kernel heap
+
+   Goal: add a small, explainable kernel allocator for dynamic kernel objects
+   without making memory management clever too early.
+
+   Scope:
+
+   - build on the existing physical page allocator;
+   - provide a narrow `kmalloc`/`kfree` or fixed-size arena contract;
+   - expose allocator diagnostics through `meminfo` or a dedicated command;
+   - keep paging replacement, swapping, userspace heap, and general VM policy
+     out of scope.
+
+   Definition of done: kernel code can allocate and release small dynamic
+   objects with bounded diagnostics and smoke-test coverage.
+
+9. [ ] Device registry
+
+   Goal: make detected platform devices visible through a tiny registry.
+
+   Scope:
+
+   - register current devices such as serial console, block device, timer,
+     poweroff, and user runtime where appropriate;
+   - add a `devices` shell command;
+   - keep this as inspection and explicit handles, not a large driver model.
+
+   Definition of done: Arwill can list its current devices and their basic
+   status without creating cross-layer shortcuts.
+
+10. [ ] Framebuffer text console
+
+   Goal: add a simple screen console for board-style experimentation while
+   keeping serial as the primary test channel.
+
+   Scope:
+
+   - use Limine framebuffer information on x86-64/QEMU;
+   - draw basic text output;
+   - keep graphics, windows, fonts beyond one built-in bitmap font, and input
+     focus out of scope.
+
+   Definition of done: boot status and shell output can be mirrored to a basic
+   framebuffer text console while serial smoke tests remain authoritative.
+
+11. [ ] Simple program image loader
+
+   Goal: run owner-provided programs from storage without jumping straight to
+   full ELF/POSIX complexity.
+
+   Scope:
+
+   - define a small Arwill Program Image format with a header and code bytes;
+   - load a program image from ARFS;
+   - run it through the existing ring 3 syscall ABI;
+   - keep ELF, dynamic linking, files-as-processes, arguments, environment,
+     and per-process address spaces out of scope until explicitly needed.
+
+   Definition of done: Arwill can load and run a tiny stored program image
+   through the current syscall boundary.

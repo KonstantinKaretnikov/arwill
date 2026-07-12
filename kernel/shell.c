@@ -63,6 +63,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "ownerinfo", .completion = shell_completion_none },
     { .name = "ps", .completion = shell_completion_none },
     { .name = "run", .completion = shell_completion_process },
+    { .name = "step", .completion = shell_completion_none },
     { .name = "exit", .completion = shell_completion_none },
     { .name = "halt", .completion = shell_completion_none },
 };
@@ -738,6 +739,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  ownerinfo  show the OS ownership model");
     arwill_console_write_line(console, "  ps         show kernel process table");
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
+    arwill_console_write_line(console, "  step       run one cooperative process step");
     arwill_console_write_line(console, "  exit       power off the machine");
     arwill_console_write_line(console, "  Tab        complete commands, paths, and processes");
     arwill_console_write_line(console, "  Up/Down    browse command history");
@@ -1295,16 +1297,18 @@ static void print_owner_info(const struct arwill_console *console) {
     arwill_console_write_line(console, "privileged code: explicit kernel or driver work");
 }
 
-static uint32_t shell_hello_process(const struct arwill_process_runtime *runtime) {
+static struct arwill_process_result shell_hello_process(
+    const struct arwill_process_runtime *runtime
+) {
     if (runtime == 0 || runtime->context == 0) {
-        return 1;
+        return arwill_process_finish(1);
     }
 
     const struct shell_process_context *context =
         (const struct shell_process_context *)runtime->context;
 
     if (context->console == 0) {
-        return 1;
+        return arwill_process_finish(1);
     }
 
     arwill_console_write(context->console, "process ");
@@ -1313,47 +1317,53 @@ static uint32_t shell_hello_process(const struct arwill_process_runtime *runtime
     write_uint64_decimal(context->console, (uint64_t)runtime->pid);
     arwill_console_write_line(context->console, "");
 
-    return 0;
+    return arwill_process_finish(0);
 }
 
-static uint32_t shell_counter_process(const struct arwill_process_runtime *runtime) {
+static struct arwill_process_result shell_counter_process(
+    const struct arwill_process_runtime *runtime
+) {
     if (runtime == 0 || runtime->context == 0) {
-        return 1;
+        return arwill_process_finish(1);
     }
 
     const struct shell_process_context *context =
         (const struct shell_process_context *)runtime->context;
 
     if (context->console == 0) {
-        return 1;
+        return arwill_process_finish(1);
     }
 
-    for (uint64_t step = 1; step <= 3U; step++) {
-        arwill_console_write(context->console, "process ");
-        arwill_console_write(context->console, runtime->name);
-        arwill_console_write(context->console, ": pid ");
-        write_uint64_decimal(context->console, (uint64_t)runtime->pid);
-        arwill_console_write(context->console, " step ");
-        write_uint64_decimal(context->console, step);
-        arwill_console_write_line(context->console, "/3");
+    const uint64_t step = runtime->run_count + 1U;
+
+    arwill_console_write(context->console, "process ");
+    arwill_console_write(context->console, runtime->name);
+    arwill_console_write(context->console, ": pid ");
+    write_uint64_decimal(context->console, (uint64_t)runtime->pid);
+    arwill_console_write(context->console, " step ");
+    write_uint64_decimal(context->console, step);
+    arwill_console_write_line(context->console, "/3");
+
+    if (step < 3U) {
+        return arwill_process_yield();
     }
 
-    return 0;
+    return arwill_process_finish(0);
 }
 
-static uint32_t shell_user_program_process(
+static struct arwill_process_result shell_user_program_process(
     const struct arwill_process_runtime *runtime,
     enum arwill_user_program program
 ) {
     if (runtime == 0 || runtime->context == 0) {
-        return 1;
+        return arwill_process_finish(1);
     }
 
     const struct shell_process_context *context =
         (const struct shell_process_context *)runtime->context;
 
     if (context->console == 0 || context->user_runtime == 0) {
-        return 1;
+        return arwill_process_finish(1);
     }
 
     struct arwill_user_program_result result;
@@ -1366,23 +1376,27 @@ static uint32_t shell_user_program_process(
         )) {
         arwill_console_write(context->console, runtime->name);
         arwill_console_write_line(context->console, ": user program launch failed");
-        return 1;
+        return arwill_process_finish(1);
     }
 
     if (!result.exited) {
         arwill_console_write(context->console, runtime->name);
         arwill_console_write_line(context->console, ": user program did not exit");
-        return 1;
+        return arwill_process_finish(1);
     }
 
-    return result.exit_code;
+    return arwill_process_finish(result.exit_code);
 }
 
-static uint32_t shell_user_hello_process(const struct arwill_process_runtime *runtime) {
+static struct arwill_process_result shell_user_hello_process(
+    const struct arwill_process_runtime *runtime
+) {
     return shell_user_program_process(runtime, arwill_user_program_hello);
 }
 
-static uint32_t shell_user_bad_process(const struct arwill_process_runtime *runtime) {
+static struct arwill_process_result shell_user_bad_process(
+    const struct arwill_process_runtime *runtime
+) {
     return shell_user_program_process(runtime, arwill_user_program_bad_syscall);
 }
 
@@ -1501,6 +1515,22 @@ static void run_process(
     if (arwill_process_run_ready(processes) == 0U) {
         arwill_console_write_line(console, "run: no ready processes");
     }
+}
+
+static void step_processes(
+    const struct arwill_console *console,
+    struct arwill_process_manager *processes
+) {
+    const size_t run_count = arwill_process_run_ready(processes);
+
+    if (run_count == 0U) {
+        arwill_console_write_line(console, "step: no ready processes");
+        return;
+    }
+
+    arwill_console_write(console, "step: ran ");
+    write_size_decimal(console, run_count);
+    arwill_console_write_line(console, " process step(s)");
 }
 
 static enum shell_completion_kind command_completion(const char *command) {
@@ -2006,6 +2036,11 @@ static void run_command(
 
     if (string_equals(line, "run") || starts_with(line, "run ")) {
         run_process(console, processes, process_context, argument_after_command(line));
+        return;
+    }
+
+    if (string_equals(line, "step")) {
+        step_processes(console, processes);
         return;
     }
 

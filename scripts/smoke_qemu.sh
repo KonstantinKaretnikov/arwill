@@ -88,7 +88,7 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.6.0" 2
+    wait_for_primary_log_count "Arwill 0.7.0" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
@@ -117,11 +117,24 @@ run_qemu_to_log() {
     printf 'run he\t\r'
     wait_for_primary_log "process hello: hello from pid"
     sleep 0.1
+    printf 'run count\t\r'
+    wait_for_primary_log "process counter: pid 2 step 1/3"
+    sleep 0.1
+    printf 'ps\r'
+    wait_for_primary_log "2 ready 1 0 counter"
+    sleep 0.1
+    printf 'ste\t\r'
+    wait_for_primary_log "process counter: pid 2 step 2/3"
+    wait_for_primary_log "step: ran 1 process step(s)"
+    sleep 0.1
+    printf 'step\r'
+    wait_for_primary_log "process counter: pid 2 step 3/3"
+    sleep 0.1
     printf 'run userh\t\r'
     wait_for_primary_log "user hello: hello from ring 3"
     sleep 0.1
     printf 'run userb\t\r'
-    wait_for_primary_log "run: spawned pid 3: userbad"
+    wait_for_primary_log "run: spawned pid 4: userbad"
     sleep 0.1
     printf 'useri\t\r'
     wait_for_primary_log "bad syscalls: 1"
@@ -173,7 +186,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.6.0"
+    wait_for_primary_log "version: 0.7.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -261,7 +274,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.6.0"
+check_line "Arwill 0.7.0"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -280,7 +293,7 @@ check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.6.0"
+check_line "Arwill 0.7.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -294,6 +307,7 @@ check_line "userinfo   show user-mode diagnostics"
 check_line "ownerinfo  show the OS ownership model"
 check_line "ps         show kernel process table"
 check_line "run [name] launch a built-in kernel process"
+check_line "step       run one cooperative process step"
 check_line "Up/Down    browse command history"
 check_absent "dir [path]"
 check_absent "info [path]"
@@ -320,9 +334,14 @@ check_line "slot shell ticks:"
 check_line "slot idle ticks:"
 check_line "run: spawned pid"
 check_line "process hello: hello from pid"
-check_line "run: spawned pid 2: userhello"
+check_line "process counter: pid 2 step 1/3"
+check_line "2 ready 1 0 counter"
+check_line "process counter: pid 2 step 2/3"
+check_line "step: ran 1 process step(s)"
+check_line "process counter: pid 2 step 3/3"
+check_line "run: spawned pid 3: userhello"
 check_line "user hello: hello from ring 3"
-check_line "run: spawned pid 3: userbad"
+check_line "run: spawned pid 4: userbad"
 check_line "user: x86_64 ring3 int80"
 check_line "available: yes"
 check_line "hhdm: yes"
@@ -337,8 +356,9 @@ check_line "owner access: full system control"
 check_line "kernel boundary: ring 3 programs use syscalls"
 check_line "privileged code: explicit kernel or driver work"
 check_line "pid state runs exit name"
-check_line "2 finished 1 7 userhello"
-check_line "3 finished 1 127 userbad"
+check_line "2 finished 3 0 counter"
+check_line "3 finished 1 7 userhello"
+check_line "4 finished 1 127 userbad"
 check_line "finished"
 check_line "boot/"
 check_line "docs/"
@@ -357,7 +377,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.6.0"
+check_line "version: 0.7.0"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"

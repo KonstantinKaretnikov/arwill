@@ -79,6 +79,22 @@ int arwill_process_spawn(
     return 1;
 }
 
+struct arwill_process_result arwill_process_finish(uint32_t exit_code) {
+    struct arwill_process_result result;
+
+    result.state = arwill_process_result_finished;
+    result.exit_code = exit_code;
+    return result;
+}
+
+struct arwill_process_result arwill_process_yield(void) {
+    struct arwill_process_result result;
+
+    result.state = arwill_process_result_yielded;
+    result.exit_code = 0;
+    return result;
+}
+
 size_t arwill_process_run_ready(struct arwill_process_manager *manager) {
     size_t run_count = 0;
 
@@ -97,12 +113,20 @@ size_t arwill_process_run_ready(struct arwill_process_manager *manager) {
 
         runtime.pid = process->pid;
         runtime.name = process->name;
+        runtime.run_count = process->run_count;
         runtime.context = process->context;
 
         process->state = arwill_process_state_running;
         process->run_count++;
-        process->exit_code = process->entry(&runtime);
-        process->state = arwill_process_state_finished;
+
+        const struct arwill_process_result result = process->entry(&runtime);
+
+        process->exit_code = result.exit_code;
+        if (result.state == arwill_process_result_yielded) {
+            process->state = arwill_process_state_ready;
+        } else {
+            process->state = arwill_process_state_finished;
+        }
         run_count++;
     }
 
