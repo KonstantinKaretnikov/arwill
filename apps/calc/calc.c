@@ -87,30 +87,37 @@ static int calculate(const char *text, size_t length, long *result) {
 
 int calculator_main(void) {
     static const char prompt[] = "calc> ";
+    static const char interrupted[] = "^C\n";
+    static const char error[] = "error\n";
     char input[64];
     char output[32];
 
-    syscall_write(prompt, text_length(prompt));
-    size_t length = 0;
-    while (length < sizeof(input) - 1U) {
-        if (syscall_read(&input[length], 1U) != 1L) {
-            return 1;
-        }
-        syscall_write(&input[length], 1U);
-        if (input[length] == '\n' || input[length] == '\r') {
-            break;
-        }
-        length++;
-    }
+    for (;;) {
+        syscall_write(prompt, text_length(prompt));
+        size_t length = 0;
 
-    long result = 0;
-    if (!calculate(input, length, &result)) {
-        static const char error[] = "error\n";
-        syscall_write(error, text_length(error));
-        return 2;
-    }
+        while (length < sizeof(input) - 1U) {
+            if (syscall_read(&input[length], 1U) != 1L) {
+                return 1;
+            }
+            if (input[length] == 0x03) {
+                syscall_write(interrupted, text_length(interrupted));
+                return 130;
+            }
+            syscall_write(&input[length], 1U);
+            if (input[length] == '\n' || input[length] == '\r') {
+                break;
+            }
+            length++;
+        }
 
-    const size_t output_length = format_number(output, result);
-    syscall_write(output, output_length);
-    return 0;
+        long result = 0;
+        if (!calculate(input, length, &result)) {
+            syscall_write(error, text_length(error));
+            continue;
+        }
+
+        const size_t output_length = format_number(output, result);
+        syscall_write(output, output_length);
+    }
 }
