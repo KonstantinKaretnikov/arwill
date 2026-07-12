@@ -90,6 +90,7 @@ int calculator_main(void) {
     static const char equals[] = "=";
     static const char interrupted[] = "^C\n";
     static const char error[] = "error\n";
+    static const char erase[] = "\b \b";
     char input[64];
     char output[32];
 
@@ -104,6 +105,13 @@ int calculator_main(void) {
             if (input[length] == 0x03) {
                 syscall_write(interrupted, text_length(interrupted));
                 return 130;
+            }
+            if (input[length] == 0x08 || input[length] == 0x7f) {
+                if (length != 0U) {
+                    length--;
+                    syscall_write(erase, text_length(erase));
+                }
+                continue;
             }
             if (input[length] == '\n' || input[length] == '\r') {
                 break;

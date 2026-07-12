@@ -173,7 +173,7 @@ run_qemu_to_log() {
     printf 'exec /apps/calc.awp\r'
     wait_for_primary_log "calc> "
     sleep 0.1
-    printf '12*7\r'
+    printf '12*9\0107\r'
     wait_for_primary_log "84"
     sleep 0.1
     printf '5+6\r'
