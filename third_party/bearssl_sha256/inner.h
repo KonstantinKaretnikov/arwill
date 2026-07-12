@@ -61,6 +61,8 @@ void br_sha256_out(const br_sha256_context *ctx, void *out);
 void br_range_dec32be(uint32_t *values, size_t count, const void *source);
 void br_range_enc32be(void *destination, const uint32_t *values, size_t count);
 
+#ifndef ARWILL_BEARSSL_COMPAT_MEMORY
+#define ARWILL_BEARSSL_COMPAT_MEMORY
 static inline void *br_compat_memcpy(void *destination, const void *source, size_t length) {
     unsigned char *destination_bytes = destination;
     const unsigned char *source_bytes = source;
@@ -84,6 +86,7 @@ static inline void *br_compat_memset(void *destination, int value, size_t length
 
 #define memcpy br_compat_memcpy
 #define memset br_compat_memset
+#endif
 
 static inline uint32_t br_dec32be(const void *source) {
     const unsigned char *bytes = source;

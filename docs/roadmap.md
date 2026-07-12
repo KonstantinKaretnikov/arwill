@@ -498,4 +498,5 @@ driver work, not accidental default access for every ring 3 program.
    framing and bidirectional KEXINIT are verified with OpenSSH 10.2, which now
    reaches `expecting SSH2_MSG_KEX_ECDH_REPLY`. P-256 public-point derivation
    is also checked against the standard generator. Remaining crypto work is
-   ECDSA signing and ChaCha20-Poly1305.
+   ChaCha20-Poly1305. Deterministic P-256 ECDSA signing is implemented and
+   checked against the RFC 6979 SHA-256 `sample` vector.

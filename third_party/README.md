@@ -25,3 +25,6 @@ Arwill compatibility header and exact provenance.
 `third_party/bearssl_p256/` contains one specialized P-256 point
 implementation and a narrow public-point adapter. It reuses the constant-time
 copy helper already linked by the X25519 subset.
+
+`third_party/bearssl_ecdsa/` contains the P-256-only RFC 6979 ECDSA signing
+path, HMAC-DRBG, and its exact reached i31 arithmetic helpers.

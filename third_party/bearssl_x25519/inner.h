@@ -65,6 +65,8 @@ void br_ccopy(uint32_t control, void *destination, const void *source, size_t le
 
 #define CCOPY br_ccopy
 
+#ifndef ARWILL_BEARSSL_COMPAT_MEMORY
+#define ARWILL_BEARSSL_COMPAT_MEMORY
 static inline void *br_compat_memcpy(void *destination, const void *source, size_t length) {
     unsigned char *destination_bytes = destination;
     const unsigned char *source_bytes = source;
@@ -88,5 +90,6 @@ static inline void *br_compat_memset(void *destination, int value, size_t length
 
 #define memcpy br_compat_memcpy
 #define memset br_compat_memset
+#endif
 
 #endif
