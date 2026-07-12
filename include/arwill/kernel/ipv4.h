@@ -23,6 +23,8 @@ struct arwill_ipv4_stack {
     uint32_t ssh_banners_sent;
     uint32_t ssh_kexinit_build_failures;
     uint32_t ssh_kexinit_send_failures;
+    uint32_t ssh_ecdh_reply_build_failures;
+    uint32_t ssh_ecdh_reply_send_failures;
     uint32_t ssh_receive_failures;
     const struct arwill_ssh_host_key *ssh_host_key;
     struct arwill_ssh_transport ssh;

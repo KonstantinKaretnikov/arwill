@@ -31,6 +31,7 @@ CFLAGS += -fno-pic -fno-pie -m64 -mno-red-zone -mcmodel=kernel
 CFLAGS += -mgeneral-regs-only
 CFLAGS += -Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion
 CFLAGS += -Wmissing-prototypes -Wstrict-prototypes
+CFLAGS += -MMD -MP
 CFLAGS += -Iinclude -Iarch/x86_64/include -Iplatform/qemu/include -Ithird_party/limine
 CFLAGS += -Ithird_party/bearssl_sha256
 CFLAGS += -Ithird_party/bearssl_x25519
@@ -110,6 +111,7 @@ SOURCES += \
 	third_party/bearssl_ecdsa/ecdsa_adapter.c
 
 OBJECTS := $(SOURCES:%.c=$(OBJ_DIR)/%.o)
+DEPENDENCIES := $(OBJECTS:.o=.d)
 BEARSSL_SHA256_OBJECTS := $(filter $(OBJ_DIR)/third_party/bearssl_sha256/%.o,$(OBJECTS))
 BEARSSL_X25519_OBJECTS := $(filter $(OBJ_DIR)/third_party/bearssl_x25519/%.o,$(OBJECTS))
 BEARSSL_P256_OBJECTS := $(filter $(OBJ_DIR)/third_party/bearssl_p256/%.o,$(OBJECTS))
@@ -119,6 +121,8 @@ $(BEARSSL_SHA256_OBJECTS): CFLAGS += -Wno-error=sign-conversion
 $(BEARSSL_X25519_OBJECTS): CFLAGS += -Wno-error=sign-conversion -Wno-error=implicit-int-conversion
 $(BEARSSL_P256_OBJECTS): CFLAGS += -Wno-error=sign-conversion -Wno-error=implicit-int-conversion
 $(BEARSSL_ECDSA_OBJECTS): CFLAGS += -Wno-error=sign-conversion -Wno-error=implicit-int-conversion
+
+-include $(DEPENDENCIES)
 
 .PHONY: setup build run check clean check-tools check-artifacts smoke FORCE
 

@@ -495,10 +495,14 @@ driver work, not accidental default access for every ring 3 program.
    Status: cryptographic foundation selected in ADR-0037. SHA-256 and the first
    fail-closed x86-64/QEMU entropy source are implemented and smoke-tested per
    ADR-0038. X25519 is implemented and checked against RFC 7748. SSH binary
-   framing and bidirectional KEXINIT are verified with OpenSSH 10.2, which now
-   reaches `expecting SSH2_MSG_KEX_ECDH_REPLY`. P-256 public-point derivation
-   is also checked against the standard generator. Remaining crypto work is
-   ChaCha20-Poly1305. Deterministic P-256 ECDSA signing is implemented and
-   checked against the RFC 6979 SHA-256 `sample` vector. A P-256 host key is
+   framing and bidirectional KEXINIT are verified with OpenSSH 10.2. P-256
+   public-point derivation is also checked against the standard generator.
+   Remaining crypto work is ChaCha20-Poly1305. Deterministic P-256 ECDSA
+   signing is implemented and checked against the RFC 6979 SHA-256 `sample`
+   vector. A P-256 host key is
    generated once, persisted at `/system/ssh-host-key`, validated on load, and
    smoke-tested for a stable public fingerprint across reboot per ADR-0039.
+   `SSH_MSG_KEX_ECDH_INIT`, Curve25519 shared-secret derivation, the RFC 5656
+   exchange hash, ECDSA SSH signature encoding, and `ECDH_REPLY` construction
+   are implemented and smoke-tested per ADR-0040. Live OpenSSH verification of
+   the reply remains pending before `NEWKEYS` work begins.

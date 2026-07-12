@@ -8,12 +8,17 @@
 
 enum {
     ssh_message_kexinit = 20,
+    ssh_message_kex_ecdh_init = 30,
+    ssh_message_kex_ecdh_reply = 31,
     ssh_minimum_padding = 4,
     ssh_clear_block_size = 8,
     ssh_host_key_generation_attempts = 16,
 };
 
 static const char ssh_host_key_path[] = "/system/ssh-host-key";
+static const char ssh_server_identification[] = "SSH-2.0-Arwill";
+static const char ssh_host_key_algorithm[] = "ecdsa-sha2-nistp256";
+static const char ssh_host_key_curve[] = "nistp256";
 
 static void put32(uint8_t *buffer, size_t offset, uint32_t value) {
     buffer[offset] = (uint8_t)(value >> 24U);
@@ -75,6 +80,71 @@ static int append_name_list(
         && append_bytes(buffer, capacity, length, (const uint8_t *)names, names_length);
 }
 
+static int append_string(
+    uint8_t *buffer,
+    size_t capacity,
+    size_t *length,
+    const uint8_t *data,
+    size_t data_length
+) {
+    return data_length <= UINT32_MAX
+        && append_u32(buffer, capacity, length, (uint32_t)data_length)
+        && append_bytes(buffer, capacity, length, data, data_length);
+}
+
+static int append_mpint(
+    uint8_t *buffer,
+    size_t capacity,
+    size_t *length,
+    const uint8_t *value,
+    size_t value_length
+) {
+    size_t first = 0;
+
+    while (first < value_length && value[first] == 0U) {
+        first++;
+    }
+    if (first == value_length) {
+        return append_u32(buffer, capacity, length, 0U);
+    }
+
+    const int prefix_zero = (value[first] & 0x80U) != 0U;
+    const size_t encoded_length = value_length - first + (prefix_zero ? 1U : 0U);
+    if (encoded_length > UINT32_MAX
+        || !append_u32(buffer, capacity, length, (uint32_t)encoded_length)) {
+        return 0;
+    }
+    if (prefix_zero && !append_bytes(
+        buffer,
+        capacity,
+        length,
+        (const uint8_t[]){ 0U },
+        1U
+    )) {
+        return 0;
+    }
+    return append_bytes(buffer, capacity, length, value + first, value_length - first);
+}
+
+static int build_host_key_blob(
+    const struct arwill_ssh_host_key *host_key,
+    uint8_t *blob,
+    size_t capacity,
+    size_t *length
+) {
+    *length = 0;
+    return host_key != 0
+        && append_name_list(blob, capacity, length, ssh_host_key_algorithm)
+        && append_name_list(blob, capacity, length, ssh_host_key_curve)
+        && append_string(
+            blob,
+            capacity,
+            length,
+            host_key->public_key,
+            sizeof(host_key->public_key)
+        );
+}
+
 static int text_equals(const char *left, const char *right) {
     size_t index = 0;
 
@@ -129,21 +199,10 @@ static int private_scalar_is_valid(const uint8_t scalar[arwill_p256_scalar_size]
 }
 
 static int build_host_key_fingerprint(struct arwill_ssh_host_key *host_key) {
-    static const char algorithm[] = "ecdsa-sha2-nistp256";
-    static const char curve[] = "nistp256";
     uint8_t blob[128];
     size_t length = 0;
 
-    if (!append_name_list(blob, sizeof(blob), &length, algorithm)
-        || !append_name_list(blob, sizeof(blob), &length, curve)
-        || !append_u32(blob, sizeof(blob), &length, (uint32_t)arwill_p256_point_size)
-        || !append_bytes(
-            blob,
-            sizeof(blob),
-            &length,
-            host_key->public_key,
-            sizeof(host_key->public_key)
-        )) {
+    if (!build_host_key_blob(host_key, blob, sizeof(blob), &length)) {
         return 0;
     }
     arwill_crypto_sha256(blob, length, host_key->fingerprint);
@@ -235,6 +294,84 @@ int arwill_ssh_host_key_init(
     return 0;
 }
 
+static void hash_u32(struct arwill_sha256_context *context, uint32_t value) {
+    uint8_t encoded[4];
+
+    put32(encoded, 0U, value);
+    arwill_crypto_sha256_update(context, encoded, sizeof(encoded));
+}
+
+static int hash_string(
+    struct arwill_sha256_context *context,
+    const uint8_t *data,
+    size_t length
+) {
+    if (length > UINT32_MAX) {
+        return 0;
+    }
+    hash_u32(context, (uint32_t)length);
+    arwill_crypto_sha256_update(context, data, length);
+    return 1;
+}
+
+static int hash_mpint(
+    struct arwill_sha256_context *context,
+    const uint8_t *value,
+    size_t value_length
+) {
+    size_t first = 0;
+
+    while (first < value_length && value[first] == 0U) {
+        first++;
+    }
+    if (first == value_length) {
+        hash_u32(context, 0U);
+        return 1;
+    }
+
+    const int prefix_zero = (value[first] & 0x80U) != 0U;
+    const size_t encoded_length = value_length - first + (prefix_zero ? 1U : 0U);
+    if (encoded_length > UINT32_MAX) {
+        return 0;
+    }
+    hash_u32(context, (uint32_t)encoded_length);
+    if (prefix_zero) {
+        static const uint8_t zero = 0U;
+        arwill_crypto_sha256_update(context, &zero, 1U);
+    }
+    arwill_crypto_sha256_update(context, value + first, value_length - first);
+    return 1;
+}
+
+static int build_clear_packet(
+    const uint8_t *payload,
+    size_t payload_length,
+    uint8_t *packet,
+    size_t capacity,
+    size_t *packet_length
+) {
+    size_t padding_length = ssh_clear_block_size
+        - ((payload_length + 5U) % ssh_clear_block_size);
+    if (padding_length < ssh_minimum_padding) {
+        padding_length += ssh_clear_block_size;
+    }
+    const size_t encoded_packet_length = 1U + payload_length + padding_length;
+    const size_t total_length = 4U + encoded_packet_length;
+    if (encoded_packet_length > UINT32_MAX || total_length > capacity) {
+        return 0;
+    }
+    put32(packet, 0U, (uint32_t)encoded_packet_length);
+    packet[4] = (uint8_t)padding_length;
+    for (size_t index = 0; index < payload_length; index++) {
+        packet[5U + index] = payload[index];
+    }
+    if (!arwill_entropy_fill(packet + 5U + payload_length, padding_length)) {
+        return 0;
+    }
+    *packet_length = total_length;
+    return 1;
+}
+
 static void discard_received(struct arwill_ssh_transport *transport, size_t length) {
     if (length >= transport->receive_length) {
         transport->receive_length = 0;
@@ -324,6 +461,17 @@ static int parse_packets(struct arwill_ssh_transport *transport) {
             }
             transport->client_kexinit_length = payload_length;
             transport->client_kexinit_received = 1;
+        } else if (transport->receive_buffer[5] == ssh_message_kex_ecdh_init
+            && !transport->client_ecdh_init_received) {
+            if (!transport->client_kexinit_received || payload_length != 37U
+                || get32(transport->receive_buffer + 6U) != (uint32_t)arwill_x25519_size) {
+                transport->last_error = 7U;
+                return 0;
+            }
+            for (size_t index = 0; index < sizeof(transport->client_ephemeral); index++) {
+                transport->client_ephemeral[index] = transport->receive_buffer[10U + index];
+            }
+            transport->client_ecdh_init_received = 1;
         }
 
         discard_received(transport, 4U + packet_length);
@@ -343,6 +491,14 @@ void arwill_ssh_transport_init(struct arwill_ssh_transport *transport) {
     transport->server_kexinit_length = 0;
     transport->client_kexinit_received = 0;
     transport->server_kexinit_sent = 0;
+    transport->client_ecdh_init_received = 0;
+    transport->server_ecdh_reply_sent = 0;
+    for (size_t index = 0; index < sizeof(transport->client_ephemeral); index++) {
+        transport->client_ephemeral[index] = 0;
+        transport->server_ephemeral[index] = 0;
+        transport->shared_secret[index] = 0;
+        transport->exchange_hash[index] = 0;
+    }
     transport->packets_received = 0;
     transport->last_error = 0;
 }
@@ -422,27 +578,178 @@ int arwill_ssh_transport_build_kexinit(
         return 0;
     }
 
-    size_t padding_length = ssh_clear_block_size
-        - ((payload_length + 5U) % ssh_clear_block_size);
-    if (padding_length < ssh_minimum_padding) {
-        padding_length += ssh_clear_block_size;
-    }
-    const size_t encoded_packet_length = 1U + payload_length + padding_length;
-    const size_t total_length = 4U + encoded_packet_length;
-    if (encoded_packet_length > UINT32_MAX || total_length > capacity
-        || payload_length > sizeof(transport->server_kexinit)) {
+    if (payload_length > sizeof(transport->server_kexinit)) {
         return 0;
     }
-    put32(packet, 0U, (uint32_t)encoded_packet_length);
-    packet[4] = (uint8_t)padding_length;
     for (size_t index = 0; index < payload_length; index++) {
-        packet[5U + index] = payload[index];
         transport->server_kexinit[index] = payload[index];
     }
-    if (!arwill_entropy_fill(packet + 5U + payload_length, padding_length)) {
+    if (!build_clear_packet(
+        payload,
+        payload_length,
+        packet,
+        capacity,
+        packet_length
+    )) {
         return 0;
     }
     transport->server_kexinit_length = payload_length;
-    *packet_length = total_length;
     return 1;
+}
+
+int arwill_ssh_transport_build_ecdh_reply(
+    struct arwill_ssh_transport *transport,
+    const struct arwill_ssh_host_key *host_key,
+    uint8_t *packet,
+    size_t capacity,
+    size_t *packet_length
+) {
+    size_t host_key_blob_length = 0;
+    size_t signature_values_length = 0;
+    size_t signature_blob_length = 0;
+    size_t payload_length = 0;
+
+    if (transport == 0 || host_key == 0 || !host_key->ready || packet == 0
+        || packet_length == 0 || !transport->client_identification_received
+        || !transport->client_kexinit_received || !transport->server_kexinit_sent
+        || !transport->client_ecdh_init_received || transport->server_ecdh_reply_sent
+        || !build_host_key_blob(
+            host_key,
+            transport->kex_host_key_blob,
+            sizeof(transport->kex_host_key_blob),
+            &host_key_blob_length
+        )
+        || !arwill_entropy_fill(
+            transport->kex_server_private,
+            sizeof(transport->kex_server_private)
+        )) {
+        return 0;
+    }
+
+    const int key_agreement_ready = arwill_crypto_x25519_public(
+        transport->server_ephemeral,
+        transport->kex_server_private
+    ) && arwill_crypto_x25519(
+        transport->shared_secret,
+        transport->kex_server_private,
+        transport->client_ephemeral
+    );
+    for (size_t index = 0; index < sizeof(transport->kex_server_private); index++) {
+        transport->kex_server_private[index] = 0;
+    }
+    if (!key_agreement_ready) {
+        return 0;
+    }
+
+    arwill_crypto_sha256_init(&transport->kex_hash);
+    if (!hash_string(
+            &transport->kex_hash,
+            (const uint8_t *)transport->client_identification,
+            transport->client_identification_length
+        )
+        || !hash_string(
+            &transport->kex_hash,
+            (const uint8_t *)ssh_server_identification,
+            sizeof(ssh_server_identification) - 1U
+        )
+        || !hash_string(
+            &transport->kex_hash,
+            transport->client_kexinit,
+            transport->client_kexinit_length
+        )
+        || !hash_string(
+            &transport->kex_hash,
+            transport->server_kexinit,
+            transport->server_kexinit_length
+        )
+        || !hash_string(
+            &transport->kex_hash,
+            transport->kex_host_key_blob,
+            host_key_blob_length
+        )
+        || !hash_string(
+            &transport->kex_hash,
+            transport->client_ephemeral,
+            sizeof(transport->client_ephemeral)
+        )
+        || !hash_string(
+            &transport->kex_hash,
+            transport->server_ephemeral,
+            sizeof(transport->server_ephemeral)
+        )
+        || !hash_mpint(
+            &transport->kex_hash,
+            transport->shared_secret,
+            sizeof(transport->shared_secret)
+        )) {
+        return 0;
+    }
+    arwill_crypto_sha256_finish(&transport->kex_hash, transport->exchange_hash);
+
+    if (!arwill_crypto_p256_sign(
+            transport->kex_raw_signature,
+            host_key->private_key,
+            transport->exchange_hash
+        )
+        || !append_mpint(
+            transport->kex_signature_values,
+            sizeof(transport->kex_signature_values),
+            &signature_values_length,
+            transport->kex_raw_signature,
+            arwill_p256_scalar_size
+        )
+        || !append_mpint(
+            transport->kex_signature_values,
+            sizeof(transport->kex_signature_values),
+            &signature_values_length,
+            transport->kex_raw_signature + arwill_p256_scalar_size,
+            arwill_p256_scalar_size
+        )
+        || !append_name_list(
+            transport->kex_signature_blob,
+            sizeof(transport->kex_signature_blob),
+            &signature_blob_length,
+            ssh_host_key_algorithm
+        )
+        || !append_string(
+            transport->kex_signature_blob,
+            sizeof(transport->kex_signature_blob),
+            &signature_blob_length,
+            transport->kex_signature_values,
+            signature_values_length
+        )) {
+        return 0;
+    }
+
+    transport->kex_reply_payload[payload_length++] = ssh_message_kex_ecdh_reply;
+    if (!append_string(
+            transport->kex_reply_payload,
+            sizeof(transport->kex_reply_payload),
+            &payload_length,
+            transport->kex_host_key_blob,
+            host_key_blob_length
+        )
+        || !append_string(
+            transport->kex_reply_payload,
+            sizeof(transport->kex_reply_payload),
+            &payload_length,
+            transport->server_ephemeral,
+            sizeof(transport->server_ephemeral)
+        )
+        || !append_string(
+            transport->kex_reply_payload,
+            sizeof(transport->kex_reply_payload),
+            &payload_length,
+            transport->kex_signature_blob,
+            signature_blob_length
+        )) {
+        return 0;
+    }
+    return build_clear_packet(
+        transport->kex_reply_payload,
+        payload_length,
+        packet,
+        capacity,
+        packet_length
+    );
 }

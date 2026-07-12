@@ -465,6 +465,23 @@ static void print_ssh_host_key(
     arwill_console_write_line(console, "");
 }
 
+static void print_ssh_ecdh(
+    const struct arwill_console *console,
+    const struct arwill_ipv4_stack *ipv4
+) {
+    arwill_console_write(console, "ssh ecdh: init ");
+    arwill_console_write(console,
+        ipv4->ssh.client_ecdh_init_received ? "received" : "pending");
+    arwill_console_write(console, ", reply ");
+    arwill_console_write_line(console,
+        ipv4->ssh.server_ecdh_reply_sent ? "sent" : "pending");
+    arwill_console_write(console, "ssh ecdh failures: build ");
+    write_uint64_decimal(console, ipv4->ssh_ecdh_reply_build_failures);
+    arwill_console_write(console, ", send ");
+    write_uint64_decimal(console, ipv4->ssh_ecdh_reply_send_failures);
+    arwill_console_write_line(console, "");
+}
+
 static uint64_t saturating_add_uint64(uint64_t left, uint64_t right) {
     if (left > UINT64_MAX - right) {
         return UINT64_MAX;
@@ -792,7 +809,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  tcpinfo    show TCP port 22 listener state");
     arwill_console_write_line(console, "  cryptocheck verify the SHA-256 primitive");
     arwill_console_write_line(console, "  entropyinfo show hardware entropy status");
-    arwill_console_write_line(console, "  sshcheck   verify SSH identification and KEXINIT framing");
+    arwill_console_write_line(console, "  sshcheck   verify SSH KEX framing and ECDH reply");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
@@ -2530,6 +2547,7 @@ static void run_command(
         arwill_console_write(console, ", last ");
         write_uint64_decimal(console, ipv4->ssh.last_error);
         arwill_console_write_line(console, "");
+        print_ssh_ecdh(console, ipv4);
         return;
     }
 
@@ -2550,6 +2568,7 @@ static void run_command(
         write_uint64_decimal(console, ipv4->ssh_banners_sent);
         arwill_console_write_line(console, "");
         print_ssh_host_key(console, ipv4->ssh_host_key);
+        print_ssh_ecdh(console, ipv4);
         return;
     }
 
@@ -2593,6 +2612,7 @@ static void run_command(
             0xf5U,
         };
         uint8_t digest[arwill_sha256_size];
+        static struct arwill_sha256_context streaming_sha256;
         uint8_t x25519_output[arwill_x25519_size];
         uint8_t p256_output[arwill_p256_point_size];
         int sha256_matches = 1;
@@ -2607,6 +2627,20 @@ static void run_command(
 
         arwill_console_write_line(console, sha256_matches ?
             "cryptocheck: sha256 abc passed" : "cryptocheck: sha256 abc failed");
+
+        arwill_crypto_sha256_init(&streaming_sha256);
+        arwill_crypto_sha256_update(&streaming_sha256, "a", 1U);
+        arwill_crypto_sha256_update(&streaming_sha256, "bc", 2U);
+        arwill_crypto_sha256_finish(&streaming_sha256, digest);
+        int sha256_stream_matches = 1;
+        for (size_t index = 0; index < arwill_sha256_size; index++) {
+            if (digest[index] != expected_sha256[index]) {
+                sha256_stream_matches = 0;
+            }
+        }
+        arwill_console_write_line(console, sha256_stream_matches ?
+            "cryptocheck: sha256 stream passed" :
+            "cryptocheck: sha256 stream failed");
 
         x25519_matches = arwill_crypto_x25519(
             x25519_output,
@@ -2691,8 +2725,17 @@ static void run_command(
             0U, 0U, 0U, 12U, 10U, 20U,
             0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
         };
-        struct arwill_ssh_transport transport;
-        uint8_t server_kexinit[arwill_ssh_server_packet_capacity];
+        static const uint8_t client_ecdh_init[] = {
+            0U, 0U, 0U, 44U, 6U, 30U, 0U, 0U, 0U, 32U,
+            9U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
+            0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
+            0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
+            0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
+            0U, 0U, 0U, 0U, 0U, 0U,
+        };
+        static struct arwill_ssh_transport transport;
+        static struct arwill_ssh_host_key host_key;
+        static uint8_t server_kexinit[arwill_ssh_server_packet_capacity];
         size_t server_kexinit_length = 0;
 
         arwill_ssh_transport_init(&transport);
@@ -2700,12 +2743,13 @@ static void run_command(
             &transport,
             client_identification,
             sizeof(client_identification) - 1U
-        ) && arwill_ssh_transport_build_kexinit(
-            &transport,
-            server_kexinit,
-            sizeof(server_kexinit),
-            &server_kexinit_length
-        ) && server_kexinit_length >= 6U
+        ) && arwill_ssh_host_key_init(&host_key, filesystem)
+            && arwill_ssh_transport_build_kexinit(
+                &transport,
+                server_kexinit,
+                sizeof(server_kexinit),
+                &server_kexinit_length
+            ) && server_kexinit_length >= 6U
             && server_kexinit[5] == 20U
             && arwill_ssh_transport_receive(
                 &transport,
@@ -2713,9 +2757,24 @@ static void run_command(
                 sizeof(client_kexinit)
             ) && transport.client_kexinit_received;
 
-        arwill_console_write_line(console, passed ?
-            "sshcheck: identification and kexinit passed" :
-            "sshcheck: identification or kexinit failed");
+        transport.server_kexinit_sent = passed;
+        const int ecdh_passed = passed && arwill_ssh_transport_receive(
+            &transport,
+            client_ecdh_init,
+            sizeof(client_ecdh_init)
+        ) && transport.client_ecdh_init_received
+            && arwill_ssh_transport_build_ecdh_reply(
+                &transport,
+                &host_key,
+                server_kexinit,
+                sizeof(server_kexinit),
+                &server_kexinit_length
+            ) && server_kexinit_length >= 6U
+            && server_kexinit[5] == 31U;
+
+        arwill_console_write_line(console, ecdh_passed ?
+            "sshcheck: identification, kexinit, and ecdh reply passed" :
+            "sshcheck: identification, kexinit, or ecdh reply failed");
         return;
     }
 

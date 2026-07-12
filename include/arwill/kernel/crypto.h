@@ -6,13 +6,28 @@
 
 enum {
     arwill_sha256_size = 32,
+    arwill_sha256_context_words = 14,
     arwill_x25519_size = 32,
     arwill_p256_scalar_size = 32,
     arwill_p256_point_size = 65,
     arwill_p256_signature_size = 64,
 };
 
+struct arwill_sha256_context {
+    uint64_t words[arwill_sha256_context_words];
+};
+
 void arwill_crypto_sha256(const void *data, size_t length, uint8_t output[arwill_sha256_size]);
+void arwill_crypto_sha256_init(struct arwill_sha256_context *context);
+void arwill_crypto_sha256_update(
+    struct arwill_sha256_context *context,
+    const void *data,
+    size_t length
+);
+void arwill_crypto_sha256_finish(
+    const struct arwill_sha256_context *context,
+    uint8_t output[arwill_sha256_size]
+);
 int arwill_crypto_x25519(
     uint8_t output[arwill_x25519_size],
     const uint8_t scalar[arwill_x25519_size],

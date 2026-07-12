@@ -84,6 +84,8 @@ int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
     stack->ssh_banners_sent = 0;
     stack->ssh_kexinit_build_failures = 0;
     stack->ssh_kexinit_send_failures = 0;
+    stack->ssh_ecdh_reply_build_failures = 0;
+    stack->ssh_ecdh_reply_send_failures = 0;
     stack->ssh_receive_failures = 0;
     stack->ssh_host_key = ssh_host_key;
     arwill_ssh_transport_init(&stack->ssh);
@@ -386,6 +388,34 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
             }
             stack->tcp_listener.sequence += (uint32_t)kexinit_length;
             stack->ssh.server_kexinit_sent = 1;
+            reply_sent = 1;
+        }
+        if (stack->ssh.client_ecdh_init_received
+            && !stack->ssh.server_ecdh_reply_sent) {
+            uint8_t ecdh_reply[arwill_ssh_server_packet_capacity];
+            size_t ecdh_reply_length = 0;
+
+            if (!arwill_ssh_transport_build_ecdh_reply(
+                &stack->ssh,
+                stack->ssh_host_key,
+                ecdh_reply,
+                sizeof(ecdh_reply),
+                &ecdh_reply_length
+            )) {
+                stack->ssh_ecdh_reply_build_failures++;
+                return 0;
+            }
+            reply.source_port = stack->tcp_listener.port;
+            reply.destination_port = incoming.source_port;
+            reply.sequence = stack->tcp_listener.sequence;
+            reply.acknowledgement = stack->tcp_listener.acknowledgement;
+            reply.flags = arwill_tcp_flag_ack | arwill_tcp_flag_psh;
+            if (!send_tcp_reply(stack, frame, &reply, ecdh_reply, ecdh_reply_length)) {
+                stack->ssh_ecdh_reply_send_failures++;
+                return 0;
+            }
+            stack->tcp_listener.sequence += (uint32_t)ecdh_reply_length;
+            stack->ssh.server_ecdh_reply_sent = 1;
             reply_sent = 1;
         }
     }

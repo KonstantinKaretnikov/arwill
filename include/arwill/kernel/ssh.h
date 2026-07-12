@@ -13,6 +13,10 @@ enum {
     arwill_ssh_packet_capacity = 4096,
     arwill_ssh_server_packet_capacity = 1024,
     arwill_ssh_receive_capacity = 4096,
+    arwill_ssh_host_key_blob_capacity = 128,
+    arwill_ssh_signature_values_capacity = 80,
+    arwill_ssh_signature_blob_capacity = 128,
+    arwill_ssh_ecdh_reply_payload_capacity = 384,
 };
 
 enum arwill_ssh_host_key_error {
@@ -42,8 +46,21 @@ struct arwill_ssh_transport {
     size_t client_kexinit_length;
     uint8_t server_kexinit[arwill_ssh_server_packet_capacity];
     size_t server_kexinit_length;
+    uint8_t client_ephemeral[arwill_x25519_size];
+    uint8_t server_ephemeral[arwill_x25519_size];
+    uint8_t shared_secret[arwill_x25519_size];
+    uint8_t exchange_hash[arwill_sha256_size];
+    uint8_t kex_host_key_blob[arwill_ssh_host_key_blob_capacity];
+    uint8_t kex_server_private[arwill_x25519_size];
+    uint8_t kex_raw_signature[arwill_p256_signature_size];
+    uint8_t kex_signature_values[arwill_ssh_signature_values_capacity];
+    uint8_t kex_signature_blob[arwill_ssh_signature_blob_capacity];
+    uint8_t kex_reply_payload[arwill_ssh_ecdh_reply_payload_capacity];
+    struct arwill_sha256_context kex_hash;
     int client_kexinit_received;
     int server_kexinit_sent;
+    int client_ecdh_init_received;
+    int server_ecdh_reply_sent;
     uint32_t packets_received;
     uint32_t last_error;
 };
@@ -61,6 +78,13 @@ int arwill_ssh_transport_receive(
 );
 int arwill_ssh_transport_build_kexinit(
     struct arwill_ssh_transport *transport,
+    uint8_t *packet,
+    size_t capacity,
+    size_t *packet_length
+);
+int arwill_ssh_transport_build_ecdh_reply(
+    struct arwill_ssh_transport *transport,
+    const struct arwill_ssh_host_key *host_key,
     uint8_t *packet,
     size_t capacity,
     size_t *packet_length
