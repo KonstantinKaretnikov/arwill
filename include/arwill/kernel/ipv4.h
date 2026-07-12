@@ -20,6 +20,9 @@ struct arwill_ipv4_stack {
     uint32_t tcp_frames_received;
     uint32_t tcp_syn_ack_sent;
     uint32_t ssh_banners_sent;
+    char ssh_client_identification[64];
+    size_t ssh_client_identification_length;
+    int ssh_client_identification_received;
 };
 
 int arwill_ipv4_init(struct arwill_ipv4_stack *stack,

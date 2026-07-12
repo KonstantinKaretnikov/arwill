@@ -81,6 +81,8 @@ int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
     stack->tcp_frames_received = 0;
     stack->tcp_syn_ack_sent = 0;
     stack->ssh_banners_sent = 0;
+    stack->ssh_client_identification_length = 0;
+    stack->ssh_client_identification_received = 0;
     return 1;
 }
 
@@ -336,6 +338,35 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
         }
         stack->ssh_banners_sent++;
         stack->tcp_listener.sequence += (uint32_t)(sizeof(banner) - 1U);
+    }
+    const size_t tcp_header_length = (size_t)(frame[46] >> 4U) * 4U;
+    const size_t ip_length = get16(frame, 16U);
+    if (stack->tcp_listener.state == arwill_tcp_state_established &&
+        tcp_header_length >= 20U && ip_length >= 20U + tcp_header_length &&
+        14U + ip_length <= length) {
+        const size_t payload_length = ip_length - 20U - tcp_header_length;
+        const uint8_t *payload = frame + 14U + 20U + tcp_header_length;
+        static const char prefix[] = "SSH-2.0-";
+        if (payload_length >= sizeof(prefix) - 1U) {
+            int matches = 1;
+            for (size_t index = 0; index < sizeof(prefix) - 1U; index++) {
+                if (payload[index] != (uint8_t)prefix[index]) {
+                    matches = 0;
+                }
+            }
+            if (matches) {
+                size_t copied = payload_length;
+                if (copied >= sizeof(stack->ssh_client_identification)) {
+                    copied = sizeof(stack->ssh_client_identification) - 1U;
+                }
+                for (size_t index = 0; index < copied; index++) {
+                    stack->ssh_client_identification[index] = (char)payload[index];
+                }
+                stack->ssh_client_identification[copied] = '\0';
+                stack->ssh_client_identification_length = copied;
+                stack->ssh_client_identification_received = 1;
+            }
+        }
     }
     return 1;
 }

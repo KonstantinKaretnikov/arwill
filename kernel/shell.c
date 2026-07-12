@@ -2481,6 +2481,9 @@ static void run_command(
         arwill_console_write(console, ", ssh banners: ");
         write_uint64_decimal(console, ipv4->ssh_banners_sent);
         arwill_console_write_line(console, "");
+        arwill_console_write(console, "ssh client: ");
+        arwill_console_write_line(console, ipv4->ssh_client_identification_received ?
+            ipv4->ssh_client_identification : "not received");
         return;
     }
 
