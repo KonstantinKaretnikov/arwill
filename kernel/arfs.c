@@ -377,17 +377,7 @@ static int entry_is_child_of(const struct arfs_entry *entry, const char *path) {
     return 1;
 }
 
-static const struct arfs_entry *find_entry(const char *path) {
-    for (size_t index = 0; index < arfs.entry_count; index++) {
-        if (string_equals(arfs.entries[index].path, path)) {
-            return &arfs.entries[index];
-        }
-    }
-
-    return 0;
-}
-
-static struct arfs_entry *find_mutable_entry(const char *path) {
+static struct arfs_entry *find_entry(const char *path) {
     for (size_t index = 0; index < arfs.entry_count; index++) {
         if (string_equals(arfs.entries[index].path, path)) {
             return &arfs.entries[index];
@@ -574,7 +564,7 @@ static int arfs_write_file(
         return 0;
     }
 
-    struct arfs_entry *entry = find_mutable_entry(path);
+    struct arfs_entry *entry = find_entry(path);
     const size_t contents_length = string_length(contents);
 
     if (entry == 0 || entry->kind != arfs_entry_file || entry->file_type != arwill_fs_file_text) {
@@ -619,7 +609,7 @@ static int refresh_owner_note_state(void) {
         return 1;
     }
 
-    entry = find_mutable_entry("/owner/note");
+    entry = find_entry("/owner/note");
 
     if (entry == 0 || entry->kind != arfs_entry_file) {
         return 0;

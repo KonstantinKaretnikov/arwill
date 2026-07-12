@@ -18,148 +18,174 @@ reboot_status_log=$serial_log.reboot.status
 
 rm -f "$serial_log" "$qemu_status_log" "$reboot_serial_log" "$reboot_status_log"
 
+wait_for_log_file() {
+    log_file=$1
+    pattern=$2
+    count=0
+
+    while [ "$count" -lt 100 ]; do
+        if [ -f "$log_file" ] && grep -q "$pattern" "$log_file"; then
+            return 0
+        fi
+
+        sleep 0.1
+        count=$((count + 1))
+    done
+
+    return 1
+}
+
+wait_for_log_count_file() {
+    log_file=$1
+    pattern=$2
+    expected_count=$3
+    count=0
+
+    while [ "$count" -lt 100 ]; do
+        if [ -f "$log_file" ]; then
+            seen_count=$(grep -c "$pattern" "$log_file" 2>/dev/null || true)
+            if [ "$seen_count" -ge "$expected_count" ]; then
+                return 0
+            fi
+        fi
+
+        sleep 0.1
+        count=$((count + 1))
+    done
+
+    return 1
+}
+
+wait_for_primary_log() {
+    wait_for_log_file "$serial_log" "$1"
+}
+
+wait_for_primary_log_count() {
+    wait_for_log_count_file "$serial_log" "$1" "$2"
+}
+
+wait_for_reboot_log() {
+    wait_for_log_file "$reboot_serial_log" "$1"
+}
+
+run_qemu_to_log() {
+    log_file=$1
+
+    "$qemu" -M "$machine" -m 128M -cdrom "$iso" -boot d \
+        -serial stdio -monitor none -display none -no-reboot \
+        -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+        -drive file="$test_disk",format=raw,if=ide,index=0,media=disk \
+        > "$log_file" 2>&1
+}
+
 (
     set +e
 
     (
-    wait_for_log() {
-        pattern=$1
-        count=0
-
-        while [ "$count" -lt 100 ]; do
-            if [ -f "$serial_log" ] && grep -q "$pattern" "$serial_log"; then
-                return 0
-            fi
-
-            sleep 0.1
-            count=$((count + 1))
-        done
-
-        return 1
-    }
-
-    wait_for_log_count() {
-        pattern=$1
-        expected_count=$2
-        count=0
-
-        while [ "$count" -lt 100 ]; do
-            if [ -f "$serial_log" ]; then
-                seen_count=$(grep -c "$pattern" "$serial_log" 2>/dev/null || true)
-                if [ "$seen_count" -ge "$expected_count" ]; then
-                    return 0
-                fi
-            fi
-
-            sleep 0.1
-            count=$((count + 1))
-        done
-
-        return 1
-    }
-
-    wait_for_log "Arwill:/> "
+    wait_for_primary_log "Arwill:/> "
     sleep 0.1
     printf '\321\200\321\203\320\264\t\r'
-    wait_for_log "Tab        complete"
+    wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_log_count "Arwill 0.6.0" 2
+    wait_for_primary_log_count "Arwill 0.6.0" 2
     sleep 0.1
     printf 'pwd\r'
-    wait_for_log_count "Arwill:/> " 4
+    wait_for_primary_log_count "Arwill:/> " 4
     sleep 0.1
     printf '\033[A\r'
-    wait_for_log_count "Arwill:/> pwd" 2
+    wait_for_primary_log_count "Arwill:/> pwd" 2
     sleep 0.1
     printf 'cl\t\r'
-    wait_for_log_count "Arwill:/> " 6
+    wait_for_primary_log_count "Arwill:/> " 6
     sleep 0.1
     printf 'mem\t\r'
-    wait_for_log "physical allocator:"
+    wait_for_primary_log "physical allocator:"
     sleep 0.1
     printf 'blk\t\r'
-    wait_for_log "sample: ARWILL-BLOCK-DEVICE-TEST"
+    wait_for_primary_log "sample: ARWILL-BLOCK-DEVICE-TEST"
     sleep 0.1
     printf 'irqi\t\r'
-    wait_for_log "timer observed: yes"
+    wait_for_primary_log "timer observed: yes"
     sleep 0.1
     printf 'irqp\t\r'
-    wait_for_log "exception probe: handled vector 3"
+    wait_for_primary_log "exception probe: handled vector 3"
     sleep 0.1
     printf 'sched\t\r'
-    wait_for_log "scheduler: timer tick round-robin foundation"
+    wait_for_primary_log "scheduler: timer tick round-robin foundation"
     sleep 0.1
     printf 'run he\t\r'
-    wait_for_log "process hello: hello from pid"
+    wait_for_primary_log "process hello: hello from pid"
     sleep 0.1
     printf 'run userh\t\r'
-    wait_for_log "user hello: hello from ring 3"
+    wait_for_primary_log "user hello: hello from ring 3"
     sleep 0.1
     printf 'run userb\t\r'
-    wait_for_log "run: spawned pid 3: userbad"
+    wait_for_primary_log "run: spawned pid 3: userbad"
     sleep 0.1
     printf 'useri\t\r'
-    wait_for_log "bad syscalls: 1"
+    wait_for_primary_log "bad syscalls: 1"
     sleep 0.1
     printf 'owneri\t\r'
-    wait_for_log "owner model: single-owner"
+    wait_for_primary_log "owner model: single-owner"
     sleep 0.1
     printf 'ps\r'
-    wait_for_log "pid state runs exit name"
-    wait_for_log "finished"
+    wait_for_primary_log "pid state runs exit name"
+    wait_for_primary_log "finished"
     sleep 0.1
     printf 'l\t\r'
-    wait_for_log "system/"
+    wait_for_primary_log "system/"
+    sleep 0.1
+    printf 'write /docs/readme nope\r'
+    wait_for_primary_log "write: cannot write: /docs/readme"
     sleep 0.1
     printf 'write /owner/note owner note persisted across reboot\r'
-    wait_for_log "write: wrote 34 bytes to /owner/note"
+    wait_for_primary_log "write: wrote 34 bytes to /owner/note"
     sleep 0.1
     printf 'cat /owner/note\r'
-    wait_for_log "owner note persisted across reboot"
+    wait_for_primary_log "owner note persisted across reboot"
+    sleep 0.1
+    printf 'stat /owner/note\r'
+    wait_for_primary_log "size: 34 bytes"
     sleep 0.1
     printf '\321\201\320\262 .\320\270\t\r'
-    wait_for_log "Arwill:/boot> "
+    wait_for_primary_log "Arwill:/boot> "
     sleep 0.1
     printf 'pwd\r'
-    wait_for_log_count "Arwill:/boot> " 2
+    wait_for_primary_log_count "Arwill:/boot> " 2
     sleep 0.1
     printf 'l\t\r'
-    wait_for_log "limine/"
+    wait_for_primary_log "limine/"
     sleep 0.1
     printf 'cd l\t\r'
-    wait_for_log "Arwill:/boot/limine> "
+    wait_for_primary_log "Arwill:/boot/limine> "
     sleep 0.1
     printf 'l\t\r'
-    wait_for_log "limine.conf"
+    wait_for_primary_log "limine.conf"
     sleep 0.1
     printf 'cat limine.c\t\r'
-    wait_for_log "protocol: limine"
+    wait_for_primary_log "protocol: limine"
     sleep 0.1
     printf 'cd ..\r'
-    wait_for_log_count "Arwill:/boot> " 4
+    wait_for_primary_log_count "Arwill:/boot> " 4
     sleep 0.1
     printf 'cat kernel.elf\r'
-    wait_for_log "cat: cannot display binary file: /boot/kernel.elf"
+    wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_log "version: 0.6.0"
+    wait_for_primary_log "version: 0.6.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
-    wait_for_log "type: text file"
+    wait_for_primary_log "type: text file"
     sleep 0.1
     printf 'cat /docs/readme\r'
-    wait_for_log "storage-backed filesystem"
+    wait_for_primary_log "storage-backed filesystem"
     sleep 0.1
     printf 'cat /docs/missing\r'
-    wait_for_log "cat: no such file: /docs/missing"
+    wait_for_primary_log "cat: no such file: /docs/missing"
     sleep 0.1
     printf 'ex\t\r'
-    ) | "$qemu" -M "$machine" -m 128M -cdrom "$iso" -boot d \
-        -serial stdio -monitor none -display none -no-reboot \
-        -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
-        -drive file="$test_disk",format=raw,if=ide,index=0,media=disk \
-        > "$serial_log" 2>&1
+    ) | run_qemu_to_log "$serial_log"
 
     qemu_status=$?
     printf '%s\n' "$qemu_status" > "$qemu_status_log"
@@ -318,8 +344,11 @@ check_line "boot/"
 check_line "docs/"
 check_line "owner/"
 check_line "system/"
+check_line "write: cannot write: /docs/readme"
 check_line "write: wrote 34 bytes to /owner/note"
 check_line "owner note persisted across reboot"
+check_line "path: /owner/note"
+check_line "size: 34 bytes"
 check_line "Arwill:/> cd /boot/"
 check_line "/boot"
 check_line "kernel.elf"
@@ -342,33 +371,13 @@ check_line "status: powering off"
     set +e
 
     (
-    wait_for_reboot_log() {
-        pattern=$1
-        count=0
-
-        while [ "$count" -lt 100 ]; do
-            if [ -f "$reboot_serial_log" ] && grep -q "$pattern" "$reboot_serial_log"; then
-                return 0
-            fi
-
-            sleep 0.1
-            count=$((count + 1))
-        done
-
-        return 1
-    }
-
     wait_for_reboot_log "Arwill:/> "
     sleep 0.1
     printf 'cat /owner/note\r'
     wait_for_reboot_log "owner note persisted across reboot"
     sleep 0.1
     printf 'ex\t\r'
-    ) | "$qemu" -M "$machine" -m 128M -cdrom "$iso" -boot d \
-        -serial stdio -monitor none -display none -no-reboot \
-        -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
-        -drive file="$test_disk",format=raw,if=ide,index=0,media=disk \
-        > "$reboot_serial_log" 2>&1
+    ) | run_qemu_to_log "$reboot_serial_log"
 
     printf '%s\n' "$?" > "$reboot_status_log"
 ) &

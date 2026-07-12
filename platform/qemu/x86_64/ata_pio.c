@@ -156,40 +156,6 @@ static int ata_identify(uint64_t *sector_count) {
     return 1;
 }
 
-static int ata_read_one_sector(uint32_t lba, uint8_t *buffer) {
-    if (!ata_wait_not_busy()) {
-        return 0;
-    }
-
-    arwill_x86_64_out8(
-        ata_primary_io_base + ata_register_drive,
-        (uint8_t)(ata_drive_master_lba | ((lba >> 24U) & 0x0fU))
-    );
-    ata_io_wait();
-
-    arwill_x86_64_out8(ata_primary_io_base + ata_register_sector_count, 1);
-    arwill_x86_64_out8(ata_primary_io_base + ata_register_lba_low, (uint8_t)lba);
-    arwill_x86_64_out8(
-        ata_primary_io_base + ata_register_lba_mid,
-        (uint8_t)(lba >> 8U)
-    );
-    arwill_x86_64_out8(
-        ata_primary_io_base + ata_register_lba_high,
-        (uint8_t)(lba >> 16U)
-    );
-    arwill_x86_64_out8(
-        ata_primary_io_base + ata_register_status_command,
-        ata_command_read_sectors
-    );
-
-    if (!ata_wait_data_request()) {
-        return 0;
-    }
-
-    ata_read_sector_bytes(buffer);
-    return 1;
-}
-
 static void ata_select_lba28(uint32_t lba) {
     arwill_x86_64_out8(
         ata_primary_io_base + ata_register_drive,
@@ -207,6 +173,25 @@ static void ata_select_lba28(uint32_t lba) {
         ata_primary_io_base + ata_register_lba_high,
         (uint8_t)(lba >> 16U)
     );
+}
+
+static int ata_read_one_sector(uint32_t lba, uint8_t *buffer) {
+    if (!ata_wait_not_busy()) {
+        return 0;
+    }
+
+    ata_select_lba28(lba);
+    arwill_x86_64_out8(
+        ata_primary_io_base + ata_register_status_command,
+        ata_command_read_sectors
+    );
+
+    if (!ata_wait_data_request()) {
+        return 0;
+    }
+
+    ata_read_sector_bytes(buffer);
+    return 1;
 }
 
 static int ata_flush_cache(void) {
