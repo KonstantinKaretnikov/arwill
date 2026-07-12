@@ -1,6 +1,6 @@
 # ADR-0018: ARFS Read-Only Filesystem
 
-Status: accepted
+Status: superseded by ADR-0029
 
 ## Context
 

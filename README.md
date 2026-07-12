@@ -201,7 +201,7 @@ console: serial
 input: serial
 owner: single-owner
 shell: ready
-filesystem: arfs writable owner note
+filesystem: arfs mutable
 block: qemu ata pio
 memory: boot memory map
 allocator: physical page bump allocator + kernel heap

@@ -41,10 +41,11 @@ Rules for future work:
   roles, or multi-user permission checks unless a later ADR explicitly changes
   this direction. The owner has full system control; ring 3 is an engineering
   guardrail for ordinary programs, not an account boundary.
-- Treat current filesystem writes as deliberately narrow. `write /owner/note`
-  is the first persistent ARFS overwrite path; do not describe Arwill as having
-  general file creation, append, delete, rename, allocation, or crash
-  consistency yet.
+- Treat ARFS v2 as a tiny mutable filesystem core with fixed entry, path, and
+  file-size limits. It supports directory creation, whole-file byte writes,
+  removal, and contiguous allocation, but has no append, rename, journal,
+  atomic metadata update, or crash consistency. The shell `write` command
+  remains restricted to `/owner/note` until dedicated commands expose more.
 - Treat the current kernel heap as a small HHDM-backed free-list allocator. It
   is useful for small kernel objects, but it is not a slab allocator, virtual
   memory subsystem, userspace heap, or physical page release mechanism.

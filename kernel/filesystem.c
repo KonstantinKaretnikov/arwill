@@ -52,3 +52,40 @@ int arwill_filesystem_write_file(
 
     return filesystem->write_file(filesystem->context, path, contents);
 }
+
+int arwill_filesystem_create_directory(
+    const struct arwill_filesystem *filesystem,
+    const char *path
+) {
+    if (filesystem == 0 || filesystem->create_directory == 0 || path == 0) {
+        return 0;
+    }
+
+    return filesystem->create_directory(filesystem->context, path);
+}
+
+int arwill_filesystem_write_bytes(
+    const struct arwill_filesystem *filesystem,
+    const char *path,
+    enum arwill_fs_file_type type,
+    const uint8_t *contents,
+    size_t size
+) {
+    if (filesystem == 0 || filesystem->write_bytes == 0 || path == 0 ||
+        (contents == 0 && size != 0U)) {
+        return 0;
+    }
+
+    return filesystem->write_bytes(filesystem->context, path, type, contents, size);
+}
+
+int arwill_filesystem_remove(
+    const struct arwill_filesystem *filesystem,
+    const char *path
+) {
+    if (filesystem == 0 || filesystem->remove == 0 || path == 0) {
+        return 0;
+    }
+
+    return filesystem->remove(filesystem->context, path);
+}

@@ -37,6 +37,15 @@ struct arwill_filesystem {
     int (*list)(void *context, const char *path, struct arwill_fs_listing *listing);
     int (*read_file)(void *context, const char *path, struct arwill_fs_file *file);
     int (*write_file)(void *context, const char *path, const char *contents);
+    int (*create_directory)(void *context, const char *path);
+    int (*write_bytes)(
+        void *context,
+        const char *path,
+        enum arwill_fs_file_type type,
+        const uint8_t *contents,
+        size_t size
+    );
+    int (*remove)(void *context, const char *path);
 };
 
 int arwill_filesystem_list(
@@ -55,6 +64,24 @@ int arwill_filesystem_write_file(
     const struct arwill_filesystem *filesystem,
     const char *path,
     const char *contents
+);
+
+int arwill_filesystem_create_directory(
+    const struct arwill_filesystem *filesystem,
+    const char *path
+);
+
+int arwill_filesystem_write_bytes(
+    const struct arwill_filesystem *filesystem,
+    const char *path,
+    enum arwill_fs_file_type type,
+    const uint8_t *contents,
+    size_t size
+);
+
+int arwill_filesystem_remove(
+    const struct arwill_filesystem *filesystem,
+    const char *path
 );
 
 #endif

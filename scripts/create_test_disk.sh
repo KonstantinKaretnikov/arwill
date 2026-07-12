@@ -28,7 +28,6 @@ identity=$payload_dir/identity
 limine_conf=$payload_dir/limine.conf
 readme=$payload_dir/readme
 owner_note=$payload_dir/owner-note
-owner_state=$payload_dir/owner-state
 app_hello=$payload_dir/hello.awp
 
 printf 'name: Arwill\nversion: %s\narchitecture: x86_64\nplatform: qemu\nfilesystem: arfs\n' \
@@ -55,16 +54,13 @@ if [ "$app_hello_size" -gt 512 ]; then
     exit 1
 fi
 
-printf 'owner_note_size=%s\n' "$owner_note_size" > "$owner_state"
+printf 'D /apps\nD /boot\nD /boot/limine\nD /docs\nD /owner\nD /system\nF /apps/hello.awp binary 13 %s\nF /boot/kernel.elf binary 0 0\nF /boot/limine/limine.conf text 10 %s\nF /boot/limine/limine-bios.sys binary 0 0\nF /docs/readme text 11 %s\nF /owner/note text 12 %s\nF /system/identity text 8 %s\n' \
+    "$app_hello_size" "$limine_conf_size" "$readme_size" "$owner_note_size" "$identity_size" > "$manifest"
 
-printf 'D /apps\nD /boot\nD /boot/limine\nD /docs\nD /owner\nD /system\nF /apps/hello.awp binary 13 %s\nF /boot/kernel.elf binary 0 0\nF /boot/limine/limine.conf text 10 %s\nF /boot/limine/limine-bios.sys binary 0 0\nF /docs/readme text 11 %s\nF /owner/note text 12 0\nF /system/identity text 8 %s\n' \
-    "$app_hello_size" "$limine_conf_size" "$readme_size" "$identity_size" > "$manifest"
-
-printf 'ARFS1\nmanifest_lba=4\nmanifest_sectors=2\nwritable_state_lba=6\nowner_note_lba=12\nowner_note_capacity=512\n' > "$superblock"
+printf 'ARFS2\nmanifest_lba=4\nmanifest_sectors=2\ndata_lba=14\n' > "$superblock"
 
 dd if="$superblock" of="$temporary" bs=512 seek=3 conv=notrunc >/dev/null 2>&1
 dd if="$manifest" of="$temporary" bs=512 seek=4 conv=notrunc >/dev/null 2>&1
-dd if="$owner_state" of="$temporary" bs=512 seek=6 conv=notrunc >/dev/null 2>&1
 dd if="$identity" of="$temporary" bs=512 seek=8 conv=notrunc >/dev/null 2>&1
 dd if="$limine_conf" of="$temporary" bs=512 seek=10 conv=notrunc >/dev/null 2>&1
 dd if="$readme" of="$temporary" bs=512 seek=11 conv=notrunc >/dev/null 2>&1

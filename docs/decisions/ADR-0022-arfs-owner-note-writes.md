@@ -1,6 +1,6 @@
 # ADR-0022: ARFS Owner Note Writes
 
-Status: accepted
+Status: superseded by ADR-0029
 
 ## Context
 

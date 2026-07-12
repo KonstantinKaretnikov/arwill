@@ -266,6 +266,16 @@ Static boot catalog:
 - It is not a disk filesystem and does not read from storage.
 - It now acts as a fallback if ARFS cannot mount.
 
+ARFS mutable core:
+
+- ARFS v2 stores its fixed-size mutable catalog in a two-sector text manifest.
+- It supports directory creation, whole-file text or binary writes, removal,
+  and contiguous allocation for files smaller than 2048 bytes.
+- Free ranges are inferred from catalog entries; there is no bitmap, journal,
+  cache, append, rename, or crash-consistency model.
+- The shell still exposes only `write /owner/note` until dedicated mutation
+  commands are added.
+
 QEMU ATA PIO block device:
 
 - Lives in `platform/qemu/x86_64/ata_pio.c`.
