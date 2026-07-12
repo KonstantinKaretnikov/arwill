@@ -385,6 +385,7 @@ driver work, not accidental default access for every ring 3 program.
    Verified by:
 
    - test disk includes `/apps/hello.awp`;
+   - `apps/hello/` builds the application separately from the disk image;
    - smoke test lists `/apps`;
    - smoke test verifies `cat /apps/hello.awp` remains binary-only;
    - smoke test runs `exec /apps/hello.awp`;

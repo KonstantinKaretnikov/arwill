@@ -163,6 +163,9 @@ the same ring 3 `int 0x80` syscall boundary. AWP is deliberately
 small and is not ELF, POSIX, dynamic linking, arguments, or environment
 support.
 
+The test application's build recipe lives in `apps/hello/`; its output is
+packaged into the ARFS test disk as `build/apps/hello.awp`.
+
 These are still narrow built-in programs. Arwill does not yet have ELF program
 loading, per-process address spaces, saved CPU contexts, or preemptive context
 switching.

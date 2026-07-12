@@ -1,13 +1,14 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 2 ]; then
-    echo "usage: create_test_disk.sh <output-image> <project-version>" >&2
+if [ "$#" -ne 3 ]; then
+    echo "usage: create_test_disk.sh <output-image> <project-version> <hello-awp>" >&2
     exit 2
 fi
 
 output=$1
 project_version=$2
+hello_app=$3
 temporary=$output.tmp
 payload_dir=$output.payloads
 
@@ -46,14 +47,13 @@ limine_conf_size=$(wc -c < "$limine_conf" | tr -d ' ')
 readme_size=$(wc -c < "$readme" | tr -d ' ')
 owner_note_size=$(wc -c < "$owner_note" | tr -d ' ')
 
-dd if=/dev/zero of="$app_hello" bs=512 count=1 >/dev/null 2>&1
-printf '\101\127\120\061\020\000\000\000\027\001\000\000\000\000\000\000' |
-    dd of="$app_hello" bs=1 seek=0 conv=notrunc >/dev/null 2>&1
-printf '\270\001\000\000\000\110\277\000\001\000\000\200\000\000\000\110\307\306\027\000\000\000\315\200\270\002\000\000\000\110\307\307\011\000\000\000\315\200\017\013' |
-    dd of="$app_hello" bs=1 seek=16 conv=notrunc >/dev/null 2>&1
-printf 'awp hello from storage\n' |
-    dd of="$app_hello" bs=1 seek=272 conv=notrunc >/dev/null 2>&1
-app_hello_size=295
+cp "$hello_app" "$app_hello"
+app_hello_size=$(wc -c < "$app_hello" | tr -d ' ')
+
+if [ "$app_hello_size" -gt 512 ]; then
+    echo "hello app exceeds its single-sector ARFS slot" >&2
+    exit 1
+fi
 
 printf 'owner_note_size=%s\n' "$owner_note_size" > "$owner_state"
 

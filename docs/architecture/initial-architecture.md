@@ -202,6 +202,8 @@ Program loader:
 - The current image format contains a small header, entry offset, and code
   bytes for one user code page.
 - `/apps/hello.awp` is the first test program.
+- Its build recipe lives under `apps/hello/`; the test-disk builder only
+  packages the finished `build/apps/hello.awp` artifact.
 - This is deliberately not ELF: there is no linker, relocation, dynamic
   loading, arguments, environment, file descriptors, or per-process address
   spaces yet.
