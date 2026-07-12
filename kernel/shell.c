@@ -52,6 +52,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "clear", .completion = shell_completion_none },
     { .name = "ls", .completion = shell_completion_path },
     { .name = "cat", .completion = shell_completion_path },
+    { .name = "write", .completion = shell_completion_path },
     { .name = "stat", .completion = shell_completion_path },
     { .name = "meminfo", .completion = shell_completion_none },
     { .name = "blkinfo", .completion = shell_completion_none },
@@ -726,6 +727,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  clear      clear the terminal screen");
     arwill_console_write_line(console, "  ls [path]  list the current filesystem");
     arwill_console_write_line(console, "  cat [path] show text file contents");
+    arwill_console_write_line(console, "  write [path] [text] overwrite a writable text file");
     arwill_console_write_line(console, "  stat [path] show file or directory metadata");
     arwill_console_write_line(console, "  meminfo    show memory map and page allocator");
     arwill_console_write_line(console, "  blkinfo    show block device read diagnostics");
@@ -874,6 +876,57 @@ static void print_file(
     if (contents_length == 0U || file.contents[contents_length - 1U] != '\n') {
         arwill_console_write_line(console, "");
     }
+}
+
+static const char *second_argument_after_first(const char *argument) {
+    size_t index = 0;
+
+    while (argument[index] != '\0' && argument[index] != ' ') {
+        index++;
+    }
+
+    while (argument[index] == ' ') {
+        index++;
+    }
+
+    return &argument[index];
+}
+
+static void write_file(
+    const struct arwill_console *console,
+    const struct arwill_filesystem *filesystem,
+    const char *current_directory,
+    const char *argument
+) {
+    char path_argument[shell_path_capacity];
+    char resolved_path[shell_path_capacity];
+    const char *contents = second_argument_after_first(argument);
+
+    if (!copy_first_argument(path_argument, sizeof(path_argument), argument)) {
+        arwill_console_write_line(console, "write: path too long");
+        return;
+    }
+
+    if (path_argument[0] == '\0') {
+        arwill_console_write_line(console, "write: missing path");
+        return;
+    }
+
+    if (!resolve_path(current_directory, path_argument, resolved_path, sizeof(resolved_path))) {
+        arwill_console_write_line(console, "write: path too long");
+        return;
+    }
+
+    if (!arwill_filesystem_write_file(filesystem, resolved_path, contents)) {
+        arwill_console_write(console, "write: cannot write: ");
+        arwill_console_write_line(console, resolved_path);
+        return;
+    }
+
+    arwill_console_write(console, "write: wrote ");
+    write_uint64_decimal(console, (uint64_t)string_length(contents));
+    arwill_console_write(console, " bytes to ");
+    arwill_console_write_line(console, resolved_path);
 }
 
 static void clear_screen(const struct arwill_console *console) {
@@ -1978,6 +2031,11 @@ static void run_command(
 
     if (string_equals(line, "cat") || starts_with(line, "cat ")) {
         print_file(console, filesystem, current_directory, argument_after_command(line));
+        return;
+    }
+
+    if (string_equals(line, "write") || starts_with(line, "write ")) {
+        write_file(console, filesystem, current_directory, argument_after_command(line));
         return;
     }
 

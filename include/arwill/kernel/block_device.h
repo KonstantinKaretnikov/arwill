@@ -16,6 +16,13 @@ struct arwill_block_device {
         uint8_t *buffer,
         size_t buffer_size
     );
+    int (*write)(
+        void *context,
+        uint64_t lba,
+        uint32_t sector_count,
+        const uint8_t *buffer,
+        size_t buffer_size
+    );
 };
 
 int arwill_block_read(
@@ -23,6 +30,14 @@ int arwill_block_read(
     uint64_t lba,
     uint32_t sector_count,
     uint8_t *buffer,
+    size_t buffer_size
+);
+
+int arwill_block_write(
+    const struct arwill_block_device *device,
+    uint64_t lba,
+    uint32_t sector_count,
+    const uint8_t *buffer,
     size_t buffer_size
 );
 

@@ -15,15 +15,16 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.5.1`
+Version: `0.6.0`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
 The shell can read terminal keyboard input through QEMU serial I/O, inspect a
 boot memory map, report the first physical page allocator state, and launch
 small cooperative kernel processes. Arwill can also read sectors from a
-QEMU-attached raw test disk through a read-only ATA PIO block-device driver and
-serve shell filesystem commands from a storage-backed read-only ARFS image.
+QEMU-attached raw test disk through an ATA PIO block-device driver and serve
+shell filesystem commands from a storage-backed ARFS image. ARFS now supports a
+first persistent writable owner note at `/owner/note`.
 The x86-64/QEMU path now installs an IDT, remaps the legacy PIC, configures the
 PIT timer, and exposes interrupt, timer, and scheduler tick diagnostics. It can
 also enter ring 3 for tiny built-in user programs, handle `int 0x80` syscalls
@@ -94,6 +95,7 @@ cd [path]
 clear
 ls [path]
 cat [path]
+write [path] [text]
 stat [path]
 meminfo
 blkinfo
@@ -108,14 +110,18 @@ exit
 halt
 ```
 
-`ls` lists the current read-only filesystem. In the normal QEMU test path this
-is ARFS mounted from the raw test disk image. The supported paths are `/`,
-`/boot`, `/boot/limine`, `/docs`, and `/system`. `cd` changes the shell's
+`ls` lists the current filesystem. In the normal QEMU test path this is ARFS
+mounted from the raw test disk image. The supported paths are `/`, `/boot`,
+`/boot/limine`, `/docs`, `/owner`, and `/system`. `cd` changes the shell's
 current directory and supports absolute paths, relative paths, `.`, and `..`.
 
 `cat` displays text files from ARFS, such as `/system/identity`,
 `/boot/limine/limine.conf`, and `/docs/readme`. Binary boot artifacts are
 visible in listings, but their contents are not displayed yet.
+
+`write /owner/note [text]` overwrites the first writable ARFS text file. The
+data is written to the QEMU raw disk image and is verified by the smoke test
+across a rebooted QEMU session. Other paths remain read-only for now.
 
 `stat` displays directory and file metadata. `meminfo` prints the
 Limine-provided boot memory map and the current physical page allocator
@@ -170,14 +176,14 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.5.1
+Arwill 0.6.0
 architecture: x86_64
 platform: qemu
 console: serial
 input: serial
 owner: single-owner
 shell: ready
-filesystem: arfs read-only disk
+filesystem: arfs writable owner note
 block: qemu ata pio
 memory: boot memory map
 allocator: physical page bump allocator
@@ -200,8 +206,8 @@ Arwill:/>
 - `docs/development/`: host setup and development workflows.
 - `include/`: public Arwill-owned C contracts.
 - `kernel/`: architecture-independent kernel orchestration, shell, contracts,
-  static boot catalog fallback, ARFS read-only filesystem support, and
-  user-runtime wrappers.
+  static boot catalog fallback, ARFS filesystem support, and user-runtime
+  wrappers.
 - `arch/x86_64/`: x86-64 entry, CPU idle, interrupt setup, port I/O, and linker
   details, including the first ring 3 user-mode path.
 - `platform/qemu/`: QEMU-specific platform wiring and serial console block.

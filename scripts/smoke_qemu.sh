@@ -13,8 +13,10 @@ test_disk=$4
 serial_log=$5
 expected_qemu_status=$6
 qemu_status_log=$serial_log.status
+reboot_serial_log=$serial_log.reboot
+reboot_status_log=$serial_log.reboot.status
 
-rm -f "$serial_log" "$qemu_status_log"
+rm -f "$serial_log" "$qemu_status_log" "$reboot_serial_log" "$reboot_status_log"
 
 (
     set +e
@@ -62,7 +64,7 @@ rm -f "$serial_log" "$qemu_status_log"
     wait_for_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_log_count "Arwill 0.5.1" 2
+    wait_for_log_count "Arwill 0.6.0" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_log_count "Arwill:/> " 4
@@ -110,6 +112,12 @@ rm -f "$serial_log" "$qemu_status_log"
     printf 'l\t\r'
     wait_for_log "system/"
     sleep 0.1
+    printf 'write /owner/note owner note persisted across reboot\r'
+    wait_for_log "write: wrote 34 bytes to /owner/note"
+    sleep 0.1
+    printf 'cat /owner/note\r'
+    wait_for_log "owner note persisted across reboot"
+    sleep 0.1
     printf '\321\201\320\262 .\320\270\t\r'
     wait_for_log "Arwill:/boot> "
     sleep 0.1
@@ -135,13 +143,13 @@ rm -f "$serial_log" "$qemu_status_log"
     wait_for_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_log "version: 0.5.1"
+    wait_for_log "version: 0.6.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_log "type: text file"
     sleep 0.1
     printf 'cat /docs/readme\r'
-    wait_for_log "storage-backed read-only filesystem"
+    wait_for_log "storage-backed filesystem"
     sleep 0.1
     printf 'cat /docs/missing\r'
     wait_for_log "cat: no such file: /docs/missing"
@@ -227,14 +235,14 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.5.1"
+check_line "Arwill 0.6.0"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
 check_line "input: serial"
 check_line "owner: single-owner"
 check_line "shell: ready"
-check_line "filesystem: arfs read-only disk"
+check_line "filesystem: arfs writable owner note"
 check_line "block: qemu ata pio"
 check_line "memory: boot memory map"
 check_line "allocator: physical page bump allocator"
@@ -246,10 +254,11 @@ check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.5.1"
+check_line "Arwill 0.6.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
+check_line "write [path] [text] overwrite a writable text file"
 check_line "meminfo    show memory map and page allocator"
 check_line "blkinfo    show block device read diagnostics"
 check_line "irqinfo    show interrupt and timer diagnostics"
@@ -307,7 +316,10 @@ check_line "3 finished 1 127 userbad"
 check_line "finished"
 check_line "boot/"
 check_line "docs/"
+check_line "owner/"
 check_line "system/"
+check_line "write: wrote 34 bytes to /owner/note"
+check_line "owner note persisted across reboot"
 check_line "Arwill:/> cd /boot/"
 check_line "/boot"
 check_line "kernel.elf"
@@ -316,14 +328,99 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.5.1"
+check_line "version: 0.6.0"
 check_line "filesystem: arfs"
 check_line "type: text file"
-check_line "Arwill storage-backed read-only filesystem"
+check_line "Arwill storage-backed filesystem"
+check_line "writable: /owner/note"
 check_line "cat: no such file: /docs/missing"
 check_line "Arwill:/boot/limine> "
 check_line "Arwill:/boot> exit"
 check_line "status: powering off"
 
+(
+    set +e
+
+    (
+    wait_for_reboot_log() {
+        pattern=$1
+        count=0
+
+        while [ "$count" -lt 100 ]; do
+            if [ -f "$reboot_serial_log" ] && grep -q "$pattern" "$reboot_serial_log"; then
+                return 0
+            fi
+
+            sleep 0.1
+            count=$((count + 1))
+        done
+
+        return 1
+    }
+
+    wait_for_reboot_log "Arwill:/> "
+    sleep 0.1
+    printf 'cat /owner/note\r'
+    wait_for_reboot_log "owner note persisted across reboot"
+    sleep 0.1
+    printf 'ex\t\r'
+    ) | "$qemu" -M "$machine" -m 128M -cdrom "$iso" -boot d \
+        -serial stdio -monitor none -display none -no-reboot \
+        -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+        -drive file="$test_disk",format=raw,if=ide,index=0,media=disk \
+        > "$reboot_serial_log" 2>&1
+
+    printf '%s\n' "$?" > "$reboot_status_log"
+) &
+reboot_qemu_pid=$!
+
+cleanup_reboot() {
+    if kill -0 "$reboot_qemu_pid" >/dev/null 2>&1; then
+        kill "$reboot_qemu_pid" >/dev/null 2>&1 || true
+        wait "$reboot_qemu_pid" >/dev/null 2>&1 || true
+    fi
+}
+
+trap cleanup_reboot EXIT INT TERM
+
+count=0
+
+while [ "$count" -lt "$deadline" ]; do
+    if [ -f "$reboot_status_log" ]; then
+        break
+    fi
+
+    sleep 0.2
+    count=$((count + 1))
+done
+
+if [ ! -f "$reboot_status_log" ]; then
+    echo "QEMU reboot persistence check did not power off before timeout" >&2
+    cleanup_reboot
+    exit 1
+fi
+
+wait "$reboot_qemu_pid" >/dev/null 2>&1 || true
+trap - EXIT INT TERM
+
+reboot_qemu_status=$(cat "$reboot_status_log")
+
+if [ "$reboot_qemu_status" -ne "$expected_qemu_status" ]; then
+    echo "unexpected reboot QEMU exit status: $reboot_qemu_status, expected: $expected_qemu_status" >&2
+    echo "--- reboot serial log ---" >&2
+    cat "$reboot_serial_log" >&2
+    echo "-------------------------" >&2
+    exit 1
+fi
+
+if ! grep -F -q "owner note persisted across reboot" "$reboot_serial_log"; then
+    echo "missing reboot persistence output" >&2
+    echo "--- reboot serial log ---" >&2
+    cat "$reboot_serial_log" >&2
+    echo "-------------------------" >&2
+    exit 1
+fi
+
 echo "QEMU serial smoke test passed"
 cat "$serial_log"
+cat "$reboot_serial_log"

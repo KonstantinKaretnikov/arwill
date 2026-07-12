@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.5.1`.
+Status: `0.6.0`.
 
 Arwill already has:
 
@@ -27,9 +27,9 @@ Arwill already has:
   test;
 - [x] QEMU serial console output and blocking serial input;
 - [x] a serial shell with canonical commands only: `help`, `version`, `pwd`,
-  `cd`, `clear`, `ls`, `cat`, `stat`, `meminfo`, `blkinfo`, `irqinfo`,
-  `irqprobe`, `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`, `exit`, and
-  `halt`;
+  `cd`, `clear`, `ls`, `cat`, `write`, `stat`, `meminfo`, `blkinfo`,
+  `irqinfo`, `irqprobe`, `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`,
+  `exit`, and `halt`;
 - [x] shell current directory state, path resolution, Tab completion, command
   history, and Russian-layout command-entry normalization;
 - [x] a static read-only boot catalog used by `ls`, `cd`, `cat`, `stat`, and
@@ -37,8 +37,10 @@ Arwill already has:
 - [x] read-only file contents for selected text files in that static catalog;
 - [x] read-only sector access from a QEMU-attached raw test disk through an ATA
   PIO block-device contract;
-- [x] storage-backed read-only ARFS mounted from the raw test disk for `ls`,
-  `cd`, `cat`, `stat`, and path completion;
+- [x] storage-backed ARFS mounted from the raw test disk for `ls`, `cd`, `cat`,
+  `stat`, and path completion;
+- [x] single-sector ATA PIO block writes and a persistent ARFS owner-note
+  overwrite path at `/owner/note`;
 - [x] a Limine memory map snapshot and first bump-only physical page allocator
   counters;
 - [x] QEMU debug-exit poweroff through `exit`;
@@ -53,9 +55,10 @@ Arwill already has:
 - [x] single-owner OS model: one owner, no accounts or multi-user permission
   system, with the kernel/user boundary kept as an engineering guardrail.
 
-Arwill does not yet have block writes, saved task contexts, preemptive context
-switching, per-process address spaces, ELF program loading, multi-user
-accounts, or writable persistent storage.
+Arwill does not yet have general filesystem allocation, arbitrary file create,
+append, delete, rename, saved task contexts, preemptive context switching,
+per-process address spaces, ELF program loading, multi-user accounts, or a
+general-purpose writable storage subsystem.
 
 ## Product Direction
 
@@ -229,7 +232,9 @@ driver work, not accidental default access for every ring 3 program.
    - smoke test runs `ownerinfo`;
    - docs and AGENTS distinguish CPU user mode from OS user accounts.
 
-6. [ ] Writable filesystem
+6. [x] Writable filesystem
+
+   Status: done in `0.6.0` as a narrow first writable slice.
 
    Goal: add controlled persistent write support after read storage, filesystem
    reads, scheduling direction, and user-space basics are established.
@@ -237,17 +242,19 @@ driver work, not accidental default access for every ring 3 program.
    Scope:
 
    - add block write support with error reporting;
-   - evolve the filesystem contract for create, overwrite, append, or whichever
-     first write operations are explicitly chosen;
-   - define allocation/update rules and persistence semantics;
-   - keep write operations narrow until crash consistency and caching are better
-     understood.
+   - evolve the filesystem contract with a narrow whole-file overwrite
+     operation;
+   - reserve `/owner/note` as the first writable ARFS text file;
+   - store the note data and note size in explicit reserved disk sectors;
+   - keep arbitrary create, append, allocation, delete, rename, and crash
+     consistency out of scope.
 
-   Expected tests:
+   Verified by:
 
-   - create or modify a small file and read it back in the same boot;
-   - verify persistence across a rebooted QEMU session with a test disk image;
-   - cover write failure paths such as no space or invalid path;
+   - smoke test runs `write /owner/note ...`;
+   - smoke test reads the note back in the same boot;
+   - smoke test powers off, boots QEMU again with the same raw disk image, and
+     reads the note back again;
    - keep read-only filesystem tests passing.
 
    Definition of done: Arwill can persist a small file change to a QEMU disk

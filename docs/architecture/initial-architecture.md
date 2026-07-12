@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.5.1 has one executable path:
+Arwill 0.6.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -9,7 +9,7 @@ Limine bootloader
   -> physical page allocator initialization
   -> QEMU serial I/O block
   -> QEMU ATA PIO block-device initialization
-  -> ARFS read-only filesystem mount from the raw test disk
+  -> ARFS filesystem mount from the raw test disk
   -> single-owner model publication
   -> x86-64 GDT, TSS, and user runtime initialization
   -> x86-64 IDT, PIC, and PIT timer initialization
@@ -18,7 +18,8 @@ Limine bootloader
   -> scheduler tick foundation initialization
   -> CPU interrupt enable
   -> serial shell
-  -> storage-backed read-only filesystem
+  -> storage-backed filesystem
+  -> persistent owner-note write when write /owner/note is requested
   -> deterministic raw disk sector read when blkinfo is requested
   -> interrupt/timer diagnostics when irqinfo or irqprobe is requested
   -> scheduler tick diagnostics when schedinfo is requested
@@ -54,8 +55,8 @@ Shell:
 
 - Lives in `kernel/shell.c`.
 - Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
-  `cat`, `stat`, `meminfo`, `blkinfo`, `irqinfo`, `irqprobe`, `schedinfo`,
-  `userinfo`, `ownerinfo`, `ps`, `run`, `exit`, and `halt`.
+  `cat`, `write`, `stat`, `meminfo`, `blkinfo`, `irqinfo`, `irqprobe`,
+  `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`, `exit`, and `halt`.
 - Keeps one canonical command name per operation; alias commands are not
   accepted.
 - Holds the current working directory as local shell state.
@@ -82,9 +83,10 @@ Ownership model:
 Block device contract:
 
 - Lives in `include/arwill/kernel/block_device.h`.
-- Provides bounded sector reads by LBA.
-- The first block-device implementation is read-only and has no block cache,
-  partition table handling, write support, or filesystem parser.
+- Provides bounded sector reads and writes by LBA.
+- The first block-device implementation has no block cache, partition table
+  handling, request queue, DMA, or flush policy beyond the narrow ATA cache
+  flush used after single-sector writes.
 - The `blkinfo` shell command reads LBA 1 from the deterministic QEMU test disk
   image and prints a sample string.
 
@@ -177,11 +179,12 @@ Memory contract:
 Filesystem contract:
 
 - Lives in `include/arwill/kernel/filesystem.h`.
-- Provides read-only directory listing and whole-file reads by path.
-- It does not yet provide open handles, streaming reads, writes, allocation, or
-  mount behavior.
+- Provides directory listing, whole-file reads by path, and a narrow whole-file
+  overwrite operation.
+- It does not yet provide open handles, streaming reads, allocation, append,
+  delete, rename, directories creation, or mount behavior.
 
-ARFS read-only filesystem:
+ARFS filesystem:
 
 - Public mount entry lives in `include/arwill/kernel/arfs.h`.
 - Implementation lives in `kernel/arfs.c`.
@@ -189,9 +192,12 @@ ARFS read-only filesystem:
   manifest from the deterministic raw test disk image.
 - Provides the primary filesystem for `ls`, `cd`, Tab completion, `cat`, and
   `stat` in the normal QEMU test path.
-- It is intentionally simple: fixed-size manifest parsing, read-only file
-  contents, no allocation, no writes, no open handles, no block cache, and no
-  partition table.
+- Provides the first persistent write path for `/owner/note`. The note's data
+  lives in a reserved data sector, and its size lives in a reserved ARFS state
+  sector so the value survives a rebooted QEMU session.
+- It is intentionally simple: fixed-size manifest parsing, one reserved
+  writable text file, no general allocation, no arbitrary file creation, no
+  append, no delete, no open handles, no block cache, and no partition table.
 
 Static boot catalog:
 
@@ -207,9 +213,9 @@ QEMU ATA PIO block device:
 
 - Lives in `platform/qemu/x86_64/ata_pio.c`.
 - Uses legacy ATA PIO ports exposed by the QEMU `pc` machine type.
-- Reads sectors from the raw test disk image attached by the host-side run and
-  smoke commands.
-- It is intentionally a first storage read path, not a general disk subsystem.
+- Reads and writes sectors from the raw test disk image attached by the
+  host-side run and smoke commands.
+- It is intentionally a first storage path, not a general disk subsystem.
 
 QEMU serial I/O:
 

@@ -3,7 +3,7 @@
 
 #include <arwill/kernel/block_device.h>
 
-static int read_range_fits(
+static int range_fits(
     const struct arwill_block_device *device,
     uint64_t lba,
     uint32_t sector_count
@@ -44,7 +44,7 @@ int arwill_block_read(
         return 0;
     }
 
-    if (!read_range_fits(device, lba, sector_count)) {
+    if (!range_fits(device, lba, sector_count)) {
         return 0;
     }
 
@@ -53,4 +53,26 @@ int arwill_block_read(
     }
 
     return device->read(device->context, lba, sector_count, buffer, buffer_size);
+}
+
+int arwill_block_write(
+    const struct arwill_block_device *device,
+    uint64_t lba,
+    uint32_t sector_count,
+    const uint8_t *buffer,
+    size_t buffer_size
+) {
+    if (device == 0 || device->write == 0 || buffer == 0) {
+        return 0;
+    }
+
+    if (!range_fits(device, lba, sector_count)) {
+        return 0;
+    }
+
+    if (!buffer_fits(device, sector_count, buffer_size)) {
+        return 0;
+    }
+
+    return device->write(device->context, lba, sector_count, buffer, buffer_size);
 }

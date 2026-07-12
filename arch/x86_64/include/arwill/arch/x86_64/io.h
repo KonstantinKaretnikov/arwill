@@ -7,6 +7,10 @@ static inline void arwill_x86_64_out8(uint16_t port, uint8_t value) {
     __asm__ volatile("outb %0, %1" : : "a"(value), "Nd"(port) : "memory");
 }
 
+static inline void arwill_x86_64_out16(uint16_t port, uint16_t value) {
+    __asm__ volatile("outw %0, %1" : : "a"(value), "Nd"(port) : "memory");
+}
+
 static inline void arwill_x86_64_out32(uint16_t port, uint32_t value) {
     __asm__ volatile("outl %0, %1" : : "a"(value), "Nd"(port) : "memory");
 }

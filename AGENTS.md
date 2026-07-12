@@ -40,6 +40,10 @@ Rules for future work:
   roles, or multi-user permission checks unless a later ADR explicitly changes
   this direction. The owner has full system control; ring 3 is an engineering
   guardrail for ordinary programs, not an account boundary.
+- Treat current filesystem writes as deliberately narrow. `write /owner/note`
+  is the first persistent ARFS overwrite path; do not describe Arwill as having
+  general file creation, append, delete, rename, allocation, or crash
+  consistency yet.
 - When a durable workflow agreement is made with the project owner, update this
   file or another appropriate document in the same change so future sessions do
   not need to rediscover it.

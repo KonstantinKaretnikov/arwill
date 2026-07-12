@@ -13,7 +13,8 @@ enum {
     arfs_max_listing_entries = 16,
     arfs_max_path_length = 64,
     arfs_max_name_length = 32,
-    arfs_file_buffer_capacity = 2048
+    arfs_file_buffer_capacity = 2048,
+    arfs_write_buffer_capacity = 512
 };
 
 enum arfs_entry_kind {
@@ -37,6 +38,10 @@ struct arfs_context {
     struct arwill_fs_entry listing_entries[arfs_max_listing_entries];
     uint8_t manifest[arfs_max_manifest_sectors * arfs_sector_size];
     char file_buffer[arfs_file_buffer_capacity];
+    uint8_t write_buffer[arfs_write_buffer_capacity];
+    uint64_t writable_state_lba;
+    uint64_t owner_note_lba;
+    uint64_t owner_note_capacity;
 };
 
 static struct arfs_context arfs;
@@ -382,6 +387,23 @@ static const struct arfs_entry *find_entry(const char *path) {
     return 0;
 }
 
+static struct arfs_entry *find_mutable_entry(const char *path) {
+    for (size_t index = 0; index < arfs.entry_count; index++) {
+        if (string_equals(arfs.entries[index].path, path)) {
+            return &arfs.entries[index];
+        }
+    }
+
+    return 0;
+}
+
+static int arfs_owner_note_configured(void) {
+    return arfs.writable_state_lba != 0U &&
+        arfs.owner_note_lba != 0U &&
+        arfs.owner_note_capacity > 0U &&
+        arfs.owner_note_capacity <= arfs_write_buffer_capacity;
+}
+
 static int arfs_list(
     void *context,
     const char *path,
@@ -445,6 +467,12 @@ static int arfs_read_file(
         return 1;
     }
 
+    if (entry->size_bytes == 0U) {
+        arfs.file_buffer[0] = '\0';
+        file->contents = arfs.file_buffer;
+        return 1;
+    }
+
     if (entry->size_bytes >= arfs_file_buffer_capacity) {
         return 0;
     }
@@ -471,11 +499,161 @@ static int arfs_read_file(
     return 1;
 }
 
+static void clear_write_buffer(void) {
+    for (size_t index = 0; index < sizeof(arfs.write_buffer); index++) {
+        arfs.write_buffer[index] = 0;
+    }
+}
+
+static int write_decimal(uint8_t *buffer, size_t capacity, size_t *offset, uint64_t value) {
+    char reversed[20];
+    size_t length = 0;
+
+    do {
+        reversed[length] = (char)('0' + (value % 10U));
+        length++;
+        value = value / 10U;
+    } while (value != 0U && length < sizeof(reversed));
+
+    if (*offset + length >= capacity) {
+        return 0;
+    }
+
+    for (size_t index = 0; index < length; index++) {
+        buffer[*offset] = (uint8_t)reversed[length - index - 1U];
+        *offset = *offset + 1U;
+    }
+
+    return 1;
+}
+
+static int write_text(uint8_t *buffer, size_t capacity, size_t *offset, const char *text) {
+    size_t index = 0;
+
+    while (text[index] != '\0') {
+        if (*offset + 1U >= capacity) {
+            return 0;
+        }
+
+        buffer[*offset] = (uint8_t)text[index];
+        *offset = *offset + 1U;
+        index++;
+    }
+
+    return 1;
+}
+
+static int persist_owner_note_size(uint64_t size_bytes) {
+    size_t offset = 0;
+
+    clear_write_buffer();
+
+    if (!write_text(arfs.write_buffer, sizeof(arfs.write_buffer), &offset, "owner_note_size=") ||
+        !write_decimal(arfs.write_buffer, sizeof(arfs.write_buffer), &offset, size_bytes) ||
+        !write_text(arfs.write_buffer, sizeof(arfs.write_buffer), &offset, "\n")) {
+        return 0;
+    }
+
+    return arwill_block_write(
+        arfs.block_device,
+        arfs.writable_state_lba,
+        1,
+        arfs.write_buffer,
+        sizeof(arfs.write_buffer)
+    );
+}
+
+static int arfs_write_file(
+    void *context,
+    const char *path,
+    const char *contents
+) {
+    (void)context;
+
+    if (!string_equals(path, "/owner/note") || !arfs_owner_note_configured()) {
+        return 0;
+    }
+
+    struct arfs_entry *entry = find_mutable_entry(path);
+    const size_t contents_length = string_length(contents);
+
+    if (entry == 0 || entry->kind != arfs_entry_file || entry->file_type != arwill_fs_file_text) {
+        return 0;
+    }
+
+    if ((uint64_t)contents_length >= arfs.owner_note_capacity) {
+        return 0;
+    }
+
+    clear_write_buffer();
+
+    for (size_t index = 0; index < contents_length; index++) {
+        arfs.write_buffer[index] = (uint8_t)contents[index];
+    }
+
+    if (!arwill_block_write(
+            arfs.block_device,
+            arfs.owner_note_lba,
+            1,
+            arfs.write_buffer,
+            sizeof(arfs.write_buffer)
+        )) {
+        return 0;
+    }
+
+    if (!persist_owner_note_size((uint64_t)contents_length)) {
+        return 0;
+    }
+
+    entry->data_lba = arfs.owner_note_lba;
+    entry->size_bytes = (uint64_t)contents_length;
+    return 1;
+}
+
+static int refresh_owner_note_state(void) {
+    uint8_t state[arfs_sector_size];
+    uint64_t size_bytes = 0;
+    struct arfs_entry *entry = 0;
+
+    if (!arfs_owner_note_configured()) {
+        return 1;
+    }
+
+    entry = find_mutable_entry("/owner/note");
+
+    if (entry == 0 || entry->kind != arfs_entry_file) {
+        return 0;
+    }
+
+    if (!arwill_block_read(
+            arfs.block_device,
+            arfs.writable_state_lba,
+            1,
+            state,
+            sizeof(state)
+        )) {
+        return 0;
+    }
+
+    if (!parse_key_decimal(state, "owner_note_size=", &size_bytes)) {
+        return 0;
+    }
+
+    if (size_bytes >= arfs.owner_note_capacity) {
+        return 0;
+    }
+
+    entry->data_lba = arfs.owner_note_lba;
+    entry->size_bytes = size_bytes;
+    return 1;
+}
+
 static const struct arwill_filesystem arfs_filesystem = {
-    .name = "arfs read-only disk",
+    .name = "arfs writable owner note",
     .context = &arfs,
     .list = arfs_list,
     .read_file = arfs_read_file,
+    .write_file = arfs_write_file,
 };
 
 const struct arwill_filesystem *arwill_arfs_mount(
@@ -487,6 +665,9 @@ const struct arwill_filesystem *arwill_arfs_mount(
 
     arfs.block_device = block_device;
     arfs.entry_count = 0;
+    arfs.writable_state_lba = 0;
+    arfs.owner_note_lba = 0;
+    arfs.owner_note_capacity = 0;
 
     if (block_device == 0 || block_device->sector_size != arfs_sector_size) {
         return 0;
@@ -511,6 +692,10 @@ const struct arwill_filesystem *arwill_arfs_mount(
         return 0;
     }
 
+    (void)parse_key_decimal(superblock, "writable_state_lba=", &arfs.writable_state_lba);
+    (void)parse_key_decimal(superblock, "owner_note_lba=", &arfs.owner_note_lba);
+    (void)parse_key_decimal(superblock, "owner_note_capacity=", &arfs.owner_note_capacity);
+
     if (manifest_sectors == 0U || manifest_sectors > arfs_max_manifest_sectors) {
         return 0;
     }
@@ -526,6 +711,11 @@ const struct arwill_filesystem *arwill_arfs_mount(
     }
 
     if (!parse_manifest((size_t)manifest_sectors * arfs_sector_size)) {
+        arfs.entry_count = 0;
+        return 0;
+    }
+
+    if (!refresh_owner_note_state()) {
         arfs.entry_count = 0;
         return 0;
     }

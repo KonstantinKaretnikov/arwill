@@ -24,6 +24,8 @@ enum {
     ata_drive_master_lba = 0xe0,
     ata_command_identify = 0xec,
     ata_command_read_sectors = 0x20,
+    ata_command_write_sectors = 0x30,
+    ata_command_cache_flush = 0xe7,
     ata_timeout_iterations = 1000000
 };
 
@@ -95,6 +97,18 @@ static void ata_read_sector_bytes(uint8_t *buffer) {
 
         buffer[index * 2U] = (uint8_t)(word & 0xffU);
         buffer[(index * 2U) + 1U] = (uint8_t)(word >> 8U);
+    }
+}
+
+static void ata_write_sector_bytes(const uint8_t *buffer) {
+    for (size_t index = 0; index < ata_words_per_sector; index++) {
+        const uint16_t word =
+            (uint16_t)(
+                (uint16_t)buffer[index * 2U] |
+                ((uint16_t)buffer[(index * 2U) + 1U] << 8U)
+            );
+
+        arwill_x86_64_out16(ata_primary_io_base + ata_register_data, word);
     }
 }
 
@@ -176,6 +190,57 @@ static int ata_read_one_sector(uint32_t lba, uint8_t *buffer) {
     return 1;
 }
 
+static void ata_select_lba28(uint32_t lba) {
+    arwill_x86_64_out8(
+        ata_primary_io_base + ata_register_drive,
+        (uint8_t)(ata_drive_master_lba | ((lba >> 24U) & 0x0fU))
+    );
+    ata_io_wait();
+
+    arwill_x86_64_out8(ata_primary_io_base + ata_register_sector_count, 1);
+    arwill_x86_64_out8(ata_primary_io_base + ata_register_lba_low, (uint8_t)lba);
+    arwill_x86_64_out8(
+        ata_primary_io_base + ata_register_lba_mid,
+        (uint8_t)(lba >> 8U)
+    );
+    arwill_x86_64_out8(
+        ata_primary_io_base + ata_register_lba_high,
+        (uint8_t)(lba >> 16U)
+    );
+}
+
+static int ata_flush_cache(void) {
+    if (!ata_wait_not_busy()) {
+        return 0;
+    }
+
+    arwill_x86_64_out8(
+        ata_primary_io_base + ata_register_status_command,
+        ata_command_cache_flush
+    );
+
+    return ata_wait_not_busy();
+}
+
+static int ata_write_one_sector(uint32_t lba, const uint8_t *buffer) {
+    if (!ata_wait_not_busy()) {
+        return 0;
+    }
+
+    ata_select_lba28(lba);
+    arwill_x86_64_out8(
+        ata_primary_io_base + ata_register_status_command,
+        ata_command_write_sectors
+    );
+
+    if (!ata_wait_data_request()) {
+        return 0;
+    }
+
+    ata_write_sector_bytes(buffer);
+    return ata_flush_cache();
+}
+
 static int qemu_ata_read(
     void *context,
     uint64_t lba,
@@ -206,12 +271,43 @@ static int qemu_ata_read(
     return 1;
 }
 
+static int qemu_ata_write(
+    void *context,
+    uint64_t lba,
+    uint32_t sector_count,
+    const uint8_t *buffer,
+    size_t buffer_size
+) {
+    (void)buffer_size;
+
+    const struct qemu_ata_context *ata = (const struct qemu_ata_context *)context;
+
+    if (ata == 0 || !ata->present || lba > UINT32_MAX) {
+        return 0;
+    }
+
+    for (uint32_t index = 0; index < sector_count; index++) {
+        const uint64_t current_lba = lba + (uint64_t)index;
+
+        if (current_lba > UINT32_MAX) {
+            return 0;
+        }
+
+        if (!ata_write_one_sector((uint32_t)current_lba, &buffer[index * ata_sector_size])) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 static struct arwill_block_device ata_block_device = {
     .context = &ata_context,
     .name = "qemu ata pio",
     .sector_size = ata_sector_size,
     .sector_count = 0,
     .read = qemu_ata_read,
+    .write = qemu_ata_write,
 };
 
 const struct arwill_block_device *arwill_qemu_ata_block_device_init(void) {

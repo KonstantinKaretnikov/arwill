@@ -36,6 +36,7 @@ struct arwill_filesystem {
     void *context;
     int (*list)(void *context, const char *path, struct arwill_fs_listing *listing);
     int (*read_file)(void *context, const char *path, struct arwill_fs_file *file);
+    int (*write_file)(void *context, const char *path, const char *contents);
 };
 
 int arwill_filesystem_list(
@@ -48,6 +49,12 @@ int arwill_filesystem_read_file(
     const struct arwill_filesystem *filesystem,
     const char *path,
     struct arwill_fs_file *file
+);
+
+int arwill_filesystem_write_file(
+    const struct arwill_filesystem *filesystem,
+    const char *path,
+    const char *contents
 );
 
 #endif
