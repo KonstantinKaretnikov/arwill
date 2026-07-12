@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.3.0
+PROJECT_VERSION := 0.4.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -39,15 +39,18 @@ SOURCES := \
 	kernel/block_device.c \
 	kernel/console.c \
 	kernel/filesystem.c \
+	kernel/interrupts.c \
 	kernel/input.c \
 	kernel/main.c \
 	kernel/memory.c \
 	kernel/power.c \
 	kernel/process.c \
+	kernel/scheduler.c \
 	kernel/shell.c \
 	arch/x86_64/boot/entry.c \
 	arch/x86_64/boot/limine_requests.c \
 	arch/x86_64/cpu/idle.c \
+	arch/x86_64/cpu/interrupts.c \
 	platform/qemu/x86_64/ata_pio.c \
 	platform/qemu/x86_64/power.c \
 	platform/qemu/x86_64/serial_console.c

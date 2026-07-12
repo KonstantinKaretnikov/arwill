@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.3.0 has one executable path:
+Arwill 0.4.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -8,13 +8,18 @@ Limine bootloader
   -> Limine memory map snapshot
   -> physical page allocator initialization
   -> QEMU serial I/O block
-  -> architecture-independent kernel startup
   -> QEMU ATA PIO block-device initialization
   -> ARFS read-only filesystem mount from the raw test disk
+  -> x86-64 IDT, PIC, and PIT timer initialization
+  -> architecture-independent kernel startup
   -> cooperative kernel process manager initialization
+  -> scheduler tick foundation initialization
+  -> CPU interrupt enable
   -> serial shell
   -> storage-backed read-only filesystem
   -> deterministic raw disk sector read when blkinfo is requested
+  -> interrupt/timer diagnostics when irqinfo or irqprobe is requested
+  -> scheduler tick diagnostics when schedinfo is requested
   -> cooperative built-in kernel process launch when run is requested
   -> QEMU debug-exit poweroff when exit is requested
   -> x86-64 CPU idle loop when halt is requested
@@ -45,7 +50,8 @@ Shell:
 
 - Lives in `kernel/shell.c`.
 - Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
-  `cat`, `stat`, `meminfo`, `blkinfo`, `ps`, `run`, `exit`, and `halt`.
+  `cat`, `stat`, `meminfo`, `blkinfo`, `irqinfo`, `irqprobe`, `schedinfo`,
+  `ps`, `run`, `exit`, and `halt`.
 - Keeps one canonical command name per operation; alias commands are not
   accepted.
 - Holds the current working directory as local shell state.
@@ -56,7 +62,7 @@ Shell:
 - Normalizes standard Russian-layout UTF-8 input back to ASCII key positions;
   it does not support Cyrillic text entry yet.
 - Depends on block device, console, input, filesystem, memory, process, power,
-  and CPU idle contracts.
+  interrupts, scheduler, and CPU idle contracts.
 
 Block device contract:
 
@@ -78,8 +84,33 @@ Process manager:
   manager runs ready entries synchronously.
 - `ps` displays the process table.
 - This is not user space. There are no separate address spaces, ELF program
-  loading, syscalls, kernel/user privilege transitions, timer interrupts, or
+  loading, syscalls, kernel/user privilege transitions, saved task contexts, or
   preemptive context switching yet.
+
+Interrupt controller contract:
+
+- Public contract lives in `include/arwill/kernel/interrupts.h`.
+- Architecture-independent helpers live in `kernel/interrupts.c`.
+- The first x86-64 implementation lives in `arch/x86_64/cpu/interrupts.c`.
+- It installs a minimal IDT, remaps the legacy PIC, unmasks IRQ0 only,
+  configures the PIT at 100 Hz, handles breakpoint vector 3 for diagnostics,
+  and handles timer vector 32.
+- `irqinfo` reports IDT/PIC/PIT state and timer ticks. `irqprobe` triggers a
+  safe breakpoint exception and verifies that vector 3 was handled.
+- This is not a full interrupt subsystem: there is no APIC, IOAPIC, HPET,
+  LAPIC timer, IRQ routing model, nested interrupt policy, or generic device
+  interrupt registration yet.
+
+Scheduler foundation:
+
+- Public contract lives in `include/arwill/kernel/scheduler.h`.
+- Implementation lives in `kernel/scheduler.c`.
+- The PIT timer interrupt calls `arwill_scheduler_tick()`.
+- The first implementation records timer ticks and alternates accounting
+  between two named slots, `shell` and `idle`, so scheduler progress is visible
+  through `schedinfo`.
+- This is deliberately only a foundation. It does not save CPU contexts, switch
+  stacks, preempt kernel code, wake sleeping tasks, or run user-space programs.
 
 Power contract:
 
@@ -161,6 +192,8 @@ Boot infrastructure:
 - Limine is fetched into `third_party/limine/`.
 - The x86-64 boot block requests the Limine memory map and converts it before
   entering architecture-independent kernel startup.
+- The x86-64 boot block wires QEMU storage, ARFS, and the x86-64 interrupt
+  controller into the architecture-independent kernel entry.
 - Limine config lives in `platform/qemu/limine.conf`.
 - ISO construction is host-side development tooling, not kernel code.
 

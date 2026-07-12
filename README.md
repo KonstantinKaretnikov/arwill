@@ -15,7 +15,7 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.3.0`
+Version: `0.4.0`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
@@ -24,6 +24,8 @@ boot memory map, report the first physical page allocator state, and launch
 small cooperative kernel processes. Arwill can also read sectors from a
 QEMU-attached raw test disk through a read-only ATA PIO block-device driver and
 serve shell filesystem commands from a storage-backed read-only ARFS image.
+The x86-64/QEMU path now installs an IDT, remaps the legacy PIC, configures the
+PIT timer, and exposes interrupt, timer, and scheduler tick diagnostics.
 
 ## Supported Host and Target
 
@@ -89,6 +91,9 @@ cat [path]
 stat [path]
 meminfo
 blkinfo
+irqinfo
+irqprobe
+schedinfo
 ps
 run [name]
 exit
@@ -109,15 +114,18 @@ Limine-provided boot memory map and the current physical page allocator
 counters.
 
 `blkinfo` displays the detected QEMU ATA PIO block device, its sector geometry,
-and a sample string read from LBA 1 of the deterministic test disk image. This
-proves sector reads only; shell filesystem commands still use the static boot
-catalog.
+and a sample string read from LBA 1 of the deterministic test disk image.
+
+`irqinfo` displays the x86-64 interrupt setup status and PIT timer tick count.
+`irqprobe` triggers a safe breakpoint exception and verifies that vector 3 is
+handled. `schedinfo` displays the current timer tick accounting for the first
+scheduler foundation.
 
 `run [name]` launches one of the built-in cooperative kernel processes:
 `hello` or `counter`. `ps` shows the kernel process table with PID, state, run
 count, exit code, and name. These are kernel-managed processes that run to
 completion; Arwill does not have user-space isolation, ELF program loading,
-syscalls, or preemptive scheduling yet.
+syscalls, saved task contexts, or preemptive context switching yet.
 
 `exit` powers off the current QEMU session. `halt` remains available as a CPU
 idle-loop command.
@@ -142,7 +150,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.3.0
+Arwill 0.4.0
 architecture: x86_64
 platform: qemu
 console: serial
@@ -153,6 +161,8 @@ block: qemu ata pio
 memory: boot memory map
 allocator: physical page bump allocator
 processes: kernel cooperative
+interrupts: x86_64 idt pic pit
+scheduler: timer tick foundation
 power: qemu debug exit
 status: kernel initialized
 Arwill:/>
@@ -169,7 +179,8 @@ Arwill:/>
 - `include/`: public Arwill-owned C contracts.
 - `kernel/`: architecture-independent kernel orchestration, shell, contracts,
   static boot catalog fallback, and ARFS read-only filesystem support.
-- `arch/x86_64/`: x86-64 entry, CPU idle, port I/O, and linker details.
+- `arch/x86_64/`: x86-64 entry, CPU idle, interrupt setup, port I/O, and linker
+  details.
 - `platform/qemu/`: QEMU-specific platform wiring and serial console block.
 - `scripts/`: host-side setup, artifact checks, and boot smoke tests.
 - `third_party/`: documented external dependencies fetched by `make setup`.

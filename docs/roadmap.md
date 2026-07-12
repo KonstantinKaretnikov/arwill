@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.3.0`.
+Status: `0.4.0`.
 
 Arwill already has:
 
@@ -27,8 +27,8 @@ Arwill already has:
   test;
 - [x] QEMU serial console output and blocking serial input;
 - [x] a serial shell with canonical commands only: `help`, `version`, `pwd`,
-  `cd`, `clear`, `ls`, `cat`, `stat`, `meminfo`, `ps`, `run`, `exit`, and
-  `halt`;
+  `cd`, `clear`, `ls`, `cat`, `stat`, `meminfo`, `blkinfo`, `irqinfo`,
+  `irqprobe`, `schedinfo`, `ps`, `run`, `exit`, and `halt`;
 - [x] shell current directory state, path resolution, Tab completion, command
   history, and Russian-layout command-entry normalization;
 - [x] a static read-only boot catalog used by `ls`, `cd`, `cat`, `stat`, and
@@ -42,10 +42,13 @@ Arwill already has:
   counters;
 - [x] QEMU debug-exit poweroff through `exit`;
 - [x] cooperative kernel-managed processes with PID, state, run count, exit
-  code, `run [name]`, and `ps`.
+  code, `run [name]`, and `ps`;
+- [x] x86-64 IDT setup, legacy PIC remap, PIT timer interrupts, and a safe
+  breakpoint exception diagnostic;
+- [x] scheduler tick accounting exposed through `schedinfo`.
 
-Arwill does not yet have block writes, interrupts, a timer, preemptive
-scheduling, user-space isolation, syscalls, ELF program loading, or writable
+Arwill does not yet have block writes, saved task contexts, preemptive context
+switching, user-space isolation, syscalls, ELF program loading, or writable
 persistent storage.
 
 ## Milestones
@@ -126,30 +129,35 @@ persistent storage.
    Definition of done: the shell's filesystem commands no longer depend on
    hard-coded directory entries for the primary happy path.
 
-4. [ ] Interrupts, timer, and scheduler foundation
+4. [x] Interrupts, timer, and scheduler foundation
 
-   Goal: create the execution foundation needed to move beyond
-   shell-triggered run-to-completion kernel processes.
+   Status: done in `0.4.0`.
+
+   Goal: create the interrupt and timer foundation needed to move beyond
+   shell-triggered run-to-completion kernel processes in later milestones.
 
    Scope:
 
-   - add IDT setup and basic exception reporting;
-   - add a timer source;
-   - add saved execution context structures;
-   - add a simple scheduler path for kernel tasks;
-   - keep behavior deterministic enough for smoke tests.
+   - add IDT setup and a safe breakpoint exception diagnostic;
+   - remap the legacy PIC and unmask IRQ0 only;
+   - add the PIT as the first timer source;
+   - route timer IRQs into a scheduler tick function;
+   - expose interrupt and scheduler diagnostics through shell commands;
+   - keep behavior deterministic enough for smoke tests;
+   - explicitly defer saved execution contexts and preemptive context switching.
 
-   Expected tests:
+   Verified by:
 
    - smoke test observes interrupt and timer initialization;
-   - deliberate safe exception or diagnostic path reports through the serial
-     console;
-   - scheduler diagnostics show that more than one kernel task can make
-     progress;
-   - tests do not depend on fragile host timing.
+   - smoke test runs `irqinfo` and observes a timer tick;
+   - smoke test runs `irqprobe` and observes handled breakpoint vector 3;
+   - smoke test runs `schedinfo` and observes scheduler tick accounting for the
+     `shell` and `idle` slots;
+   - tests avoid exact tick counts and do not depend on fragile host timing.
 
-   Definition of done: Arwill can schedule kernel tasks independently of a
-   single shell command running a function to completion.
+   Definition of done: Arwill has an observable IDT/PIC/PIT path and a timer
+   callback into scheduler accounting, ready for a later saved-context
+   scheduler.
 
 5. [ ] User-space v1
 

@@ -7,9 +7,11 @@
 #include <arwill/kernel/cpu.h>
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
+#include <arwill/kernel/interrupts.h>
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/power.h>
 #include <arwill/kernel/process.h>
+#include <arwill/kernel/scheduler.h>
 #include <arwill/kernel/shell.h>
 
 enum {
@@ -52,6 +54,9 @@ static const struct shell_command shell_commands[] = {
     { .name = "stat", .completion = shell_completion_path },
     { .name = "meminfo", .completion = shell_completion_none },
     { .name = "blkinfo", .completion = shell_completion_none },
+    { .name = "irqinfo", .completion = shell_completion_none },
+    { .name = "irqprobe", .completion = shell_completion_none },
+    { .name = "schedinfo", .completion = shell_completion_none },
     { .name = "ps", .completion = shell_completion_none },
     { .name = "run", .completion = shell_completion_process },
     { .name = "exit", .completion = shell_completion_none },
@@ -720,6 +725,9 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  stat [path] show file or directory metadata");
     arwill_console_write_line(console, "  meminfo    show memory map and page allocator");
     arwill_console_write_line(console, "  blkinfo    show block device read diagnostics");
+    arwill_console_write_line(console, "  irqinfo    show interrupt and timer diagnostics");
+    arwill_console_write_line(console, "  irqprobe   trigger a safe breakpoint exception");
+    arwill_console_write_line(console, "  schedinfo  show scheduler tick diagnostics");
     arwill_console_write_line(console, "  ps         show kernel process table");
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
     arwill_console_write_line(console, "  exit       power off the machine");
@@ -1055,6 +1063,130 @@ static void print_block_info(
 
     arwill_console_write_line(console, "sample lba: 1");
     print_block_sample(console, sector);
+}
+
+static void print_yes_no(const struct arwill_console *console, int value) {
+    if (value) {
+        arwill_console_write_line(console, "yes");
+    } else {
+        arwill_console_write_line(console, "no");
+    }
+}
+
+static void print_loaded_missing(const struct arwill_console *console, int value) {
+    if (value) {
+        arwill_console_write_line(console, "loaded");
+    } else {
+        arwill_console_write_line(console, "missing");
+    }
+}
+
+static void print_configured_missing(const struct arwill_console *console, int value) {
+    if (value) {
+        arwill_console_write_line(console, "configured");
+    } else {
+        arwill_console_write_line(console, "missing");
+    }
+}
+
+static void print_irqinfo(
+    const struct arwill_console *console,
+    const struct arwill_interrupts *interrupts
+) {
+    struct arwill_interrupt_stats stats;
+    const int timer_observed = arwill_interrupts_wait_for_timer_tick(interrupts);
+
+    arwill_interrupts_stats(interrupts, &stats);
+
+    arwill_console_write(console, "interrupts: ");
+    if (interrupts == 0 || interrupts->name == 0) {
+        arwill_console_write_line(console, "unavailable");
+    } else {
+        arwill_console_write_line(console, interrupts->name);
+    }
+
+    arwill_console_write(console, "idt: ");
+    print_loaded_missing(console, stats.idt_loaded);
+    arwill_console_write(console, "pic: ");
+    if (stats.pic_remapped) {
+        arwill_console_write_line(console, "remapped");
+    } else {
+        arwill_console_write_line(console, "missing");
+    }
+    arwill_console_write(console, "timer: ");
+    print_configured_missing(console, stats.timer_configured);
+    arwill_console_write(console, "enabled: ");
+    print_yes_no(console, stats.enabled);
+    arwill_console_write(console, "timer observed: ");
+    print_yes_no(console, timer_observed);
+    arwill_console_write(console, "timer ticks: ");
+    write_uint64_decimal(console, stats.timer_ticks);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "exceptions: ");
+    write_uint64_decimal(console, stats.exception_count);
+    arwill_console_write_line(console, "");
+
+    if (stats.exception_count > 0U) {
+        arwill_console_write(console, "last exception: ");
+        write_uint64_decimal(console, (uint64_t)stats.last_exception_vector);
+        arwill_console_write_line(console, "");
+    }
+}
+
+static void probe_interrupts(
+    const struct arwill_console *console,
+    const struct arwill_interrupts *interrupts
+) {
+    struct arwill_interrupt_stats before;
+    struct arwill_interrupt_stats after;
+
+    arwill_interrupts_stats(interrupts, &before);
+    arwill_interrupts_trigger_breakpoint(interrupts);
+    arwill_interrupts_stats(interrupts, &after);
+
+    if (
+        after.exception_count > before.exception_count &&
+        after.last_exception_vector == 3U
+    ) {
+        arwill_console_write_line(console, "exception probe: handled vector 3");
+        return;
+    }
+
+    arwill_console_write_line(console, "exception probe: failed");
+}
+
+static void print_scheduler_info(
+    const struct arwill_console *console,
+    const struct arwill_interrupts *interrupts
+) {
+    struct arwill_scheduler_stats stats;
+
+    (void)arwill_interrupts_wait_for_timer_tick(interrupts);
+    arwill_scheduler_stats(&stats);
+
+    arwill_console_write(console, "scheduler: ");
+    arwill_console_write_line(console, stats.name);
+    arwill_console_write(console, "scheduler ticks: ");
+    write_uint64_decimal(console, stats.ticks);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "scheduler slots: ");
+    write_size_decimal(console, stats.slot_count);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "current slot: ");
+    write_size_decimal(console, stats.current_slot);
+    arwill_console_write_line(console, "");
+
+    for (
+        size_t index = 0;
+        index < stats.slot_count && index < arwill_scheduler_slot_capacity;
+        index++
+    ) {
+        arwill_console_write(console, "slot ");
+        arwill_console_write(console, stats.slots[index].name);
+        arwill_console_write(console, " ticks: ");
+        write_uint64_decimal(console, stats.slots[index].ticks);
+        arwill_console_write_line(console, "");
+    }
 }
 
 static uint32_t shell_hello_process(const struct arwill_process_runtime *runtime) {
@@ -1649,6 +1781,7 @@ static void run_command(
     const struct arwill_power *power,
     struct arwill_process_manager *processes,
     const struct arwill_block_device *block_device,
+    const struct arwill_interrupts *interrupts,
     struct shell_process_context *process_context,
     char *current_directory,
     const char *line
@@ -1684,6 +1817,21 @@ static void run_command(
 
     if (string_equals(line, "blkinfo")) {
         print_block_info(console, block_device);
+        return;
+    }
+
+    if (string_equals(line, "irqinfo")) {
+        print_irqinfo(console, interrupts);
+        return;
+    }
+
+    if (string_equals(line, "irqprobe")) {
+        probe_interrupts(console, interrupts);
+        return;
+    }
+
+    if (string_equals(line, "schedinfo")) {
+        print_scheduler_info(console, interrupts);
         return;
     }
 
@@ -1744,7 +1892,8 @@ void arwill_shell_run(
     const struct arwill_memory *memory,
     const struct arwill_power *power,
     struct arwill_process_manager *processes,
-    const struct arwill_block_device *block_device
+    const struct arwill_block_device *block_device,
+    const struct arwill_interrupts *interrupts
 ) {
     char line[shell_line_capacity];
     char current_directory[shell_path_capacity] = "/";
@@ -1803,6 +1952,7 @@ void arwill_shell_run(
                 power,
                 processes,
                 block_device,
+                interrupts,
                 &process_context,
                 current_directory,
                 line
