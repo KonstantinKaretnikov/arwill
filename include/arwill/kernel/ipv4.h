@@ -24,11 +24,13 @@ struct arwill_ipv4_stack {
     uint32_t ssh_kexinit_build_failures;
     uint32_t ssh_kexinit_send_failures;
     uint32_t ssh_receive_failures;
+    const struct arwill_ssh_host_key *ssh_host_key;
     struct arwill_ssh_transport ssh;
 };
 
 int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
-    const struct arwill_network_device *network);
+    const struct arwill_network_device *network,
+    const struct arwill_ssh_host_key *ssh_host_key);
 
 int arwill_ipv4_send_arp_request(const struct arwill_ipv4_stack *stack,
     const uint8_t target[4]);

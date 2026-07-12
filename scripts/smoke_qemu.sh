@@ -125,6 +125,12 @@ run_qemu_to_log() {
     sleep 0.1
     printf 'tcpinfo\r'
     wait_for_primary_log "tcp: port 22, state listen"
+    wait_for_primary_log "ssh host key: created"
+    wait_for_primary_log "ssh host fingerprint: SHA256-hex:"
+    sleep 0.1
+    printf 'stat /system/ssh-host-key\r'
+    wait_for_primary_log "path: /system/ssh-host-key"
+    wait_for_primary_log "size: 32 bytes"
     sleep 0.1
     printf 'cryptocheck\r'
     wait_for_primary_log "cryptocheck: sha256 abc passed"
@@ -310,7 +316,7 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-deadline=50
+deadline=100
 count=0
 
 while [ "$count" -lt "$deadline" ]; do
@@ -398,6 +404,9 @@ check_line "ping: reply received"
 check_line "tcpcheck: listener state established"
 check_line "tcplisten: frames 0, state listen"
 check_line "tcp: port 22, state listen"
+check_line "ssh host key: created"
+check_line "ssh host fingerprint: SHA256-hex:"
+check_line "path: /system/ssh-host-key"
 check_line "cryptocheck: sha256 abc passed"
 check_line "cryptocheck: x25519 rfc7748 passed"
 check_line "cryptocheck: p256 generator passed"
@@ -565,6 +574,10 @@ fi
     (
     wait_for_reboot_log "Arwill:/> "
     sleep 0.1
+    printf 'tcpinfo\r'
+    wait_for_reboot_log "ssh host key: loaded"
+    wait_for_reboot_log "ssh host fingerprint: SHA256-hex:"
+    sleep 0.1
     printf 'cat /owner/note\r'
     wait_for_reboot_log "owner note persisted across reboot"
     sleep 0.1
@@ -668,6 +681,13 @@ if ! grep -F -q "owner note persisted across reboot" "$reboot_serial_log"; then
     exit 1
 fi
 
+primary_fingerprint=$(sed -n 's/^ssh host fingerprint: //p' "$serial_log" | head -n 1 | tr -d '\r')
+reboot_fingerprint=$(sed -n 's/^ssh host fingerprint: //p' "$reboot_serial_log" | head -n 1 | tr -d '\r')
+if [ -z "$primary_fingerprint" ] || [ "$primary_fingerprint" != "$reboot_fingerprint" ]; then
+    echo "SSH host-key fingerprint changed across reboot" >&2
+    exit 1
+fi
+
 for expected in \
     "persistent mutable text" \
     "cat: cannot display binary file: /scratch/data.bin" \
@@ -687,13 +707,13 @@ do
     fi
 done
 
-reused_data=$(dd if="$test_disk" bs=512 skip=18 count=1 2>/dev/null | LC_ALL=C tr -d '\000')
+reused_data=$(dd if="$test_disk" bs=512 skip=19 count=1 2>/dev/null | LC_ALL=C tr -d '\000')
 if [ "$reused_data" != "reused sector" ]; then
     echo "released ARFS data sector was not reused as expected" >&2
     exit 1
 fi
 
-binary_hex=$(od -An -tx1 -N7 -j $((19 * 512)) "$test_disk" | tr -d ' \n')
+binary_hex=$(od -An -tx1 -N7 -j $((20 * 512)) "$test_disk" | tr -d ' \n')
 if [ "$binary_hex" != "0001027f80feff" ]; then
     echo "persisted ARFS binary contents differ: $binary_hex" >&2
     exit 1

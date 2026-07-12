@@ -444,6 +444,27 @@ static void write_uint8_hex(const struct arwill_console *console, uint8_t value)
     arwill_console_write(console, text);
 }
 
+static void print_ssh_host_key(
+    const struct arwill_console *console,
+    const struct arwill_ssh_host_key *host_key
+) {
+    if (host_key == 0 || !host_key->ready) {
+        arwill_console_write(console, "ssh host key: unavailable, error ");
+        write_uint64_decimal(console, host_key == 0 ?
+            (uint64_t)arwill_ssh_host_key_error_storage : (uint64_t)host_key->error);
+        arwill_console_write_line(console, "");
+        return;
+    }
+
+    arwill_console_write(console, "ssh host key: ");
+    arwill_console_write_line(console, host_key->created ? "created" : "loaded");
+    arwill_console_write(console, "ssh host fingerprint: SHA256-hex:");
+    for (size_t index = 0; index < sizeof(host_key->fingerprint); index++) {
+        write_uint8_hex(console, host_key->fingerprint[index]);
+    }
+    arwill_console_write_line(console, "");
+}
+
 static uint64_t saturating_add_uint64(uint64_t left, uint64_t right) {
     if (left > UINT64_MAX - right) {
         return UINT64_MAX;
@@ -2528,6 +2549,7 @@ static void run_command(
         arwill_console_write(console, ", ssh banners: ");
         write_uint64_decimal(console, ipv4->ssh_banners_sent);
         arwill_console_write_line(console, "");
+        print_ssh_host_key(console, ipv4->ssh_host_key);
         return;
     }
 

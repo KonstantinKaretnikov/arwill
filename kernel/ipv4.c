@@ -61,7 +61,8 @@ static void write_char(const struct arwill_console *console, char value) {
 }
 
 int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
-    const struct arwill_network_device *network) {
+    const struct arwill_network_device *network,
+    const struct arwill_ssh_host_key *ssh_host_key) {
     static const uint8_t address[4] = { 10, 0, 2, 15 };
     static const uint8_t gateway[4] = { 10, 0, 2, 2 };
 
@@ -84,6 +85,7 @@ int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
     stack->ssh_kexinit_build_failures = 0;
     stack->ssh_kexinit_send_failures = 0;
     stack->ssh_receive_failures = 0;
+    stack->ssh_host_key = ssh_host_key;
     arwill_ssh_transport_init(&stack->ssh);
     return 1;
 }
@@ -363,12 +365,13 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
             uint8_t kexinit[arwill_ssh_server_packet_capacity];
             size_t kexinit_length = 0;
 
-            if (!arwill_ssh_transport_build_kexinit(
-                &stack->ssh,
-                kexinit,
-                sizeof(kexinit),
-                &kexinit_length
-            )) {
+            if (stack->ssh_host_key == 0 || !stack->ssh_host_key->ready
+                || !arwill_ssh_transport_build_kexinit(
+                    &stack->ssh,
+                    kexinit,
+                    sizeof(kexinit),
+                    &kexinit_length
+                )) {
                 stack->ssh_kexinit_build_failures++;
                 return 0;
             }

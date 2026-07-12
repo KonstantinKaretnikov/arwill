@@ -1,14 +1,19 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <arwill/kernel/crypto.h>
 #include <arwill/kernel/entropy.h>
+#include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/ssh.h>
 
 enum {
     ssh_message_kexinit = 20,
     ssh_minimum_padding = 4,
     ssh_clear_block_size = 8,
+    ssh_host_key_generation_attempts = 16,
 };
+
+static const char ssh_host_key_path[] = "/system/ssh-host-key";
 
 static void put32(uint8_t *buffer, size_t offset, uint32_t value) {
     buffer[offset] = (uint8_t)(value >> 24U);
@@ -68,6 +73,166 @@ static int append_name_list(
     return names_length <= UINT32_MAX
         && append_u32(buffer, capacity, length, (uint32_t)names_length)
         && append_bytes(buffer, capacity, length, (const uint8_t *)names, names_length);
+}
+
+static int text_equals(const char *left, const char *right) {
+    size_t index = 0;
+
+    while (left[index] != '\0' && right[index] != '\0') {
+        if (left[index] != right[index]) {
+            return 0;
+        }
+        index++;
+    }
+    return left[index] == right[index];
+}
+
+static void clear_host_key(struct arwill_ssh_host_key *host_key) {
+    for (size_t index = 0; index < sizeof(host_key->private_key); index++) {
+        host_key->private_key[index] = 0;
+    }
+    for (size_t index = 0; index < sizeof(host_key->public_key); index++) {
+        host_key->public_key[index] = 0;
+    }
+    for (size_t index = 0; index < sizeof(host_key->fingerprint); index++) {
+        host_key->fingerprint[index] = 0;
+    }
+    host_key->ready = 0;
+    host_key->created = 0;
+    host_key->error = arwill_ssh_host_key_error_none;
+}
+
+static int private_scalar_is_valid(const uint8_t scalar[arwill_p256_scalar_size]) {
+    static const uint8_t order[arwill_p256_scalar_size] = {
+        0xffU, 0xffU, 0xffU, 0xffU, 0x00U, 0x00U, 0x00U, 0x00U,
+        0xffU, 0xffU, 0xffU, 0xffU, 0xffU, 0xffU, 0xffU, 0xffU,
+        0xbcU, 0xe6U, 0xfaU, 0xadU, 0xa7U, 0x17U, 0x9eU, 0x84U,
+        0xf3U, 0xb9U, 0xcaU, 0xc2U, 0xfcU, 0x63U, 0x25U, 0x51U,
+    };
+    int nonzero = 0;
+
+    for (size_t index = 0; index < arwill_p256_scalar_size; index++) {
+        nonzero |= scalar[index] != 0U;
+    }
+    if (!nonzero) {
+        return 0;
+    }
+    for (size_t index = 0; index < arwill_p256_scalar_size; index++) {
+        if (scalar[index] < order[index]) {
+            return 1;
+        }
+        if (scalar[index] > order[index]) {
+            return 0;
+        }
+    }
+    return 0;
+}
+
+static int build_host_key_fingerprint(struct arwill_ssh_host_key *host_key) {
+    static const char algorithm[] = "ecdsa-sha2-nistp256";
+    static const char curve[] = "nistp256";
+    uint8_t blob[128];
+    size_t length = 0;
+
+    if (!append_name_list(blob, sizeof(blob), &length, algorithm)
+        || !append_name_list(blob, sizeof(blob), &length, curve)
+        || !append_u32(blob, sizeof(blob), &length, (uint32_t)arwill_p256_point_size)
+        || !append_bytes(
+            blob,
+            sizeof(blob),
+            &length,
+            host_key->public_key,
+            sizeof(host_key->public_key)
+        )) {
+        return 0;
+    }
+    arwill_crypto_sha256(blob, length, host_key->fingerprint);
+    return 1;
+}
+
+static int initialize_host_key_material(struct arwill_ssh_host_key *host_key) {
+    return private_scalar_is_valid(host_key->private_key)
+        && arwill_crypto_p256_public(host_key->public_key, host_key->private_key)
+        && build_host_key_fingerprint(host_key);
+}
+
+static int host_key_file_exists(const struct arwill_filesystem *filesystem) {
+    struct arwill_fs_listing listing;
+
+    if (!arwill_filesystem_list(filesystem, "/system", &listing)) {
+        return -1;
+    }
+    for (size_t index = 0; index < listing.count; index++) {
+        if (text_equals(listing.entries[index].name, "ssh-host-key")) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int arwill_ssh_host_key_init(
+    struct arwill_ssh_host_key *host_key,
+    const struct arwill_filesystem *filesystem
+) {
+    struct arwill_fs_file file;
+
+    if (host_key == 0) {
+        return 0;
+    }
+    clear_host_key(host_key);
+
+    const int exists = host_key_file_exists(filesystem);
+    if (exists < 0) {
+        host_key->error = arwill_ssh_host_key_error_storage;
+        return 0;
+    }
+    if (exists != 0) {
+        if (!arwill_filesystem_read_file(filesystem, ssh_host_key_path, &file)
+            || file.type != arwill_fs_file_binary
+            || file.size_bytes != (uint64_t)arwill_p256_scalar_size
+            || file.contents == 0) {
+            host_key->error = arwill_ssh_host_key_error_invalid;
+            return 0;
+        }
+        for (size_t index = 0; index < sizeof(host_key->private_key); index++) {
+            host_key->private_key[index] = (uint8_t)file.contents[index];
+        }
+        if (!initialize_host_key_material(host_key)) {
+            clear_host_key(host_key);
+            host_key->error = arwill_ssh_host_key_error_invalid;
+            return 0;
+        }
+        host_key->ready = 1;
+        return 1;
+    }
+
+    for (size_t attempt = 0; attempt < ssh_host_key_generation_attempts; attempt++) {
+        if (!arwill_entropy_fill(host_key->private_key, sizeof(host_key->private_key))) {
+            clear_host_key(host_key);
+            host_key->error = arwill_ssh_host_key_error_entropy;
+            return 0;
+        }
+        if (initialize_host_key_material(host_key)) {
+            if (!arwill_filesystem_write_bytes(
+                filesystem,
+                ssh_host_key_path,
+                arwill_fs_file_binary,
+                host_key->private_key,
+                sizeof(host_key->private_key)
+            )) {
+                clear_host_key(host_key);
+                host_key->error = arwill_ssh_host_key_error_persist;
+                return 0;
+            }
+            host_key->ready = 1;
+            host_key->created = 1;
+            return 1;
+        }
+    }
+
+    clear_host_key(host_key);
+    host_key->error = arwill_ssh_host_key_error_entropy;
+    return 0;
 }
 
 static void discard_received(struct arwill_ssh_transport *transport, size_t length) {

@@ -499,4 +499,6 @@ driver work, not accidental default access for every ring 3 program.
    reaches `expecting SSH2_MSG_KEX_ECDH_REPLY`. P-256 public-point derivation
    is also checked against the standard generator. Remaining crypto work is
    ChaCha20-Poly1305. Deterministic P-256 ECDSA signing is implemented and
-   checked against the RFC 6979 SHA-256 `sample` vector.
+   checked against the RFC 6979 SHA-256 `sample` vector. A P-256 host key is
+   generated once, persisted at `/system/ssh-host-key`, validated on load, and
+   smoke-tested for a stable public fingerprint across reboot per ADR-0039.

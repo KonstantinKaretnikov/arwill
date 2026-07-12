@@ -15,6 +15,7 @@
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/ipv4.h>
 #include <arwill/kernel/pci.h>
+#include <arwill/kernel/ssh.h>
 #include <arwill/platform/qemu/ata_pio.h>
 #include <arwill/platform/qemu/e1000.h>
 #include <arwill/platform/qemu/power.h>
@@ -31,6 +32,7 @@ static struct arwill_memory arwill_limine_memory;
 static struct arwill_device_registry arwill_limine_devices;
 static struct arwill_pci_bus arwill_limine_pci;
 static struct arwill_ipv4_stack arwill_limine_ipv4;
+static struct arwill_ssh_host_key arwill_limine_ssh_host_key;
 
 static enum arwill_memory_region_type convert_limine_memory_region_type(uint64_t type) {
     switch (type) {
@@ -105,6 +107,11 @@ void arwill_limine_entry(void) {
     const struct arwill_power *power = arwill_qemu_power();
     const struct arwill_block_device *block_device = arwill_qemu_ata_block_device_init();
     const struct arwill_filesystem *filesystem = arwill_arfs_mount(block_device);
+    const int arfs_mounted = filesystem != 0;
+    if (filesystem == 0) {
+        filesystem = arwill_boot_catalog_filesystem();
+    }
+    (void)arwill_ssh_host_key_init(&arwill_limine_ssh_host_key, filesystem);
     const struct limine_hhdm_response *hhdm = arwill_limine_hhdm_response();
     const uint64_t hhdm_offset = hhdm == 0 ? 0 : hhdm->offset;
     const struct arwill_clock *clock = arwill_x86_64_pit_clock();
@@ -114,7 +121,11 @@ void arwill_limine_entry(void) {
     const struct arwill_interrupts *interrupts = arwill_x86_64_interrupts_init();
     const struct arwill_network_device *network =
         arwill_qemu_e1000_init(&arwill_limine_pci, &arwill_limine_memory, hhdm_offset);
-    const int ipv4_ready = arwill_ipv4_init(&arwill_limine_ipv4, network);
+    const int ipv4_ready = arwill_ipv4_init(
+        &arwill_limine_ipv4,
+        network,
+        &arwill_limine_ssh_host_key
+    );
     (void)ipv4_ready;
 
     (void)arwill_device_register(
@@ -149,8 +160,8 @@ void arwill_limine_entry(void) {
         &arwill_limine_devices,
         "fs0",
         arwill_device_kind_filesystem,
-        filesystem == 0 || filesystem->name == 0 ? "boot catalog" : filesystem->name,
-        filesystem == 0 ? "fallback" : "mounted"
+        filesystem->name == 0 ? "boot catalog" : filesystem->name,
+        arfs_mounted ? "mounted" : "fallback"
     );
     (void)arwill_device_register(
         &arwill_limine_devices,
@@ -187,10 +198,6 @@ void arwill_limine_entry(void) {
         network == 0 || network->name == 0 ? "none" : network->name,
         network == 0 ? "unavailable" : "ready"
     );
-
-    if (filesystem == 0) {
-        filesystem = arwill_boot_catalog_filesystem();
-    }
 
     arwill_kernel_start(
         console,

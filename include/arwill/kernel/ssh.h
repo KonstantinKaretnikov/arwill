@@ -4,11 +4,32 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <arwill/kernel/crypto.h>
+
+struct arwill_filesystem;
+
 enum {
     arwill_ssh_identification_capacity = 64,
     arwill_ssh_packet_capacity = 4096,
     arwill_ssh_server_packet_capacity = 1024,
     arwill_ssh_receive_capacity = 4096,
+};
+
+enum arwill_ssh_host_key_error {
+    arwill_ssh_host_key_error_none,
+    arwill_ssh_host_key_error_storage,
+    arwill_ssh_host_key_error_invalid,
+    arwill_ssh_host_key_error_entropy,
+    arwill_ssh_host_key_error_persist,
+};
+
+struct arwill_ssh_host_key {
+    uint8_t private_key[arwill_p256_scalar_size];
+    uint8_t public_key[arwill_p256_point_size];
+    uint8_t fingerprint[arwill_sha256_size];
+    int ready;
+    int created;
+    enum arwill_ssh_host_key_error error;
 };
 
 struct arwill_ssh_transport {
@@ -26,6 +47,11 @@ struct arwill_ssh_transport {
     uint32_t packets_received;
     uint32_t last_error;
 };
+
+int arwill_ssh_host_key_init(
+    struct arwill_ssh_host_key *host_key,
+    const struct arwill_filesystem *filesystem
+);
 
 void arwill_ssh_transport_init(struct arwill_ssh_transport *transport);
 int arwill_ssh_transport_receive(
