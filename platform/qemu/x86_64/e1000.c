@@ -74,6 +74,7 @@ struct e1000_context {
     uint64_t rx_buffer_physical[e1000_ring_count];
     uint8_t *tx_buffer[e1000_ring_count];
     uint8_t *rx_buffer[e1000_ring_count];
+    uint32_t tx_tail;
     uint8_t mac[arwill_network_mac_length];
     int ready;
 };
@@ -197,18 +198,21 @@ static int read_mac(void *context, uint8_t mac[arwill_network_mac_length]) {
 static int send_frame(void *context, const uint8_t *frame, size_t length) {
     struct e1000_context *device = (struct e1000_context *)context;
     if (device == 0 || !device->ready || frame == 0 || length == 0U ||
-        length > e1000_buffer_capacity || device->tx_descriptor->status != e1000_tx_status_dd) {
+        length > e1000_buffer_capacity ||
+        device->tx_descriptor[device->tx_tail].status != e1000_tx_status_dd) {
         return 0;
     }
 
+    const uint32_t descriptor_index = device->tx_tail;
     for (size_t index = 0; index < length; index++) {
-        device->tx_buffer[0][index] = frame[index];
+        device->tx_buffer[descriptor_index][index] = frame[index];
     }
-    device->tx_descriptor->length = (uint16_t)length;
-    device->tx_descriptor->command =
+    device->tx_descriptor[descriptor_index].length = (uint16_t)length;
+    device->tx_descriptor[descriptor_index].command =
         e1000_tx_command_eop | e1000_tx_command_ifcs | e1000_tx_command_rs;
-    device->tx_descriptor->status = 0;
-    register_write(e1000_register_tdt, 1U);
+    device->tx_descriptor[descriptor_index].status = 0;
+    device->tx_tail = (descriptor_index + 1U) % e1000_ring_count;
+    register_write(e1000_register_tdt, device->tx_tail);
 
     for (size_t index = 0; index < e1000_poll_limit; index++) {
         if ((device->tx_descriptor->status & e1000_tx_status_dd) != 0U) {
