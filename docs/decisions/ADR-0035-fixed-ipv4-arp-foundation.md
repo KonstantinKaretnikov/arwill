@@ -15,9 +15,11 @@ network defaults: guest `10.0.2.15/24` and gateway `10.0.2.2`. The first
 protocol operation is an Ethernet/ARP request for the gateway, exposed through
 `arping`; `netcfg` reports the fixed values.
 
-There is no DHCP, persistent configuration, ARP cache, reply wait, IPv4 packet
-parser, ICMP, TCP, or socket API yet. The fixed values are deliberately
-diagnostic scaffolding for the next protocol milestone.
+There is no DHCP, persistent configuration, or socket API yet. ARP reply
+handling is not reliable in the current polling path, so `ping` currently
+contains the ICMP request/reply path but reports a timeout when the gateway
+reply is not observed. The fixed values are deliberately diagnostic
+scaffolding for the next protocol milestone.
 
 ## Consequences
 
@@ -27,5 +29,5 @@ the only supported network environment.
 
 ## Verification
 
-The QEMU smoke test observes `netcfg` and a successfully transmitted
-`arping` request to `10.0.2.2`.
+The QEMU smoke test observes `netcfg`, a successfully transmitted `arping`
+request, and the bounded `ping` timeout path to `10.0.2.2`.

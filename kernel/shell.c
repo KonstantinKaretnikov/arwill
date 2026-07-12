@@ -56,6 +56,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "netprobe", .completion = shell_completion_none },
     { .name = "netcfg", .completion = shell_completion_none },
     { .name = "arping", .completion = shell_completion_none },
+    { .name = "ping", .completion = shell_completion_none },
     { .name = "pwd", .completion = shell_completion_none },
     { .name = "cd", .completion = shell_completion_directory_path },
     { .name = "clear", .completion = shell_completion_none },
@@ -754,6 +755,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  netprobe   transmit a raw Ethernet diagnostic frame");
     arwill_console_write_line(console, "  netcfg     show fixed IPv4 network configuration");
     arwill_console_write_line(console, "  arping     transmit an ARP request to the gateway");
+    arwill_console_write_line(console, "  ping       send one ICMP echo to the gateway");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
@@ -2406,6 +2408,16 @@ static void run_command(
             return;
         }
         arwill_console_write_line(console, "arping: request transmitted to 10.0.2.2");
+        return;
+    }
+
+    if (string_equals(line, "ping")) {
+        arwill_console_write_line(console, "ping 10.0.2.2");
+        if (ipv4 == 0 || !arwill_ipv4_ping_gateway(ipv4)) {
+            arwill_console_write_line(console, "ping: no reply");
+            return;
+        }
+        arwill_console_write_line(console, "ping: reply received");
         return;
     }
 

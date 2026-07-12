@@ -476,5 +476,5 @@ driver work, not accidental default access for every ring 3 program.
    Status: started: fixed configuration and ARP request construction are now
    present through `netcfg` and `arping`.
 
-   Goal: add ARP reply handling, IPv4 parsing, and ICMP echo requests for one
-   fixed QEMU IPv4 address. DHCP, routing, and sockets remain out of scope.
+   Goal: finish ARP reply handling and verify ICMP echo replies for one fixed
+   QEMU IPv4 address. DHCP, routing, and sockets remain out of scope.

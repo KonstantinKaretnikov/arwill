@@ -7,3 +7,7 @@ void arwill_cpu_idle_forever(void) {
         __asm__ volatile("hlt" : : : "memory");
     }
 }
+
+void arwill_cpu_wait_for_interrupt(void) {
+    __asm__ volatile("hlt" : : : "memory");
+}

@@ -341,7 +341,7 @@ const struct arwill_network_device *arwill_qemu_e1000_init(
     register_write(e1000_register_rdbah, (uint32_t)(e1000.rx_descriptor_physical >> 32U));
     register_write(e1000_register_rdlen, e1000_ring_count * sizeof(struct e1000_descriptor));
     register_write(e1000_register_rdh, 0U);
-    register_write(e1000_register_rdt, 0U);
+    register_write(e1000_register_rdt, e1000_ring_count - 1U);
     register_write(e1000_register_rctl, e1000_rctl_enable | e1000_rctl_bam | e1000_rctl_secrc);
     register_write(e1000_register_tipg, 10U | (8U << 10U) | (6U << 20U));
     register_write(e1000_register_tctl, e1000_tctl_enable | e1000_tctl_pad | (0x10U << 4U) | (0x40U << 12U));
