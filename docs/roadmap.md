@@ -489,3 +489,8 @@ driver work, not accidental default access for every ring 3 program.
    Goal: wire the listener to IPv4 TCP packet parsing, checksums,
    retransmission, and a small kernel socket contract for a later owner-only
    SSH service.
+
+20. [ ] Owner-only SSH v2
+
+   Status: cryptographic foundation selected in ADR-0037. First algorithms are
+   Curve25519 ECDH, P-256 ECDSA host authentication, and ChaCha20-Poly1305.
