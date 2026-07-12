@@ -60,6 +60,15 @@ struct e1000_descriptor {
     uint16_t special;
 } __attribute__((packed, aligned(e1000_descriptor_alignment)));
 
+struct e1000_rx_descriptor {
+    uint64_t address;
+    uint16_t length;
+    uint16_t checksum;
+    uint8_t status;
+    uint8_t errors;
+    uint16_t special;
+} __attribute__((packed, aligned(e1000_descriptor_alignment)));
+
 struct e1000_context {
     struct arwill_memory *memory;
     uint64_t hhdm_offset;
@@ -67,7 +76,7 @@ struct e1000_context {
     uint16_t io_base;
     int io_mode;
     volatile struct e1000_descriptor *tx_descriptor;
-    volatile struct e1000_descriptor *rx_descriptor;
+    volatile struct e1000_rx_descriptor *rx_descriptor;
     uint64_t tx_descriptor_physical;
     uint64_t rx_descriptor_physical;
     uint64_t tx_buffer_physical[e1000_ring_count];
@@ -322,7 +331,7 @@ const struct arwill_network_device *arwill_qemu_e1000_init(
     if (!allocate_page(&e1000.rx_descriptor_physical, &virtual)) {
         return 0;
     }
-    e1000.rx_descriptor = (volatile struct e1000_descriptor *)virtual;
+    e1000.rx_descriptor = (volatile struct e1000_rx_descriptor *)virtual;
     for (size_t index = 0; index < e1000_ring_count; index++) {
         if (!allocate_page(&e1000.tx_buffer_physical[index], &e1000.tx_buffer[index]) ||
             !allocate_page(&e1000.rx_buffer_physical[index], &e1000.rx_buffer[index])) {
@@ -343,6 +352,7 @@ const struct arwill_network_device *arwill_qemu_e1000_init(
     register_write(e1000_register_rdh, 0U);
     register_write(e1000_register_rdt, e1000_ring_count - 1U);
     register_write(e1000_register_rctl, e1000_rctl_enable | e1000_rctl_bam | e1000_rctl_secrc);
+    register_write(e1000_register_rdt, e1000_ring_count - 1U);
     register_write(e1000_register_tipg, 10U | (8U << 10U) | (6U << 20U));
     register_write(e1000_register_tctl, e1000_tctl_enable | e1000_tctl_pad | (0x10U << 4U) | (0x40U << 12U));
     register_write(e1000_register_ims, 0U);
