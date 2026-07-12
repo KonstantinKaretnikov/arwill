@@ -453,10 +453,6 @@ static int arfs_read_file(
     file->size_bytes = entry->size_bytes;
     file->contents = 0;
 
-    if (entry->file_type == arwill_fs_file_binary) {
-        return 1;
-    }
-
     if (entry->size_bytes == 0U) {
         arfs.file_buffer[0] = '\0';
         file->contents = arfs.file_buffer;

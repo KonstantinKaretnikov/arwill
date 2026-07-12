@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.10.0`.
+Status: `0.11.0`.
 
 Arwill already has:
 
@@ -46,6 +46,7 @@ Arwill already has:
 - [x] a tiny fixed-size device registry and `devices` shell command;
 - [x] framebuffer text console mirroring serial output when Limine provides a
   32-bit framebuffer;
+- [x] simple Arwill Program Image loader through `exec [path]`;
 - [x] QEMU debug-exit poweroff through `exit`;
 - [x] cooperative kernel-managed processes with PID, state, run count, exit
   code, `run [name]`, cooperative `step`, and `ps`;
@@ -60,8 +61,8 @@ Arwill already has:
 
 Arwill does not yet have general filesystem allocation, arbitrary file create,
 append, delete, rename, saved CPU contexts, preemptive context switching,
-per-process address spaces, program image loading from storage, ELF program
-loading, multi-user accounts, or a general-purpose writable storage subsystem.
+per-process address spaces, ELF program loading, dynamic linking, multi-user
+accounts, or a general-purpose writable storage subsystem.
 
 ## Product Direction
 
@@ -366,7 +367,9 @@ driver work, not accidental default access for every ring 3 program.
    Definition of done: boot status and shell output can be mirrored to a basic
    framebuffer text console while serial smoke tests remain authoritative.
 
-11. [ ] Simple program image loader
+11. [x] Simple program image loader
+
+   Status: done in `0.11.0` with Arwill Program Image v1.
 
    Goal: run owner-provided programs from storage without jumping straight to
    full ELF/POSIX complexity.
@@ -378,6 +381,15 @@ driver work, not accidental default access for every ring 3 program.
    - run it through the existing ring 3 syscall ABI;
    - keep ELF, dynamic linking, files-as-processes, arguments, environment,
      and per-process address spaces out of scope until explicitly needed.
+
+   Verified by:
+
+   - test disk includes `/programs/hello.api`;
+   - smoke test lists `/programs`;
+   - smoke test verifies `cat /programs/hello.api` remains binary-only;
+   - smoke test runs `exec /programs/hello.api`;
+   - the stored image writes `api hello from storage` through syscall `write`
+     and exits with code `9`.
 
    Definition of done: Arwill can load and run a tiny stored program image
    through the current syscall boundary.

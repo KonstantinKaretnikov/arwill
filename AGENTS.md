@@ -53,6 +53,9 @@ Rules for future work:
 - Treat the current framebuffer text console as a serial-output mirror. It is
   not a graphics subsystem, terminal emulator, windowing layer, or input focus
   model.
+- Treat Arwill Program Image v1 as the first tiny stored executable format. It
+  is not ELF, POSIX process loading, dynamic linking, argument passing,
+  environment handling, or a per-process address-space model.
 - When a durable workflow agreement is made with the project owner, update this
   file or another appropriate document in the same change so future sessions do
   not need to rediscover it.

@@ -88,7 +88,7 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.10.0" 2
+    wait_for_primary_log_count "Arwill 0.11.0" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
@@ -150,7 +150,13 @@ run_qemu_to_log() {
     printf 'run userb\t\r'
     wait_for_primary_log "run: spawned pid 4: userbad"
     sleep 0.1
+    printf 'exec /programs/hello.api\r'
+    wait_for_primary_log "api hello from storage"
+    wait_for_primary_log "exec: exited 9"
+    sleep 0.1
     printf 'useri\t\r'
+    wait_for_primary_log "runs: 3"
+    wait_for_primary_log "bytes written: 53"
     wait_for_primary_log "bad syscalls: 1"
     sleep 0.1
     printf 'owneri\t\r'
@@ -162,6 +168,10 @@ run_qemu_to_log() {
     sleep 0.1
     printf 'l\t\r'
     wait_for_primary_log "system/"
+    wait_for_primary_log "programs/"
+    sleep 0.1
+    printf 'cat /programs/hello.api\r'
+    wait_for_primary_log "cat: cannot display binary file: /programs/hello.api"
     sleep 0.1
     printf 'write /docs/readme nope\r'
     wait_for_primary_log "write: cannot write: /docs/readme"
@@ -200,7 +210,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.10.0"
+    wait_for_primary_log "version: 0.11.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -211,7 +221,7 @@ run_qemu_to_log() {
     printf 'cat /docs/missing\r'
     wait_for_primary_log "cat: no such file: /docs/missing"
     sleep 0.1
-    printf 'ex\t\r'
+    printf 'exit\r'
     ) | run_qemu_to_log "$serial_log"
 
     qemu_status=$?
@@ -288,7 +298,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.10.0"
+check_line "Arwill 0.11.0"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -308,7 +318,7 @@ check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.10.0"
+check_line "Arwill 0.11.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -324,6 +334,7 @@ check_line "userinfo   show user-mode diagnostics"
 check_line "ownerinfo  show the OS ownership model"
 check_line "ps         show kernel process table"
 check_line "run [name] launch a built-in kernel process"
+check_line "exec [path] run a stored program image"
 check_line "step       run one cooperative process step"
 check_line "Up/Down    browse command history"
 check_absent "dir [path]"
@@ -374,13 +385,16 @@ check_line "process counter: pid 2 step 3/3"
 check_line "run: spawned pid 3: userhello"
 check_line "user hello: hello from ring 3"
 check_line "run: spawned pid 4: userbad"
+check_line "api hello from storage"
+check_line "exec: exited 9"
 check_line "user: x86_64 ring3 int80"
 check_line "available: yes"
 check_line "hhdm: yes"
 check_line "gdt: loaded"
 check_line "tss: loaded"
 check_line "syscall gate: loaded"
-check_line "runs: 2"
+check_line "runs: 3"
+check_line "bytes written: 53"
 check_line "bad syscalls: 1"
 check_line "owner model: single-owner"
 check_line "accounts: none"
@@ -395,7 +409,9 @@ check_line "finished"
 check_line "boot/"
 check_line "docs/"
 check_line "owner/"
+check_line "programs/"
 check_line "system/"
+check_line "cat: cannot display binary file: /programs/hello.api"
 check_line "write: cannot write: /docs/readme"
 check_line "write: wrote 34 bytes to /owner/note"
 check_line "owner note persisted across reboot"
@@ -409,7 +425,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.10.0"
+check_line "version: 0.11.0"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
@@ -428,7 +444,7 @@ check_line "status: powering off"
     printf 'cat /owner/note\r'
     wait_for_reboot_log "owner note persisted across reboot"
     sleep 0.1
-    printf 'ex\t\r'
+    printf 'exit\r'
     ) | run_qemu_to_log "$reboot_serial_log"
 
     printf '%s\n' "$?" > "$reboot_status_log"

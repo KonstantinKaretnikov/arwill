@@ -29,6 +29,14 @@ enum {
     bad_syscall_exit_code = 127
 };
 
+enum {
+    api_header_size = 16,
+    api_magic_0 = 'A',
+    api_magic_1 = 'P',
+    api_magic_2 = 'I',
+    api_magic_3 = '1',
+};
+
 struct gdt_pointer {
     uint16_t limit;
     uint64_t base;
@@ -418,6 +426,56 @@ static int build_bad_syscall_program(uint8_t *code) {
         emit_ud2(code, &offset);
 }
 
+static uint16_t read_le16(const uint8_t *bytes) {
+    return (uint16_t)((uint16_t)bytes[0] | ((uint16_t)bytes[1] << 8U));
+}
+
+static uint32_t read_le32(const uint8_t *bytes) {
+    return (uint32_t)bytes[0] |
+        ((uint32_t)bytes[1] << 8U) |
+        ((uint32_t)bytes[2] << 16U) |
+        ((uint32_t)bytes[3] << 24U);
+}
+
+static int copy_user_image_to_page(
+    const uint8_t *image,
+    uint64_t image_size,
+    uint8_t *code,
+    uint64_t *entry_point
+) {
+    if (image == 0 || code == 0 || entry_point == 0) {
+        return 0;
+    }
+
+    if (image_size < api_header_size ||
+        image[0] != api_magic_0 ||
+        image[1] != api_magic_1 ||
+        image[2] != api_magic_2 ||
+        image[3] != api_magic_3) {
+        return 0;
+    }
+
+    const uint16_t header_size = read_le16(&image[4]);
+    const uint16_t entry_offset = read_le16(&image[6]);
+    const uint32_t code_size = read_le32(&image[8]);
+
+    if (header_size < api_header_size ||
+        (uint64_t)header_size > image_size ||
+        code_size == 0U ||
+        (uint64_t)code_size > ARWILL_MEMORY_PAGE_SIZE ||
+        (uint64_t)entry_offset >= (uint64_t)code_size ||
+        image_size - (uint64_t)header_size < (uint64_t)code_size) {
+        return 0;
+    }
+
+    for (uint32_t index = 0; index < code_size; index++) {
+        code[index] = image[(uint64_t)header_size + (uint64_t)index];
+    }
+
+    *entry_point = user_code_virtual + (uint64_t)entry_offset;
+    return 1;
+}
+
 static int prepare_user_program(
     struct x86_64_user_context *context,
     enum arwill_user_program program,
@@ -468,6 +526,52 @@ static int prepare_user_program(
     context->active_stack_base = user_stack_virtual;
     context->active_stack_size = ARWILL_MEMORY_PAGE_SIZE;
     *entry_point = user_code_virtual;
+    *stack_pointer = user_stack_virtual + ARWILL_MEMORY_PAGE_SIZE - 16U;
+    return 1;
+}
+
+static int prepare_user_image(
+    struct x86_64_user_context *context,
+    const uint8_t *image,
+    uint64_t image_size,
+    uint64_t *entry_point,
+    uint64_t *stack_pointer
+) {
+    uint64_t code_physical = 0;
+    uint64_t stack_physical = 0;
+    uint8_t *code = 0;
+
+    if (!allocate_zero_page(context, &code_physical)) {
+        return 0;
+    }
+
+    if (!allocate_zero_page(context, &stack_physical)) {
+        return 0;
+    }
+
+    code = physical_to_virtual(context, code_physical);
+
+    if (!copy_user_image_to_page(image, image_size, code, entry_point)) {
+        return 0;
+    }
+
+    if (!map_user_page(context, user_code_virtual, code_physical, 0U)) {
+        return 0;
+    }
+
+    if (!map_user_page(
+            context,
+            user_stack_virtual,
+            stack_physical,
+            page_writable
+        )) {
+        return 0;
+    }
+
+    context->active_code_base = user_code_virtual;
+    context->active_code_size = ARWILL_MEMORY_PAGE_SIZE;
+    context->active_stack_base = user_stack_virtual;
+    context->active_stack_size = ARWILL_MEMORY_PAGE_SIZE;
     *stack_pointer = user_stack_virtual + ARWILL_MEMORY_PAGE_SIZE - 16U;
     return 1;
 }
@@ -669,6 +773,38 @@ static void clear_run_state(struct x86_64_user_context *context) {
     context->active_status = "not started";
 }
 
+static int run_prepared_user_code(
+    struct x86_64_user_context *user,
+    uint64_t entry_point,
+    uint64_t stack_pointer,
+    const struct arwill_console *console,
+    struct arwill_user_program_result *result
+) {
+    if (user == 0 || !user->available || console == 0) {
+        return 0;
+    }
+
+    user->active_console = console;
+
+    user->runs++;
+    if (result != 0) {
+        result->started = 1;
+    }
+
+    arwill_x86_64_user_enter(entry_point, stack_pointer, &user->run_state);
+
+    if (result != 0) {
+        result->exited = user->active_exited;
+        result->exit_code = user->active_exit_code;
+        result->syscall_count = user->active_syscalls;
+        result->bytes_written = user->active_bytes_written;
+        result->status = user->active_status;
+    }
+
+    clear_run_state(user);
+    return 1;
+}
+
 static int x86_64_user_run(
     void *context,
     enum arwill_user_program program,
@@ -688,7 +824,6 @@ static int x86_64_user_run(
     }
 
     clear_run_state(user);
-    user->active_console = console;
 
     if (!prepare_user_program(user, program, &entry_point, &stack_pointer)) {
         if (result != 0) {
@@ -698,23 +833,39 @@ static int x86_64_user_run(
         return 0;
     }
 
-    user->runs++;
+    return run_prepared_user_code(user, entry_point, stack_pointer, console, result);
+}
+
+static int x86_64_user_run_image(
+    void *context,
+    const uint8_t *image,
+    uint64_t image_size,
+    const struct arwill_console *console,
+    struct arwill_user_program_result *result
+) {
+    struct x86_64_user_context *user = (struct x86_64_user_context *)context;
+    uint64_t entry_point = 0;
+    uint64_t stack_pointer = 0;
+
     if (result != 0) {
-        result->started = 1;
+        result->status = "unavailable";
     }
 
-    arwill_x86_64_user_enter(entry_point, stack_pointer, &user->run_state);
-
-    if (result != 0) {
-        result->exited = user->active_exited;
-        result->exit_code = user->active_exit_code;
-        result->syscall_count = user->active_syscalls;
-        result->bytes_written = user->active_bytes_written;
-        result->status = user->active_status;
+    if (user == 0 || !user->available || console == 0 || image == 0) {
+        return 0;
     }
 
     clear_run_state(user);
-    return 1;
+
+    if (!prepare_user_image(user, image, image_size, &entry_point, &stack_pointer)) {
+        if (result != 0) {
+            result->status = "load failed";
+        }
+        clear_run_state(user);
+        return 0;
+    }
+
+    return run_prepared_user_code(user, entry_point, stack_pointer, console, result);
 }
 
 static void x86_64_user_stats(void *context, struct arwill_user_stats *stats) {
@@ -739,6 +890,7 @@ static const struct arwill_user_runtime user_runtime = {
     .context = &user_context,
     .name = "x86_64 ring3 int80",
     .run = x86_64_user_run,
+    .run_image = x86_64_user_run_image,
     .stats = x86_64_user_stats,
 };
 

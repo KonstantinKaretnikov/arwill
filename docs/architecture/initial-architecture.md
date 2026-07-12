@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.10.0 has one executable path:
+Arwill 0.11.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -30,6 +30,7 @@ Limine bootloader
   -> scheduler tick diagnostics when schedinfo is requested
   -> cooperative built-in kernel process launch when run is requested
   -> yielded cooperative process continuation when step is requested
+  -> stored Arwill Program Image load and ring 3 launch when exec is requested
   -> user page mapping and built-in ring 3 user program launch when userhello
      or userbad is run
   -> QEMU debug-exit poweroff when exit is requested
@@ -75,7 +76,7 @@ Shell:
 - Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
   `cat`, `write`, `stat`, `meminfo`, `heaptest`, `devices`, `blkinfo`,
   `irqinfo`, `irqprobe`, `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`,
-  `step`, `exit`, and `halt`.
+  `exec`, `step`, `exit`, and `halt`.
 - Keeps one canonical command name per operation; alias commands are not
   accepted.
 - Holds the current working directory as local shell state.
@@ -191,6 +192,19 @@ User runtime:
   executable, per-process page table, argument passing, heap, signal model, or
   preemptive user scheduling yet.
 - "User" here means CPU user mode, not an Arwill account model.
+
+Program image loader:
+
+- The first stored executable format is Arwill Program Image v1, identified by
+  an `API1` binary header.
+- The shell command `exec [path]` reads a binary file from ARFS and asks the
+  user runtime to map and execute its code bytes in ring 3.
+- The current image format contains a small header, entry offset, and code
+  bytes for one user code page.
+- `/programs/hello.api` is the first test image.
+- This is deliberately not ELF: there is no linker, relocation, dynamic
+  loading, arguments, environment, file descriptors, or per-process address
+  spaces yet.
 
 Power contract:
 

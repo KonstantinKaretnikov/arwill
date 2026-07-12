@@ -66,6 +66,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "ownerinfo", .completion = shell_completion_none },
     { .name = "ps", .completion = shell_completion_none },
     { .name = "run", .completion = shell_completion_process },
+    { .name = "exec", .completion = shell_completion_path },
     { .name = "step", .completion = shell_completion_none },
     { .name = "exit", .completion = shell_completion_none },
     { .name = "halt", .completion = shell_completion_none },
@@ -744,6 +745,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  ownerinfo  show the OS ownership model");
     arwill_console_write_line(console, "  ps         show kernel process table");
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
+    arwill_console_write_line(console, "  exec [path] run a stored program image");
     arwill_console_write_line(console, "  step       run one cooperative process step");
     arwill_console_write_line(console, "  exit       power off the machine");
     arwill_console_write_line(console, "  Tab        complete commands, paths, and processes");
@@ -883,6 +885,69 @@ static void print_file(
     if (contents_length == 0U || file.contents[contents_length - 1U] != '\n') {
         arwill_console_write_line(console, "");
     }
+}
+
+static void exec_program_image(
+    const struct arwill_console *console,
+    const struct arwill_filesystem *filesystem,
+    const struct arwill_user_runtime *user_runtime,
+    const char *current_directory,
+    const char *path
+) {
+    char path_argument[shell_path_capacity];
+    char resolved_path[shell_path_capacity];
+
+    if (!copy_first_argument(path_argument, sizeof(path_argument), path)) {
+        arwill_console_write_line(console, "exec: path too long");
+        return;
+    }
+
+    if (path_argument[0] == '\0') {
+        arwill_console_write_line(console, "exec: missing path");
+        return;
+    }
+
+    if (!resolve_path(current_directory, path_argument, resolved_path, sizeof(resolved_path))) {
+        arwill_console_write_line(console, "exec: path too long");
+        return;
+    }
+
+    struct arwill_fs_file file;
+
+    if (!arwill_filesystem_read_file(filesystem, resolved_path, &file)) {
+        arwill_console_write(console, "exec: no such file: ");
+        arwill_console_write_line(console, resolved_path);
+        return;
+    }
+
+    if (file.type != arwill_fs_file_binary || file.contents == 0) {
+        arwill_console_write(console, "exec: not a program image: ");
+        arwill_console_write_line(console, resolved_path);
+        return;
+    }
+
+    struct arwill_user_program_result result;
+
+    if (!arwill_user_run_image(
+            user_runtime,
+            (const uint8_t *)file.contents,
+            file.size_bytes,
+            console,
+            &result
+        )) {
+        arwill_console_write(console, "exec: launch failed: ");
+        arwill_console_write_line(console, resolved_path);
+        return;
+    }
+
+    if (!result.exited) {
+        arwill_console_write_line(console, "exec: program did not exit");
+        return;
+    }
+
+    arwill_console_write(console, "exec: exited ");
+    write_uint64_decimal(console, (uint64_t)result.exit_code);
+    arwill_console_write_line(console, "");
 }
 
 static const char *second_argument_after_first(const char *argument) {
@@ -2142,6 +2207,17 @@ static void run_command(
 
     if (string_equals(line, "run") || starts_with(line, "run ")) {
         run_process(console, processes, process_context, argument_after_command(line));
+        return;
+    }
+
+    if (string_equals(line, "exec") || starts_with(line, "exec ")) {
+        exec_program_image(
+            console,
+            filesystem,
+            user_runtime,
+            current_directory,
+            argument_after_command(line)
+        );
         return;
     }
 
