@@ -14,7 +14,7 @@ void arwill_kernel_start(
     const struct arwill_console *console,
     const struct arwill_input *input,
     const struct arwill_filesystem *filesystem,
-    const struct arwill_memory *memory,
+    struct arwill_memory *memory,
     const struct arwill_power *power,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,

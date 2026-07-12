@@ -55,6 +55,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "write", .completion = shell_completion_path },
     { .name = "stat", .completion = shell_completion_path },
     { .name = "meminfo", .completion = shell_completion_none },
+    { .name = "heaptest", .completion = shell_completion_none },
     { .name = "blkinfo", .completion = shell_completion_none },
     { .name = "irqinfo", .completion = shell_completion_none },
     { .name = "irqprobe", .completion = shell_completion_none },
@@ -730,7 +731,8 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  cat [path] show text file contents");
     arwill_console_write_line(console, "  write [path] [text] overwrite a writable text file");
     arwill_console_write_line(console, "  stat [path] show file or directory metadata");
-    arwill_console_write_line(console, "  meminfo    show memory map and page allocator");
+    arwill_console_write_line(console, "  meminfo    show memory map and allocators");
+    arwill_console_write_line(console, "  heaptest   exercise kernel heap allocation");
     arwill_console_write_line(console, "  blkinfo    show block device read diagnostics");
     arwill_console_write_line(console, "  irqinfo    show interrupt and timer diagnostics");
     arwill_console_write_line(console, "  irqprobe   trigger a safe breakpoint exception");
@@ -1015,6 +1017,14 @@ static void print_memory_region(
     arwill_console_write_line(console, " bytes");
 }
 
+static void print_yes_no(const struct arwill_console *console, int value) {
+    if (value) {
+        arwill_console_write_line(console, "yes");
+    } else {
+        arwill_console_write_line(console, "no");
+    }
+}
+
 static void print_meminfo(
     const struct arwill_console *console,
     const struct arwill_memory *memory
@@ -1056,6 +1066,65 @@ static void print_meminfo(
     arwill_console_write_line(console, "");
     arwill_console_write(console, "  allocations: ");
     write_uint64_decimal(console, stats.allocation_count);
+    arwill_console_write_line(console, "");
+
+    struct arwill_kernel_heap_stats heap_stats;
+    arwill_kernel_heap_stats(memory, &heap_stats);
+
+    arwill_console_write_line(console, "kernel heap:");
+    arwill_console_write(console, "  initialized: ");
+    print_yes_no(console, heap_stats.initialized);
+    arwill_console_write(console, "  size: ");
+    write_size_decimal(console, heap_stats.size_bytes);
+    arwill_console_write_line(console, " bytes");
+    arwill_console_write(console, "  used: ");
+    write_size_decimal(console, heap_stats.used_bytes);
+    arwill_console_write_line(console, " bytes");
+    arwill_console_write(console, "  free: ");
+    write_size_decimal(console, heap_stats.free_bytes);
+    arwill_console_write_line(console, " bytes");
+    arwill_console_write(console, "  allocations: ");
+    write_size_decimal(console, heap_stats.allocation_count);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "  frees: ");
+    write_size_decimal(console, heap_stats.free_count);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "  failed allocations: ");
+    write_size_decimal(console, heap_stats.failed_allocation_count);
+    arwill_console_write_line(console, "");
+}
+
+static void run_heap_test(
+    const struct arwill_console *console,
+    struct arwill_memory *memory
+) {
+    void *small = arwill_kmalloc(memory, 24);
+    void *large = arwill_kmalloc(memory, 128);
+
+    if (small == 0 || large == 0) {
+        if (small != 0) {
+            arwill_kfree(memory, small);
+        }
+
+        if (large != 0) {
+            arwill_kfree(memory, large);
+        }
+
+        arwill_console_write_line(console, "heaptest: allocation failed");
+        return;
+    }
+
+    arwill_kfree(memory, large);
+    arwill_kfree(memory, small);
+    arwill_console_write_line(console, "heaptest: allocated and freed 2 blocks");
+
+    struct arwill_kernel_heap_stats stats;
+    arwill_kernel_heap_stats(memory, &stats);
+
+    arwill_console_write(console, "heaptest: allocations ");
+    write_size_decimal(console, stats.allocation_count);
+    arwill_console_write(console, ", frees ");
+    write_size_decimal(console, stats.free_count);
     arwill_console_write_line(console, "");
 }
 
@@ -1124,14 +1193,6 @@ static void print_block_info(
 
     arwill_console_write_line(console, "sample lba: 1");
     print_block_sample(console, sector);
-}
-
-static void print_yes_no(const struct arwill_console *console, int value) {
-    if (value) {
-        arwill_console_write_line(console, "yes");
-    } else {
-        arwill_console_write_line(console, "no");
-    }
 }
 
 static void print_loaded_missing(const struct arwill_console *console, int value) {
@@ -1960,7 +2021,7 @@ static void complete_line(
 static void run_command(
     const struct arwill_console *console,
     const struct arwill_filesystem *filesystem,
-    const struct arwill_memory *memory,
+    struct arwill_memory *memory,
     const struct arwill_power *power,
     struct arwill_process_manager *processes,
     const struct arwill_block_device *block_device,
@@ -1996,6 +2057,11 @@ static void run_command(
 
     if (string_equals(line, "meminfo")) {
         print_meminfo(console, memory);
+        return;
+    }
+
+    if (string_equals(line, "heaptest")) {
+        run_heap_test(console, memory);
         return;
     }
 
@@ -2093,7 +2159,7 @@ void arwill_shell_run(
     const struct arwill_console *console,
     const struct arwill_input *input,
     const struct arwill_filesystem *filesystem,
-    const struct arwill_memory *memory,
+    struct arwill_memory *memory,
     const struct arwill_power *power,
     struct arwill_process_manager *processes,
     const struct arwill_block_device *block_device,

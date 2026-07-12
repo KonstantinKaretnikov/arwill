@@ -16,7 +16,7 @@ void arwill_kernel_start(
     const struct arwill_console *console,
     const struct arwill_input *input,
     const struct arwill_filesystem *filesystem,
-    const struct arwill_memory *memory,
+    struct arwill_memory *memory,
     const struct arwill_power *power,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
@@ -49,7 +49,7 @@ void arwill_kernel_start(
         arwill_console_write_line(console, block_device->name);
     }
     arwill_console_write_line(console, "memory: boot memory map");
-    arwill_console_write_line(console, "allocator: physical page bump allocator");
+    arwill_console_write_line(console, "allocator: physical page bump allocator + kernel heap");
     arwill_console_write_line(console, "processes: kernel cooperative");
     arwill_console_write(console, "interrupts: ");
     if (interrupts == 0 || interrupts->name == 0) {

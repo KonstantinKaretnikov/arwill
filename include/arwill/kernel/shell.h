@@ -15,7 +15,7 @@ void arwill_shell_run(
     const struct arwill_console *console,
     const struct arwill_input *input,
     const struct arwill_filesystem *filesystem,
-    const struct arwill_memory *memory,
+    struct arwill_memory *memory,
     const struct arwill_power *power,
     struct arwill_process_manager *processes,
     const struct arwill_block_device *block_device,

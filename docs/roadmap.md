@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.7.0`.
+Status: `0.8.0`.
 
 Arwill already has:
 
@@ -28,8 +28,8 @@ Arwill already has:
 - [x] QEMU serial console output and blocking serial input;
 - [x] a serial shell with canonical commands only: `help`, `version`, `pwd`,
   `cd`, `clear`, `ls`, `cat`, `write`, `stat`, `meminfo`, `blkinfo`,
-  `irqinfo`, `irqprobe`, `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`,
-  `exit`, and `halt`;
+  `heaptest`, `irqinfo`, `irqprobe`, `schedinfo`, `userinfo`, `ownerinfo`,
+  `ps`, `run`, `step`, `exit`, and `halt`;
 - [x] shell current directory state, path resolution, Tab completion, command
   history, and Russian-layout command-entry normalization;
 - [x] a static read-only boot catalog used by `ls`, `cd`, `cat`, `stat`, and
@@ -41,8 +41,8 @@ Arwill already has:
   `stat`, and path completion;
 - [x] single-sector ATA PIO block writes and a persistent ARFS owner-note
   overwrite path at `/owner/note`;
-- [x] a Limine memory map snapshot and first bump-only physical page allocator
-  counters;
+- [x] a Limine memory map snapshot, first bump-only physical page allocator
+  counters, and a small HHDM-backed kernel heap;
 - [x] QEMU debug-exit poweroff through `exit`;
 - [x] cooperative kernel-managed processes with PID, state, run count, exit
   code, `run [name]`, cooperative `step`, and `ps`;
@@ -57,9 +57,9 @@ Arwill already has:
 
 Arwill does not yet have general filesystem allocation, arbitrary file create,
 append, delete, rename, saved CPU contexts, preemptive context switching,
-kernel heap allocation, device registry, framebuffer text console, per-process
-address spaces, program image loading from storage, ELF program loading,
-multi-user accounts, or a general-purpose writable storage subsystem.
+device registry, framebuffer text console, per-process address spaces, program
+image loading from storage, ELF program loading, multi-user accounts, or a
+general-purpose writable storage subsystem.
 
 ## Product Direction
 
@@ -287,18 +287,30 @@ driver work, not accidental default access for every ring 3 program.
    Definition of done: a cooperative kernel process can yield, remain visible
    as ready, and continue later from explicit saved progress.
 
-8. [ ] Kernel heap
+8. [x] Kernel heap
+
+   Status: done in `0.8.0` as a small HHDM-backed free-list allocator.
 
    Goal: add a small, explainable kernel allocator for dynamic kernel objects
    without making memory management clever too early.
 
    Scope:
 
-   - build on the existing physical page allocator;
-   - provide a narrow `kmalloc`/`kfree` or fixed-size arena contract;
-   - expose allocator diagnostics through `meminfo` or a dedicated command;
+   - build on the existing physical page allocator and Limine HHDM;
+   - reserve a small contiguous heap during boot;
+   - provide a narrow `kmalloc`/`kfree` contract;
+   - split and coalesce free-list blocks;
+   - expose allocator diagnostics through `meminfo`;
+   - add `heaptest` to allocate and free small blocks in the smoke path;
    - keep paging replacement, swapping, userspace heap, and general VM policy
      out of scope.
+
+   Verified by:
+
+   - startup output reports `allocator: physical page bump allocator + kernel
+     heap`;
+   - smoke test runs `meminfo` and observes kernel heap counters;
+   - smoke test runs `heaptest` and observes two allocations and frees.
 
    Definition of done: kernel code can allocate and release small dynamic
    objects with bounded diagnostics and smoke-test coverage.

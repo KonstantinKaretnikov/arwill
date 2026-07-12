@@ -55,9 +55,30 @@ struct arwill_physical_allocator_stats {
     size_t range_count;
 };
 
+struct arwill_kernel_heap {
+    void *base;
+    size_t size_bytes;
+    size_t used_bytes;
+    size_t allocation_count;
+    size_t free_count;
+    size_t failed_allocation_count;
+    int initialized;
+};
+
+struct arwill_kernel_heap_stats {
+    size_t size_bytes;
+    size_t used_bytes;
+    size_t free_bytes;
+    size_t allocation_count;
+    size_t free_count;
+    size_t failed_allocation_count;
+    int initialized;
+};
+
 struct arwill_memory {
     struct arwill_memory_map map;
     struct arwill_physical_allocator physical_allocator;
+    struct arwill_kernel_heap kernel_heap;
 };
 
 void arwill_memory_init(
@@ -77,5 +98,20 @@ void arwill_physical_allocator_stats(
 );
 
 int arwill_physical_allocate_page(struct arwill_memory *memory, uint64_t *physical_address);
+
+int arwill_kernel_heap_init(
+    struct arwill_memory *memory,
+    uint64_t hhdm_offset,
+    size_t page_count
+);
+
+void *arwill_kmalloc(struct arwill_memory *memory, size_t size);
+
+void arwill_kfree(struct arwill_memory *memory, void *pointer);
+
+void arwill_kernel_heap_stats(
+    const struct arwill_memory *memory,
+    struct arwill_kernel_heap_stats *stats
+);
 
 #endif

@@ -93,6 +93,7 @@ void arwill_limine_entry(void) {
     const struct arwill_filesystem *filesystem = arwill_arfs_mount(block_device);
     const struct limine_hhdm_response *hhdm = arwill_limine_hhdm_response();
     const uint64_t hhdm_offset = hhdm == 0 ? 0 : hhdm->offset;
+    (void)arwill_kernel_heap_init(&arwill_limine_memory, hhdm_offset, 4);
     const struct arwill_user_runtime *user_runtime =
         arwill_x86_64_user_mode_init(&arwill_limine_memory, hhdm_offset);
     const struct arwill_interrupts *interrupts = arwill_x86_64_interrupts_init();

@@ -3,6 +3,16 @@
 
 #include <arwill/kernel/memory.h>
 
+enum {
+    heap_alignment = 16
+};
+
+struct heap_block {
+    size_t size;
+    int free;
+    struct heap_block *next;
+};
+
 static uint64_t align_down(uint64_t value, uint64_t alignment) {
     return value - (value % alignment);
 }
@@ -27,6 +37,20 @@ static uint64_t saturating_add(uint64_t left, uint64_t right) {
     }
 
     return left + right;
+}
+
+static size_t align_size_up(size_t value, size_t alignment) {
+    const size_t remainder = value % alignment;
+
+    if (remainder == 0U) {
+        return value;
+    }
+
+    if (value > SIZE_MAX - (alignment - remainder)) {
+        return SIZE_MAX;
+    }
+
+    return value + (alignment - remainder);
 }
 
 static void physical_allocator_init(
@@ -92,6 +116,14 @@ void arwill_memory_init(
     memory->map.truncated = truncated;
 
     physical_allocator_init(&memory->physical_allocator, regions, region_count);
+
+    memory->kernel_heap.base = 0;
+    memory->kernel_heap.size_bytes = 0;
+    memory->kernel_heap.used_bytes = 0;
+    memory->kernel_heap.allocation_count = 0;
+    memory->kernel_heap.free_count = 0;
+    memory->kernel_heap.failed_allocation_count = 0;
+    memory->kernel_heap.initialized = 0;
 }
 
 const struct arwill_memory_map *arwill_memory_map(const struct arwill_memory *memory) {
@@ -178,4 +210,175 @@ int arwill_physical_allocate_page(struct arwill_memory *memory, uint64_t *physic
     }
 
     return 0;
+}
+
+static struct heap_block *heap_first_block(struct arwill_memory *memory) {
+    return (struct heap_block *)memory->kernel_heap.base;
+}
+
+static size_t heap_payload_offset(void) {
+    return align_size_up(sizeof(struct heap_block), heap_alignment);
+}
+
+static void heap_coalesce(struct arwill_memory *memory) {
+    struct heap_block *block = heap_first_block(memory);
+
+    while (block != 0 && block->next != 0) {
+        if (block->free && block->next->free) {
+            block->size += heap_payload_offset() + block->next->size;
+            block->next = block->next->next;
+            continue;
+        }
+
+        block = block->next;
+    }
+}
+
+int arwill_kernel_heap_init(
+    struct arwill_memory *memory,
+    uint64_t hhdm_offset,
+    size_t page_count
+) {
+    uint64_t first_physical = 0;
+    uint64_t previous_physical = 0;
+
+    if (memory == 0 || hhdm_offset == 0U || page_count == 0U) {
+        return 0;
+    }
+
+    if (memory->kernel_heap.initialized) {
+        return 1;
+    }
+
+    if (page_count > SIZE_MAX / ARWILL_MEMORY_PAGE_SIZE) {
+        return 0;
+    }
+
+    for (size_t index = 0; index < page_count; index++) {
+        uint64_t physical = 0;
+
+        if (!arwill_physical_allocate_page(memory, &physical)) {
+            return 0;
+        }
+
+        if (index == 0U) {
+            first_physical = physical;
+        } else if (physical != previous_physical + ARWILL_MEMORY_PAGE_SIZE) {
+            return 0;
+        }
+
+        previous_physical = physical;
+    }
+
+    const size_t heap_size = page_count * ARWILL_MEMORY_PAGE_SIZE;
+    struct heap_block *first =
+        (struct heap_block *)(uintptr_t)(hhdm_offset + first_physical);
+
+    first->size = heap_size - heap_payload_offset();
+    first->free = 1;
+    first->next = 0;
+
+    memory->kernel_heap.base = first;
+    memory->kernel_heap.size_bytes = heap_size;
+    memory->kernel_heap.used_bytes = 0;
+    memory->kernel_heap.allocation_count = 0;
+    memory->kernel_heap.free_count = 0;
+    memory->kernel_heap.failed_allocation_count = 0;
+    memory->kernel_heap.initialized = 1;
+    return 1;
+}
+
+void *arwill_kmalloc(struct arwill_memory *memory, size_t size) {
+    if (memory == 0 || !memory->kernel_heap.initialized || size == 0U) {
+        return 0;
+    }
+
+    const size_t aligned_size = align_size_up(size, heap_alignment);
+
+    if (aligned_size == SIZE_MAX) {
+        memory->kernel_heap.failed_allocation_count++;
+        return 0;
+    }
+
+    struct heap_block *block = heap_first_block(memory);
+
+    while (block != 0) {
+        if (!block->free || block->size < aligned_size) {
+            block = block->next;
+            continue;
+        }
+
+        const size_t header_size = heap_payload_offset();
+
+        if (block->size >= aligned_size + header_size + heap_alignment) {
+            struct heap_block *next =
+                (struct heap_block *)((uint8_t *)block + header_size + aligned_size);
+
+            next->size = block->size - aligned_size - header_size;
+            next->free = 1;
+            next->next = block->next;
+            block->size = aligned_size;
+            block->next = next;
+        }
+
+        block->free = 0;
+        memory->kernel_heap.used_bytes += block->size;
+        memory->kernel_heap.allocation_count++;
+        return (uint8_t *)block + header_size;
+    }
+
+    memory->kernel_heap.failed_allocation_count++;
+    return 0;
+}
+
+void arwill_kfree(struct arwill_memory *memory, void *pointer) {
+    if (memory == 0 || !memory->kernel_heap.initialized || pointer == 0) {
+        return;
+    }
+
+    struct heap_block *block =
+        (struct heap_block *)((uint8_t *)pointer - heap_payload_offset());
+
+    if (block->free) {
+        return;
+    }
+
+    block->free = 1;
+    if (memory->kernel_heap.used_bytes >= block->size) {
+        memory->kernel_heap.used_bytes -= block->size;
+    } else {
+        memory->kernel_heap.used_bytes = 0;
+    }
+
+    memory->kernel_heap.free_count++;
+    heap_coalesce(memory);
+}
+
+void arwill_kernel_heap_stats(
+    const struct arwill_memory *memory,
+    struct arwill_kernel_heap_stats *stats
+) {
+    if (stats == 0) {
+        return;
+    }
+
+    stats->size_bytes = 0;
+    stats->used_bytes = 0;
+    stats->free_bytes = 0;
+    stats->allocation_count = 0;
+    stats->free_count = 0;
+    stats->failed_allocation_count = 0;
+    stats->initialized = 0;
+
+    if (memory == 0 || !memory->kernel_heap.initialized) {
+        return;
+    }
+
+    stats->size_bytes = memory->kernel_heap.size_bytes;
+    stats->used_bytes = memory->kernel_heap.used_bytes;
+    stats->free_bytes = memory->kernel_heap.size_bytes - memory->kernel_heap.used_bytes;
+    stats->allocation_count = memory->kernel_heap.allocation_count;
+    stats->free_count = memory->kernel_heap.free_count;
+    stats->failed_allocation_count = memory->kernel_heap.failed_allocation_count;
+    stats->initialized = memory->kernel_heap.initialized;
 }

@@ -45,6 +45,9 @@ Rules for future work:
   is the first persistent ARFS overwrite path; do not describe Arwill as having
   general file creation, append, delete, rename, allocation, or crash
   consistency yet.
+- Treat the current kernel heap as a small HHDM-backed free-list allocator. It
+  is useful for small kernel objects, but it is not a slab allocator, virtual
+  memory subsystem, userspace heap, or physical page release mechanism.
 - When a durable workflow agreement is made with the project owner, update this
   file or another appropriate document in the same change so future sessions do
   not need to rediscover it.

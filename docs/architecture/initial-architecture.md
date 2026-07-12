@@ -1,12 +1,13 @@
 # Initial Architecture
 
-Arwill 0.7.0 has one executable path:
+Arwill 0.8.0 has one executable path:
 
 ```text
 Limine bootloader
   -> x86-64 Limine entry
   -> Limine memory map snapshot
   -> physical page allocator initialization
+  -> small kernel heap initialization from HHDM-mapped physical pages
   -> QEMU serial I/O block
   -> QEMU ATA PIO block-device initialization
   -> ARFS filesystem mount from the raw test disk
@@ -20,6 +21,7 @@ Limine bootloader
   -> serial shell
   -> storage-backed filesystem
   -> persistent owner-note write when write /owner/note is requested
+  -> kernel heap diagnostics and heap probe when meminfo or heaptest is requested
   -> deterministic raw disk sector read when blkinfo is requested
   -> interrupt/timer diagnostics when irqinfo or irqprobe is requested
   -> scheduler tick diagnostics when schedinfo is requested
@@ -56,7 +58,7 @@ Shell:
 
 - Lives in `kernel/shell.c`.
 - Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
-  `cat`, `write`, `stat`, `meminfo`, `blkinfo`, `irqinfo`, `irqprobe`,
+  `cat`, `write`, `stat`, `meminfo`, `heaptest`, `blkinfo`, `irqinfo`, `irqprobe`,
   `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`, `step`, `exit`, and
   `halt`.
 - Keeps one canonical command name per operation; alias commands are not
@@ -180,6 +182,12 @@ Memory contract:
   reuse pages yet.
 - User-mode setup consumes physical pages for generated user code, user stack,
   and page-table pages; those allocations are not freed yet.
+- The first kernel heap reserves a small contiguous run of physical pages,
+  accesses them through Limine HHDM, and manages them with a simple free list.
+- The kernel heap can allocate and free small kernel objects, split free blocks,
+  coalesce adjacent free blocks, and report counters through `meminfo`.
+- This is not a general virtual memory subsystem: there is no paging policy,
+  demand mapping, slab cache, userspace heap, or physical page release path yet.
 
 Filesystem contract:
 
