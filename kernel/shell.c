@@ -5,6 +5,7 @@
 #include <arwill/kernel/block_device.h>
 #include <arwill/kernel/console.h>
 #include <arwill/kernel/cpu.h>
+#include <arwill/kernel/device.h>
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/interrupts.h>
@@ -56,6 +57,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "stat", .completion = shell_completion_path },
     { .name = "meminfo", .completion = shell_completion_none },
     { .name = "heaptest", .completion = shell_completion_none },
+    { .name = "devices", .completion = shell_completion_none },
     { .name = "blkinfo", .completion = shell_completion_none },
     { .name = "irqinfo", .completion = shell_completion_none },
     { .name = "irqprobe", .completion = shell_completion_none },
@@ -733,6 +735,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  stat [path] show file or directory metadata");
     arwill_console_write_line(console, "  meminfo    show memory map and allocators");
     arwill_console_write_line(console, "  heaptest   exercise kernel heap allocation");
+    arwill_console_write_line(console, "  devices    list detected devices");
     arwill_console_write_line(console, "  blkinfo    show block device read diagnostics");
     arwill_console_write_line(console, "  irqinfo    show interrupt and timer diagnostics");
     arwill_console_write_line(console, "  irqprobe   trigger a safe breakpoint exception");
@@ -1126,6 +1129,37 @@ static void run_heap_test(
     arwill_console_write(console, ", frees ");
     write_size_decimal(console, stats.free_count);
     arwill_console_write_line(console, "");
+}
+
+static void print_devices(
+    const struct arwill_console *console,
+    const struct arwill_device_registry *devices
+) {
+    size_t count = 0;
+    const struct arwill_device_entry *entries = arwill_device_entries(devices, &count);
+
+    if (entries == 0) {
+        arwill_console_write_line(console, "devices: unavailable");
+        return;
+    }
+
+    arwill_console_write_line(console, "name kind driver status");
+
+    for (size_t index = 0; index < count; index++) {
+        const struct arwill_device_entry *entry = &entries[index];
+
+        arwill_console_write(console, entry->name);
+        arwill_console_write(console, " ");
+        arwill_console_write(console, arwill_device_kind_name(entry->kind));
+        arwill_console_write(console, " ");
+        arwill_console_write(console, entry->driver);
+        arwill_console_write(console, " ");
+        arwill_console_write_line(console, entry->status);
+    }
+
+    if (count == 0U) {
+        arwill_console_write_line(console, "no devices");
+    }
 }
 
 static int is_sample_byte(uint8_t byte) {
@@ -2027,6 +2061,7 @@ static void run_command(
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
     const struct arwill_user_runtime *user_runtime,
+    const struct arwill_device_registry *devices,
     struct shell_process_context *process_context,
     char *current_directory,
     const char *line
@@ -2062,6 +2097,11 @@ static void run_command(
 
     if (string_equals(line, "heaptest")) {
         run_heap_test(console, memory);
+        return;
+    }
+
+    if (string_equals(line, "devices")) {
+        print_devices(console, devices);
         return;
     }
 
@@ -2164,7 +2204,8 @@ void arwill_shell_run(
     struct arwill_process_manager *processes,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
-    const struct arwill_user_runtime *user_runtime
+    const struct arwill_user_runtime *user_runtime,
+    const struct arwill_device_registry *devices
 ) {
     char line[shell_line_capacity];
     char current_directory[shell_path_capacity] = "/";
@@ -2226,6 +2267,7 @@ void arwill_shell_run(
                 block_device,
                 interrupts,
                 user_runtime,
+                devices,
                 &process_context,
                 current_directory,
                 line

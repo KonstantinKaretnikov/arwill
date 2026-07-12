@@ -20,7 +20,8 @@ void arwill_kernel_start(
     const struct arwill_power *power,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
-    const struct arwill_user_runtime *user_runtime
+    const struct arwill_user_runtime *user_runtime,
+    const struct arwill_device_registry *devices
 ) {
     static struct arwill_process_manager process_manager;
 
@@ -50,6 +51,7 @@ void arwill_kernel_start(
     }
     arwill_console_write_line(console, "memory: boot memory map");
     arwill_console_write_line(console, "allocator: physical page bump allocator + kernel heap");
+    arwill_console_write_line(console, "devices: registry");
     arwill_console_write_line(console, "processes: kernel cooperative");
     arwill_console_write(console, "interrupts: ");
     if (interrupts == 0 || interrupts->name == 0) {
@@ -77,6 +79,7 @@ void arwill_kernel_start(
         &process_manager,
         block_device,
         interrupts,
-        user_runtime
+        user_runtime,
+        devices
     );
 }

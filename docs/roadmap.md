@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.8.0`.
+Status: `0.9.0`.
 
 Arwill already has:
 
@@ -43,6 +43,7 @@ Arwill already has:
   overwrite path at `/owner/note`;
 - [x] a Limine memory map snapshot, first bump-only physical page allocator
   counters, and a small HHDM-backed kernel heap;
+- [x] a tiny fixed-size device registry and `devices` shell command;
 - [x] QEMU debug-exit poweroff through `exit`;
 - [x] cooperative kernel-managed processes with PID, state, run count, exit
   code, `run [name]`, cooperative `step`, and `ps`;
@@ -57,9 +58,9 @@ Arwill already has:
 
 Arwill does not yet have general filesystem allocation, arbitrary file create,
 append, delete, rename, saved CPU contexts, preemptive context switching,
-device registry, framebuffer text console, per-process address spaces, program
-image loading from storage, ELF program loading, multi-user accounts, or a
-general-purpose writable storage subsystem.
+framebuffer text console, per-process address spaces, program image loading
+from storage, ELF program loading, multi-user accounts, or a general-purpose
+writable storage subsystem.
 
 ## Product Direction
 
@@ -315,7 +316,9 @@ driver work, not accidental default access for every ring 3 program.
    Definition of done: kernel code can allocate and release small dynamic
    objects with bounded diagnostics and smoke-test coverage.
 
-9. [ ] Device registry
+9. [x] Device registry
+
+   Status: done in `0.9.0` as a fixed-size inspection table.
 
    Goal: make detected platform devices visible through a tiny registry.
 
@@ -325,6 +328,13 @@ driver work, not accidental default access for every ring 3 program.
      poweroff, and user runtime where appropriate;
    - add a `devices` shell command;
    - keep this as inspection and explicit handles, not a large driver model.
+
+   Verified by:
+
+   - startup output reports `devices: registry`;
+   - smoke test runs `devices`;
+   - smoke test observes serial, input, disk, filesystem, heap, timer, power,
+     and user runtime entries.
 
    Definition of done: Arwill can list its current devices and their basic
    status without creating cross-layer shortcuts.

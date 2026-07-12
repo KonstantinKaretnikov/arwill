@@ -88,7 +88,7 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.8.0" 2
+    wait_for_primary_log_count "Arwill 0.9.0" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
@@ -107,6 +107,13 @@ run_qemu_to_log() {
     printf 'heap\t\r'
     wait_for_primary_log "heaptest: allocated and freed 2 blocks"
     wait_for_primary_log "heaptest: allocations 2, frees 2"
+    sleep 0.1
+    printf 'dev\t\r'
+    wait_for_primary_log "name kind driver status"
+    wait_for_primary_log "serial0 console qemu serial ready"
+    wait_for_primary_log "disk0 block qemu ata pio ready"
+    wait_for_primary_log "heap0 memory hhdm free-list ready"
+    wait_for_primary_log "user0 user x86_64 ring3 int80 ready"
     sleep 0.1
     printf 'blk\t\r'
     wait_for_primary_log "sample: ARWILL-BLOCK-DEVICE-TEST"
@@ -192,7 +199,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.8.0"
+    wait_for_primary_log "version: 0.9.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -280,7 +287,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.8.0"
+check_line "Arwill 0.9.0"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -291,6 +298,7 @@ check_line "filesystem: arfs writable owner note"
 check_line "block: qemu ata pio"
 check_line "memory: boot memory map"
 check_line "allocator: physical page bump allocator + kernel heap"
+check_line "devices: registry"
 check_line "processes: kernel cooperative"
 check_line "interrupts: x86_64 idt pic pit"
 check_line "scheduler: timer tick foundation"
@@ -299,13 +307,14 @@ check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.8.0"
+check_line "Arwill 0.9.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
 check_line "write [path] [text] overwrite a writable text file"
 check_line "meminfo    show memory map and allocators"
 check_line "heaptest   exercise kernel heap allocation"
+check_line "devices    list detected devices"
 check_line "blkinfo    show block device read diagnostics"
 check_line "irqinfo    show interrupt and timer diagnostics"
 check_line "irqprobe   trigger a safe breakpoint exception"
@@ -328,6 +337,15 @@ check_line "initialized: yes"
 check_line "size: 16384 bytes"
 check_line "heaptest: allocated and freed 2 blocks"
 check_line "heaptest: allocations 2, frees 2"
+check_line "name kind driver status"
+check_line "serial0 console qemu serial ready"
+check_line "input0 input qemu serial ready"
+check_line "disk0 block qemu ata pio ready"
+check_line "fs0 filesystem arfs writable owner note mounted"
+check_line "heap0 memory hhdm free-list ready"
+check_line "timer0 interrupts x86_64 idt pic pit ready"
+check_line "power0 power qemu debug exit ready"
+check_line "user0 user x86_64 ring3 int80 ready"
 check_line "block device: qemu ata pio"
 check_line "sector size: 512 bytes"
 check_line "sample lba: 1"
@@ -389,7 +407,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.8.0"
+check_line "version: 0.9.0"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"

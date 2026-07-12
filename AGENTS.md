@@ -48,6 +48,8 @@ Rules for future work:
 - Treat the current kernel heap as a small HHDM-backed free-list allocator. It
   is useful for small kernel objects, but it is not a slab allocator, virtual
   memory subsystem, userspace heap, or physical page release mechanism.
+- Treat the current device registry as a fixed-size inspection table. It is not
+  a full driver model, bus hierarchy, hotplug system, or ownership layer.
 - When a durable workflow agreement is made with the project owner, update this
   file or another appropriate document in the same change so future sessions do
   not need to rediscover it.

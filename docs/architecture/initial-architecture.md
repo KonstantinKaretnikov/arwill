@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.8.0 has one executable path:
+Arwill 0.9.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -8,6 +8,7 @@ Limine bootloader
   -> Limine memory map snapshot
   -> physical page allocator initialization
   -> small kernel heap initialization from HHDM-mapped physical pages
+  -> tiny device registry publication
   -> QEMU serial I/O block
   -> QEMU ATA PIO block-device initialization
   -> ARFS filesystem mount from the raw test disk
@@ -21,6 +22,7 @@ Limine bootloader
   -> serial shell
   -> storage-backed filesystem
   -> persistent owner-note write when write /owner/note is requested
+  -> device registry listing when devices is requested
   -> kernel heap diagnostics and heap probe when meminfo or heaptest is requested
   -> deterministic raw disk sector read when blkinfo is requested
   -> interrupt/timer diagnostics when irqinfo or irqprobe is requested
@@ -58,9 +60,9 @@ Shell:
 
 - Lives in `kernel/shell.c`.
 - Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
-  `cat`, `write`, `stat`, `meminfo`, `heaptest`, `blkinfo`, `irqinfo`, `irqprobe`,
-  `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`, `step`, `exit`, and
-  `halt`.
+  `cat`, `write`, `stat`, `meminfo`, `heaptest`, `devices`, `blkinfo`,
+  `irqinfo`, `irqprobe`, `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`,
+  `step`, `exit`, and `halt`.
 - Keeps one canonical command name per operation; alias commands are not
   accepted.
 - Holds the current working directory as local shell state.
@@ -83,6 +85,19 @@ Ownership model:
   ring 3 programs use syscalls, while privileged access is added deliberately as
   kernel or driver work.
 - `ownerinfo` exposes this model in the shell.
+
+Device registry:
+
+- Public contract lives in `include/arwill/kernel/device.h`.
+- Implementation lives in `kernel/device.c`.
+- The registry is a small fixed-size inspection table for detected devices and
+  published contracts.
+- The first entries include serial console/input, ARFS or fallback filesystem,
+  QEMU ATA block device, kernel heap, timer/interrupts, QEMU poweroff, and user
+  runtime.
+- `devices` lists name, kind, driver, and status.
+- This is not a full driver model: devices are not hot-pluggable, there is no
+  bus hierarchy, no dynamic probing policy, and no ownership transfer.
 
 Block device contract:
 

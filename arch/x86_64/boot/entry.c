@@ -23,6 +23,7 @@ enum {
 
 static struct arwill_memory_region arwill_limine_memory_regions[limine_memory_region_capacity];
 static struct arwill_memory arwill_limine_memory;
+static struct arwill_device_registry arwill_limine_devices;
 
 static enum arwill_memory_region_type convert_limine_memory_region_type(uint64_t type) {
     switch (type) {
@@ -85,6 +86,7 @@ static void initialize_memory_from_limine(void) {
 
 void arwill_limine_entry(void) {
     initialize_memory_from_limine();
+    arwill_device_registry_init(&arwill_limine_devices);
 
     const struct arwill_console *console = arwill_qemu_serial_console_init();
     const struct arwill_input *input = arwill_qemu_serial_input();
@@ -98,6 +100,63 @@ void arwill_limine_entry(void) {
         arwill_x86_64_user_mode_init(&arwill_limine_memory, hhdm_offset);
     const struct arwill_interrupts *interrupts = arwill_x86_64_interrupts_init();
 
+    (void)arwill_device_register(
+        &arwill_limine_devices,
+        "serial0",
+        arwill_device_kind_console,
+        "qemu serial",
+        console == 0 ? "unavailable" : "ready"
+    );
+    (void)arwill_device_register(
+        &arwill_limine_devices,
+        "input0",
+        arwill_device_kind_input,
+        "qemu serial",
+        input == 0 ? "unavailable" : "ready"
+    );
+    (void)arwill_device_register(
+        &arwill_limine_devices,
+        "disk0",
+        arwill_device_kind_block,
+        block_device == 0 || block_device->name == 0 ? "none" : block_device->name,
+        block_device == 0 ? "unavailable" : "ready"
+    );
+    (void)arwill_device_register(
+        &arwill_limine_devices,
+        "fs0",
+        arwill_device_kind_filesystem,
+        filesystem == 0 || filesystem->name == 0 ? "boot catalog" : filesystem->name,
+        filesystem == 0 ? "fallback" : "mounted"
+    );
+    (void)arwill_device_register(
+        &arwill_limine_devices,
+        "heap0",
+        arwill_device_kind_memory,
+        "hhdm free-list",
+        arwill_limine_memory.kernel_heap.initialized ? "ready" : "unavailable"
+    );
+    (void)arwill_device_register(
+        &arwill_limine_devices,
+        "timer0",
+        arwill_device_kind_interrupts,
+        interrupts == 0 || interrupts->name == 0 ? "none" : interrupts->name,
+        interrupts == 0 ? "unavailable" : "ready"
+    );
+    (void)arwill_device_register(
+        &arwill_limine_devices,
+        "power0",
+        arwill_device_kind_power,
+        "qemu debug exit",
+        power == 0 ? "unavailable" : "ready"
+    );
+    (void)arwill_device_register(
+        &arwill_limine_devices,
+        "user0",
+        arwill_device_kind_user_runtime,
+        user_runtime == 0 || user_runtime->name == 0 ? "none" : user_runtime->name,
+        user_runtime == 0 ? "unavailable" : "ready"
+    );
+
     if (filesystem == 0) {
         filesystem = arwill_boot_catalog_filesystem();
     }
@@ -110,7 +169,8 @@ void arwill_limine_entry(void) {
         power,
         block_device,
         interrupts,
-        user_runtime
+        user_runtime,
+        &arwill_limine_devices
     );
     arwill_cpu_idle_forever();
 }

@@ -3,6 +3,7 @@
 
 #include <arwill/kernel/block_device.h>
 #include <arwill/kernel/console.h>
+#include <arwill/kernel/device.h>
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/interrupts.h>
@@ -18,7 +19,8 @@ void arwill_kernel_start(
     const struct arwill_power *power,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
-    const struct arwill_user_runtime *user_runtime
+    const struct arwill_user_runtime *user_runtime,
+    const struct arwill_device_registry *devices
 ) __attribute__((noreturn));
 
 #endif

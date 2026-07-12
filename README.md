@@ -15,14 +15,14 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.8.0`
+Version: `0.9.0`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
 The shell can read terminal keyboard input through QEMU serial I/O, inspect a
-boot memory map, report physical page allocator and kernel heap state, and
-launch small cooperative kernel processes that can yield and continue on later
-shell steps. Arwill can also read sectors from a
+boot memory map, report physical page allocator and kernel heap state, list the
+detected device registry, and launch small cooperative kernel processes that
+can yield and continue on later shell steps. Arwill can also read sectors from a
 QEMU-attached raw test disk through an ATA PIO block-device driver and serve
 shell filesystem commands from a storage-backed ARFS image. ARFS now supports a
 first persistent writable owner note at `/owner/note`.
@@ -100,6 +100,7 @@ write [path] [text]
 stat [path]
 meminfo
 heaptest
+devices
 blkinfo
 irqinfo
 irqprobe
@@ -126,7 +127,8 @@ visible in listings, but their contents are not displayed yet.
 data is written to the QEMU raw disk image and is verified by the smoke test
 across a rebooted QEMU session. Other paths remain read-only for now.
 
-`stat` displays directory and file metadata. `meminfo` prints the
+`stat` displays directory and file metadata. `devices` lists the current
+platform devices and their basic status. `meminfo` prints the
 Limine-provided boot memory map, physical page allocator counters, and kernel
 heap counters. `heaptest` allocates and frees two small heap blocks.
 
@@ -180,7 +182,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.8.0
+Arwill 0.9.0
 architecture: x86_64
 platform: qemu
 console: serial
@@ -191,6 +193,7 @@ filesystem: arfs writable owner note
 block: qemu ata pio
 memory: boot memory map
 allocator: physical page bump allocator + kernel heap
+devices: registry
 processes: kernel cooperative
 interrupts: x86_64 idt pic pit
 scheduler: timer tick foundation
