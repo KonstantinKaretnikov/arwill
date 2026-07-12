@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.13.0`.
+Status: `0.14.0`.
 
 Arwill already has:
 
@@ -58,6 +58,8 @@ Arwill already has:
   mappings, `int 0x80` syscalls for `write`, `exit`, `read`, and `clock`, and
   process-table exit status for built-in user programs;
 - [x] a PIT-backed monotonic clock exposed through `uptime` and syscall `4`;
+- [x] bounded PCI discovery and `pciinfo`, with a QEMU e1000 device attached
+  for the next network milestone;
 - [x] single-owner OS model: one owner, no accounts or multi-user permission
   system, with the kernel/user boundary kept as an engineering guardrail.
 
@@ -445,3 +447,18 @@ driver work, not accidental default access for every ring 3 program.
    including one after ring 3 and stored AWP execution, and runs a temporary AWP
    syscall probe. RTC/CMOS calendar time, dates, timezones, NTP, and process
    timers remain out of scope.
+
+16. [x] PCI discovery v1
+
+   Status: done in `0.14.0`.
+
+   Scope: scan bus 0 through PCI configuration mechanism #1, expose fixed
+   vendor/device/class/BAR diagnostics through `pciinfo`, and attach a real
+   QEMU e1000 device for future driver work.
+
+   Verified by: smoke discovery of Intel vendor `8086`, device `100e`.
+
+17. [ ] QEMU Ethernet driver
+
+   Goal: bind the discovered e1000 and implement bounded frame TX/RX through a
+   replaceable network-device contract.

@@ -15,7 +15,7 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.13.0`
+Version: `0.14.0`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
@@ -96,6 +96,7 @@ Available shell commands:
 help
 version
 uptime
+pciinfo
 pwd
 cd [path]
 clear
@@ -156,6 +157,10 @@ scheduler foundation.
 value is available to AWP programs through syscall `4` (`clock`). This is not
 calendar time: Arwill still has no RTC/CMOS reader, date, timezone, or NTP.
 
+`pciinfo` lists the bounded PCI scan used to discover platform devices. The
+current QEMU path attaches an Intel e1000 NIC; packet transmission is not
+implemented yet.
+
 `userinfo` displays the current x86-64 user-mode setup, including HHDM, GDT,
 TSS, syscall-gate, run, syscall, byte, and bad-syscall counters.
 
@@ -211,7 +216,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.13.0
+Arwill 0.14.0
 architecture: x86_64
 platform: qemu
 console: serial

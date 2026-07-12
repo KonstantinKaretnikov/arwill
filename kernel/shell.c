@@ -50,6 +50,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "help", .completion = shell_completion_none },
     { .name = "version", .completion = shell_completion_none },
     { .name = "uptime", .completion = shell_completion_none },
+    { .name = "pciinfo", .completion = shell_completion_none },
     { .name = "pwd", .completion = shell_completion_none },
     { .name = "cd", .completion = shell_completion_directory_path },
     { .name = "clear", .completion = shell_completion_none },
@@ -733,6 +734,7 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  help       show commands");
     arwill_console_write_line(console, "  version    show kernel version");
     arwill_console_write_line(console, "  uptime     show monotonic time since boot");
+    arwill_console_write_line(console, "  pciinfo    list discovered PCI devices");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
@@ -2260,6 +2262,7 @@ static void run_command(
     struct arwill_memory *memory,
     const struct arwill_power *power,
     struct arwill_process_manager *processes,
+    const struct arwill_pci_bus *pci,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
     const struct arwill_clock *clock,
@@ -2285,6 +2288,28 @@ static void run_command(
 
     if (string_equals(line, "uptime")) {
         print_uptime(console, clock);
+        return;
+    }
+
+    if (string_equals(line, "pciinfo")) {
+        arwill_console_write_line(console, "pci: x86_64 configuration mechanism 1");
+        arwill_console_write(console, "devices: ");
+        write_size_decimal(console, pci == 0 ? 0U : pci->count);
+        arwill_console_write_line(console, "");
+        if (pci != 0) {
+            for (size_t index = 0; index < pci->count; index++) {
+                const struct arwill_pci_device *device = &pci->devices[index];
+                arwill_console_write(console, "  vendor ");
+                write_uint64_hex(console, device->vendor_id);
+                arwill_console_write(console, " device ");
+                write_uint64_hex(console, device->device_id);
+                arwill_console_write(console, " class ");
+                write_uint64_hex(console, device->class_code);
+                arwill_console_write(console, "/");
+                write_uint64_hex(console, device->subclass);
+                arwill_console_write_line(console, "");
+            }
+        }
         return;
     }
 
@@ -2438,6 +2463,7 @@ void arwill_shell_run(
     struct arwill_memory *memory,
     const struct arwill_power *power,
     struct arwill_process_manager *processes,
+    const struct arwill_pci_bus *pci,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
     const struct arwill_clock *clock,
@@ -2501,6 +2527,7 @@ void arwill_shell_run(
                 memory,
                 power,
                 processes,
+                pci,
                 block_device,
                 interrupts,
                 clock,

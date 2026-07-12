@@ -27,4 +27,10 @@ static inline uint16_t arwill_x86_64_in16(uint16_t port) {
     return value;
 }
 
+static inline uint32_t arwill_x86_64_in32(uint16_t port) {
+    uint32_t value;
+    __asm__ volatile("inl %1, %0" : "=a"(value) : "Nd"(port) : "memory");
+    return value;
+}
+
 #endif

@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.13.0
+PROJECT_VERSION := 0.14.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -21,6 +21,7 @@ QEMU_MACHINE := pc
 QEMU_POWEROFF_EXIT_STATUS := 33
 QEMU_POWEROFF_ARGS := -device isa-debug-exit,iobase=0xf4,iosize=0x04
 QEMU_STORAGE_ARGS := -drive file=$(TEST_DISK),format=raw,if=ide,index=0,media=disk
+QEMU_NETWORK_ARGS := -netdev user,id=net0 -device e1000,netdev=net0
 
 CFLAGS := --target=x86_64-elf
 CFLAGS += -std=c11 -ffreestanding -fno-stack-protector -fno-stack-check
@@ -47,6 +48,7 @@ SOURCES := \
 	kernel/input.c \
 	kernel/main.c \
 	kernel/memory.c \
+	kernel/pci.c \
 	kernel/power.c \
 	kernel/process.c \
 	kernel/scheduler.c \
@@ -57,6 +59,7 @@ SOURCES := \
 	arch/x86_64/boot/limine_requests.c \
 	arch/x86_64/cpu/idle.c \
 	arch/x86_64/cpu/interrupts.c \
+	arch/x86_64/cpu/pci.c \
 	arch/x86_64/cpu/user_mode.c \
 	platform/qemu/x86_64/ata_pio.c \
 	platform/qemu/x86_64/power.c \
@@ -73,7 +76,7 @@ build: check-tools setup $(ISO)
 
 run: build $(TEST_DISK)
 	@set +e; \
-	$(QEMU) -M $(QEMU_MACHINE) -m 128M -cdrom $(ISO) -boot d -serial stdio -monitor none -display none -no-reboot $(QEMU_POWEROFF_ARGS) $(QEMU_STORAGE_ARGS); \
+	$(QEMU) -M $(QEMU_MACHINE) -m 128M -cdrom $(ISO) -boot d -serial stdio -monitor none -display none -no-reboot $(QEMU_POWEROFF_ARGS) $(QEMU_STORAGE_ARGS) $(QEMU_NETWORK_ARGS); \
 	status=$$?; \
 	if [ "$$status" -eq "$(QEMU_POWEROFF_EXIT_STATUS)" ]; then exit 0; fi; \
 	exit "$$status"

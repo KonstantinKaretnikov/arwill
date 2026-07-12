@@ -5,6 +5,7 @@
 
 #include <arwill/arch/x86_64/framebuffer_console.h>
 #include <arwill/arch/x86_64/interrupts.h>
+#include <arwill/arch/x86_64/pci.h>
 #include <arwill/arch/x86_64/limine_requests.h>
 #include <arwill/arch/x86_64/user_mode.h>
 #include <arwill/kernel/arfs.h>
@@ -12,6 +13,7 @@
 #include <arwill/kernel/cpu.h>
 #include <arwill/kernel/kernel.h>
 #include <arwill/kernel/memory.h>
+#include <arwill/kernel/pci.h>
 #include <arwill/platform/qemu/ata_pio.h>
 #include <arwill/platform/qemu/power.h>
 #include <arwill/platform/qemu/serial_console.h>
@@ -25,6 +27,7 @@ enum {
 static struct arwill_memory_region arwill_limine_memory_regions[limine_memory_region_capacity];
 static struct arwill_memory arwill_limine_memory;
 static struct arwill_device_registry arwill_limine_devices;
+static struct arwill_pci_bus arwill_limine_pci;
 
 static enum arwill_memory_region_type convert_limine_memory_region_type(uint64_t type) {
     switch (type) {
@@ -88,6 +91,7 @@ static void initialize_memory_from_limine(void) {
 void arwill_limine_entry(void) {
     initialize_memory_from_limine();
     arwill_device_registry_init(&arwill_limine_devices);
+    arwill_x86_64_pci_scan(&arwill_limine_pci);
 
     const struct arwill_console *serial_console = arwill_qemu_serial_console_init();
     const struct arwill_console *console = arwill_x86_64_framebuffer_console_init(
@@ -179,6 +183,7 @@ void arwill_limine_entry(void) {
         input,
         filesystem,
         &arwill_limine_memory,
+        &arwill_limine_pci,
         power,
         block_device,
         interrupts,

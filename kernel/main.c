@@ -9,6 +9,7 @@
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/power.h>
 #include <arwill/kernel/process.h>
+#include <arwill/kernel/pci.h>
 #include <arwill/kernel/scheduler.h>
 #include <arwill/kernel/shell.h>
 #include <arwill/kernel/user.h>
@@ -18,6 +19,7 @@ void arwill_kernel_start(
     const struct arwill_input *input,
     const struct arwill_filesystem *filesystem,
     struct arwill_memory *memory,
+    const struct arwill_pci_bus *pci,
     const struct arwill_power *power,
     const struct arwill_block_device *block_device,
     const struct arwill_interrupts *interrupts,
@@ -79,6 +81,7 @@ void arwill_kernel_start(
         memory,
         power,
         &process_manager,
+        pci,
         block_device,
         interrupts,
         clock,

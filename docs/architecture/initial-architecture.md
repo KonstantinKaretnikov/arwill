@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.13.0 has one executable path:
+Arwill 0.14.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -164,6 +164,16 @@ Clock contract:
 - `uptime` and user syscall `4` expose the same value.
 - RTC/CMOS calendar time, dates, timezones, NTP, and process timers remain
   absent.
+
+PCI discovery:
+
+- The architecture-independent fixed PCI table lives in
+  `include/arwill/kernel/pci.h`; x86-64 configuration access lives in
+  `arch/x86_64/cpu/pci.c`.
+- `pciinfo` scans bus 0 with configuration mechanism #1 and exposes vendor,
+  device, class, and raw BAR values.
+- This is discovery only: there is no BAR mapping, IRQ/MSI setup, resource
+  allocator, hotplug, or driver binding yet.
 
 Scheduler foundation:
 
