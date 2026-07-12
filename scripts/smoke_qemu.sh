@@ -182,6 +182,9 @@ run_qemu_to_log() {
     printf 'exit\r'
     wait_for_primary_log "exec: exited 0"
     sleep 0.1
+    printf 'irqinfo\r'
+    wait_for_primary_log_count "timer observed: yes" 2
+    sleep 0.1
     printf 'cat /apps/hello.awp\r'
     wait_for_primary_log "cat: cannot display binary file: /apps/hello.awp"
     sleep 0.1

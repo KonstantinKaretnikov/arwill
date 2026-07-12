@@ -10,7 +10,8 @@
 enum {
     idt_entry_count = 256,
     idt_gate_interrupt = 0x8e,
-    idt_gate_user_interrupt = 0xee,
+    /* Trap gate preserves IF across the user syscall exit-path retq. */
+    idt_gate_user_interrupt = 0xef,
     vector_breakpoint = 3,
     vector_irq0_timer = 32,
     vector_syscall = 0x80,

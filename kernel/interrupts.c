@@ -59,6 +59,5 @@ int arwill_interrupts_wait_for_timer_tick(const struct arwill_interrupts *interr
         }
     }
 
-    arwill_interrupts_stats(interrupts, &after);
-    return after.timer_ticks > 0U;
+    return 0;
 }
