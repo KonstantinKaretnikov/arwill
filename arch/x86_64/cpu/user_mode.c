@@ -30,11 +30,11 @@ enum {
 };
 
 enum {
-    api_header_size = 16,
-    api_magic_0 = 'A',
-    api_magic_1 = 'P',
-    api_magic_2 = 'I',
-    api_magic_3 = '1',
+    awp_header_size = 16,
+    awp_magic_0 = 'A',
+    awp_magic_1 = 'W',
+    awp_magic_2 = 'P',
+    awp_magic_3 = '1',
 };
 
 struct gdt_pointer {
@@ -447,11 +447,11 @@ static int copy_user_image_to_page(
         return 0;
     }
 
-    if (image_size < api_header_size ||
-        image[0] != api_magic_0 ||
-        image[1] != api_magic_1 ||
-        image[2] != api_magic_2 ||
-        image[3] != api_magic_3) {
+    if (image_size < awp_header_size ||
+        image[0] != awp_magic_0 ||
+        image[1] != awp_magic_1 ||
+        image[2] != awp_magic_2 ||
+        image[3] != awp_magic_3) {
         return 0;
     }
 
@@ -459,7 +459,7 @@ static int copy_user_image_to_page(
     const uint16_t entry_offset = read_le16(&image[6]);
     const uint32_t code_size = read_le32(&image[8]);
 
-    if (header_size < api_header_size ||
+    if (header_size < awp_header_size ||
         (uint64_t)header_size > image_size ||
         code_size == 0U ||
         (uint64_t)code_size > ARWILL_MEMORY_PAGE_SIZE ||

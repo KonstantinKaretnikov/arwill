@@ -1,6 +1,6 @@
 # ADR-0027: Arwill Program Image v1
 
-Status: Accepted
+Status: Superseded by ADR-0028
 
 ## Context
 

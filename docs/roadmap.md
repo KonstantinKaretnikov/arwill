@@ -46,7 +46,7 @@ Arwill already has:
 - [x] a tiny fixed-size device registry and `devices` shell command;
 - [x] framebuffer text console mirroring serial output when Limine provides a
   32-bit framebuffer;
-- [x] simple Arwill Program Image loader through `exec [path]`;
+- [x] simple Arwill Program loader through `exec [path]`;
 - [x] QEMU debug-exit poweroff through `exit`;
 - [x] cooperative kernel-managed processes with PID, state, run count, exit
   code, `run [name]`, cooperative `step`, and `ps`;
@@ -369,14 +369,14 @@ driver work, not accidental default access for every ring 3 program.
 
 11. [x] Simple program image loader
 
-   Status: done in `0.11.0` with Arwill Program Image v1.
+   Status: done in `0.11.0`, then renamed to Arwill Program v1.
 
    Goal: run owner-provided programs from storage without jumping straight to
    full ELF/POSIX complexity.
 
    Scope:
 
-   - define a small Arwill Program Image format with a header and code bytes;
+   - define a small Arwill Program format with a header and code bytes;
    - load a program image from ARFS;
    - run it through the existing ring 3 syscall ABI;
    - keep ELF, dynamic linking, files-as-processes, arguments, environment,
@@ -384,11 +384,11 @@ driver work, not accidental default access for every ring 3 program.
 
    Verified by:
 
-   - test disk includes `/programs/hello.api`;
-   - smoke test lists `/programs`;
-   - smoke test verifies `cat /programs/hello.api` remains binary-only;
-   - smoke test runs `exec /programs/hello.api`;
-   - the stored image writes `api hello from storage` through syscall `write`
+   - test disk includes `/apps/hello.awp`;
+   - smoke test lists `/apps`;
+   - smoke test verifies `cat /apps/hello.awp` remains binary-only;
+   - smoke test runs `exec /apps/hello.awp`;
+   - the stored program writes `awp hello from storage` through syscall `write`
      and exits with code `9`.
 
    Definition of done: Arwill can load and run a tiny stored program image

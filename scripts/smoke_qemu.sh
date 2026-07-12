@@ -150,8 +150,8 @@ run_qemu_to_log() {
     printf 'run userb\t\r'
     wait_for_primary_log "run: spawned pid 4: userbad"
     sleep 0.1
-    printf 'exec /programs/hello.api\r'
-    wait_for_primary_log "api hello from storage"
+    printf 'exec /apps/hello.awp\r'
+    wait_for_primary_log "awp hello from storage"
     wait_for_primary_log "exec: exited 9"
     sleep 0.1
     printf 'useri\t\r'
@@ -168,10 +168,10 @@ run_qemu_to_log() {
     sleep 0.1
     printf 'l\t\r'
     wait_for_primary_log "system/"
-    wait_for_primary_log "programs/"
+    wait_for_primary_log "apps/"
     sleep 0.1
-    printf 'cat /programs/hello.api\r'
-    wait_for_primary_log "cat: cannot display binary file: /programs/hello.api"
+    printf 'cat /apps/hello.awp\r'
+    wait_for_primary_log "cat: cannot display binary file: /apps/hello.awp"
     sleep 0.1
     printf 'write /docs/readme nope\r'
     wait_for_primary_log "write: cannot write: /docs/readme"
@@ -385,7 +385,7 @@ check_line "process counter: pid 2 step 3/3"
 check_line "run: spawned pid 3: userhello"
 check_line "user hello: hello from ring 3"
 check_line "run: spawned pid 4: userbad"
-check_line "api hello from storage"
+check_line "awp hello from storage"
 check_line "exec: exited 9"
 check_line "user: x86_64 ring3 int80"
 check_line "available: yes"
@@ -409,9 +409,9 @@ check_line "finished"
 check_line "boot/"
 check_line "docs/"
 check_line "owner/"
-check_line "programs/"
+check_line "apps/"
 check_line "system/"
-check_line "cat: cannot display binary file: /programs/hello.api"
+check_line "cat: cannot display binary file: /apps/hello.awp"
 check_line "write: cannot write: /docs/readme"
 check_line "write: wrote 34 bytes to /owner/note"
 check_line "owner note persisted across reboot"

@@ -30,7 +30,7 @@ Limine bootloader
   -> scheduler tick diagnostics when schedinfo is requested
   -> cooperative built-in kernel process launch when run is requested
   -> yielded cooperative process continuation when step is requested
-  -> stored Arwill Program Image load and ring 3 launch when exec is requested
+  -> stored Arwill Program load and ring 3 launch when exec is requested
   -> user page mapping and built-in ring 3 user program launch when userhello
      or userbad is run
   -> QEMU debug-exit poweroff when exit is requested
@@ -193,15 +193,15 @@ User runtime:
   preemptive user scheduling yet.
 - "User" here means CPU user mode, not an Arwill account model.
 
-Program image loader:
+Program loader:
 
-- The first stored executable format is Arwill Program Image v1, identified by
-  an `API1` binary header.
+- The first stored executable format is Arwill Program v1, identified by an
+  `AWP1` binary header.
 - The shell command `exec [path]` reads a binary file from ARFS and asks the
   user runtime to map and execute its code bytes in ring 3.
 - The current image format contains a small header, entry offset, and code
   bytes for one user code page.
-- `/programs/hello.api` is the first test image.
+- `/apps/hello.awp` is the first test program.
 - This is deliberately not ELF: there is no linker, relocation, dynamic
   loading, arguments, environment, file descriptors, or per-process address
   spaces yet.

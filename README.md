@@ -158,8 +158,8 @@ enters ring 3 and makes an unknown syscall, which exits with code `127`
 without crashing the kernel. `ps` shows the process table with PID, state, run
 count, exit code, and name.
 
-`exec /programs/hello.api` loads a tiny Arwill Program Image from ARFS and runs
-it through the same ring 3 `int 0x80` syscall boundary. API is deliberately
+`exec /apps/hello.awp` loads a tiny Arwill Program from ARFS and runs it through
+the same ring 3 `int 0x80` syscall boundary. AWP is deliberately
 small and is not ELF, POSIX, dynamic linking, arguments, or environment
 support.
 
