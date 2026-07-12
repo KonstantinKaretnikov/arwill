@@ -9,6 +9,7 @@ ISO := $(BUILD_DIR)/arwill.iso
 TEST_DISK := $(BUILD_DIR)/arwill-test-disk.img
 SERIAL_LOG := $(BUILD_DIR)/serial-smoke.log
 HELLO_APP := $(BUILD_DIR)/apps/hello.awp
+CALC_APP := $(BUILD_DIR)/apps/calc.awp
 
 BREW_LLVM_PREFIX := $(shell brew --prefix llvm 2>/dev/null)
 BREW_LLD_PREFIX := $(shell brew --prefix lld 2>/dev/null)
@@ -116,13 +117,16 @@ $(ISO): $(KERNEL) platform/qemu/limine.conf third_party/limine/limine
 		$(ISO_ROOT) -o $(ISO)
 	third_party/limine/limine bios-install $(ISO)
 
-$(TEST_DISK): scripts/create_test_disk.sh $(HELLO_APP) Makefile FORCE
-	@sh scripts/create_test_disk.sh "$@" "$(PROJECT_VERSION)" "$(HELLO_APP)"
+$(TEST_DISK): scripts/create_test_disk.sh $(HELLO_APP) $(CALC_APP) Makefile FORCE
+	@sh scripts/create_test_disk.sh "$@" "$(PROJECT_VERSION)" "$(HELLO_APP)" "$(CALC_APP)"
 
 FORCE:
 
 $(HELLO_APP): apps/hello/build.sh Makefile
 	@sh apps/hello/build.sh "$@"
+
+$(CALC_APP): apps/calc/build.sh apps/calc/calc.c apps/calc/start.S apps/calc/linker.ld Makefile
+	@sh apps/calc/build.sh "$@"
 
 third_party/limine/limine:
 	@scripts/setup_limine.sh

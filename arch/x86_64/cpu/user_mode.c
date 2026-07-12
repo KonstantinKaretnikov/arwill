@@ -3,6 +3,7 @@
 
 #include <arwill/arch/x86_64/user_mode.h>
 #include <arwill/kernel/console.h>
+#include <arwill/kernel/input.h>
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/user.h>
 
@@ -24,6 +25,7 @@ enum {
     page_large = 0x080,
     syscall_write = 1,
     syscall_exit = 2,
+    syscall_read = 3,
     user_code_message_offset = 0x100,
     user_write_limit = 256,
     bad_syscall_exit_code = 127
@@ -119,6 +121,7 @@ struct x86_64_user_context {
     uint64_t bytes_written;
     uint64_t bad_syscalls;
     const struct arwill_console *active_console;
+    const struct arwill_input *input;
     struct arwill_x86_64_user_run_state run_state;
     uint64_t active_code_base;
     uint64_t active_code_size;
@@ -612,6 +615,15 @@ static int user_range_is_readable(const struct x86_64_user_context *context, uin
         );
 }
 
+static int user_range_is_writable(const struct x86_64_user_context *context, uint64_t start, uint64_t length) {
+    return range_in_user_region(
+        start,
+        length,
+        context->active_stack_base,
+        context->active_stack_size
+    );
+}
+
 static void write_user_bytes(
     const struct arwill_console *console,
     const uint8_t *bytes,
@@ -689,6 +701,31 @@ static int arwill_x86_64_user_handle_syscall(
         user_context.active_status = "exited";
         user_context.active_exited = 1;
         return 1;
+    }
+
+    if (registers->rax == syscall_read) {
+        const uint64_t user_pointer = registers->rdi;
+        uint64_t length = registers->rsi;
+
+        if (length > user_write_limit) {
+            length = user_write_limit;
+        }
+
+        if (user_context.input == 0 ||
+            !user_range_is_writable(&user_context, user_pointer, length)) {
+            user_context.active_exit_code = bad_syscall_exit_code;
+            user_context.active_status = "bad user pointer";
+            user_context.active_exited = 1;
+            return 1;
+        }
+
+        uint8_t *destination = (uint8_t *)(uintptr_t)user_pointer;
+        for (uint64_t index = 0; index < length; index++) {
+            destination[index] = arwill_input_read_byte(user_context.input);
+        }
+
+        registers->rax = length;
+        return 0;
     }
 
     user_context.bad_syscalls++;
@@ -896,7 +933,8 @@ static const struct arwill_user_runtime user_runtime = {
 
 const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     struct arwill_memory *memory,
-    uint64_t hhdm_offset
+    uint64_t hhdm_offset,
+    const struct arwill_input *input
 ) {
     user_context.memory = memory;
     user_context.hhdm_offset = hhdm_offset;
@@ -909,6 +947,7 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     user_context.syscall_count = 0;
     user_context.bytes_written = 0;
     user_context.bad_syscalls = 0;
+    user_context.input = input;
     clear_run_state(&user_context);
 
     initialize_gdt();

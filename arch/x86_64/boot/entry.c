@@ -102,7 +102,7 @@ void arwill_limine_entry(void) {
     const uint64_t hhdm_offset = hhdm == 0 ? 0 : hhdm->offset;
     (void)arwill_kernel_heap_init(&arwill_limine_memory, hhdm_offset, 4);
     const struct arwill_user_runtime *user_runtime =
-        arwill_x86_64_user_mode_init(&arwill_limine_memory, hhdm_offset);
+        arwill_x86_64_user_mode_init(&arwill_limine_memory, hhdm_offset, input);
     const struct arwill_interrupts *interrupts = arwill_x86_64_interrupts_init();
 
     (void)arwill_device_register(

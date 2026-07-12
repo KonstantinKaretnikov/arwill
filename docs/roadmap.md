@@ -420,3 +420,13 @@ driver work, not accidental default access for every ring 3 program.
    files, reboots, verifies their persisted type, size, and contents, executes
    the stored AWP application, removes the entries, and verifies that the first
    released data sector is reused.
+
+14. [x] Interactive AWP calculator
+
+   Status: implemented in the current `0.12.0` increment.
+
+   Scope: add the minimal serial-input syscall and package a plain integer
+   calculator under `/apps/calc.awp`. This does not add a general input API,
+   process scheduling, or a language runtime.
+
+   Verified by: smoke execution of `12*7`, observing `84` and a clean exit.

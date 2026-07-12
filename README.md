@@ -170,8 +170,12 @@ the same ring 3 `int 0x80` syscall boundary. AWP is deliberately
 small and is not ELF, POSIX, dynamic linking, arguments, or environment
 support.
 
-The test application's build recipe lives in `apps/hello/`; its output is
-packaged into the ARFS test disk as `build/apps/hello.awp`.
+`exec /apps/calc.awp` runs the deliberately plain interactive calculator. Type
+one expression such as `12*7` and press Enter. It supports integer `+`, `-`,
+`*`, and `/`; division by zero and malformed expressions print `error`.
+
+The test application build recipes live in `apps/hello/` and `apps/calc/`; their
+outputs are packaged into the ARFS test disk as `.awp` files.
 
 These are still narrow built-in programs. Arwill does not yet have ELF program
 loading, per-process address spaces, saved CPU contexts, or preemptive context

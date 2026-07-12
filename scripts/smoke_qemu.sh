@@ -170,6 +170,12 @@ run_qemu_to_log() {
     wait_for_primary_log "system/"
     wait_for_primary_log "apps/"
     sleep 0.1
+    printf 'exec /apps/calc.awp\r'
+    wait_for_primary_log "calc> "
+    sleep 0.1
+    printf '12*7\r'
+    wait_for_primary_log "84"
+    sleep 0.1
     printf 'cat /apps/hello.awp\r'
     wait_for_primary_log "cat: cannot display binary file: /apps/hello.awp"
     sleep 0.1
@@ -419,6 +425,8 @@ check_line "boot/"
 check_line "docs/"
 check_line "owner/"
 check_line "apps/"
+check_line "calc> "
+check_line "84"
 check_line "system/"
 check_line "cat: cannot display binary file: /apps/hello.awp"
 check_line "mkdir: created /scratch"
@@ -562,13 +570,13 @@ do
     fi
 done
 
-reused_data=$(dd if="$test_disk" bs=512 skip=14 count=1 2>/dev/null | LC_ALL=C tr -d '\000')
+reused_data=$(dd if="$test_disk" bs=512 skip=17 count=1 2>/dev/null | LC_ALL=C tr -d '\000')
 if [ "$reused_data" != "reused sector" ]; then
     echo "released ARFS data sector was not reused as expected" >&2
     exit 1
 fi
 
-binary_hex=$(od -An -tx1 -N7 -j $((15 * 512)) "$test_disk" | tr -d ' \n')
+binary_hex=$(od -An -tx1 -N7 -j $((18 * 512)) "$test_disk" | tr -d ' \n')
 if [ "$binary_hex" != "0001027f80feff" ]; then
     echo "persisted ARFS binary contents differ: $binary_hex" >&2
     exit 1
