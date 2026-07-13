@@ -80,8 +80,8 @@ Shell:
 - Keeps one canonical command name per operation; alias commands are not
   accepted.
 - Holds the current working directory as local shell state.
-- Owns Tab completion for command names, filesystem paths, and built-in process
-  names.
+- Owns Tab completion for command names, filesystem paths, both `exec` path
+  positions, and built-in process names.
 - Owns a small in-memory command history navigated by Up and Down escape
   sequences.
 - Normalizes standard Russian-layout UTF-8 input back to ASCII key positions;
@@ -199,8 +199,8 @@ User runtime:
 - The syscall ABI uses `int 0x80`: syscall `1` writes to the originating
   session, syscall `2` exits, syscall `3` reads session input, syscall `4`
   returns monotonic milliseconds, and syscalls `5` and `6` perform bounded
-  whole-text-file reads and writes. Syscall `7` copies the task's one bounded
-  launch argument to a user buffer.
+  whole-text-file reads and writes. Syscall `7` copies the task's one bounded,
+  shell-resolved launch file path to a user buffer.
 - `run userhello` executes a tiny generated user program that writes
   `user hello: hello from ring 3` through syscall `write` and exits with code
   `7`.
@@ -220,9 +220,9 @@ Program loader:
 
 - The first stored executable format is Arwill Program v1, identified by an
   `AWP1` binary header.
-- The shell command `exec [path] [argument]` reads a binary file from ARFS and
-  asks the user runtime to map and execute its code bytes in ring 3 with at
-  most one 63-byte launch argument.
+- The shell command `exec [image] [file]` reads a binary file from ARFS and asks
+  the user runtime to map and execute its code bytes in ring 3 with at most one
+  63-byte launch file path resolved against the shell current directory.
 - The current image format contains a small header, entry offset, and at most
   two code pages.
 - The fixture packages `/apps/hello.awp`, `/apps/calc.awp`, and

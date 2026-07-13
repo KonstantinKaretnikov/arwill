@@ -1,4 +1,4 @@
-# ADR-0048: Single AWP Launch Argument
+# ADR-0048: Single AWP Launch File Path
 
 Status: accepted
 
@@ -12,33 +12,34 @@ startup stack would be disproportionate to the current use case.
 
 ## Decision
 
-Extend `exec` to accept at most one optional whitespace-delimited launch
-argument: `exec [image] [argument]`. Store at most 63 ASCII bytes in the fixed
-AWP task slot. Syscall `7` copies the current task's launch argument into a
-bounded writable user buffer and returns its byte length. It returns zero when
-the launcher supplied no argument and `-1` when the destination is too small
-or invalid.
+Extend `exec` to accept at most one optional launch file path: `exec [image]
+[file]`. Both positions support filesystem Tab completion. Resolve a relative
+file path against the launching shell session's current directory and pass the
+canonical absolute path to the AWP task. Store at most 63 ASCII bytes in its
+fixed slot. Syscall `7` copies the path into a bounded writable user buffer and
+returns its byte length. It returns zero when the launcher supplied no file and
+`-1` when the destination is too small or invalid.
 
-The argument is opaque to the shell: it is not quoted, expanded, or resolved
-against the shell working directory. Multiple arguments are rejected. This
-does not change the on-disk `AWP1` image format.
+The path is not quoted or expanded, and multiple launch values are rejected.
+This does not change the on-disk `AWP1` image format.
 
-Make `/apps/edit.awp` require one absolute file path through this channel.
-Remove its interactive `edit file:` prompt. With no argument it prints `edit:
-missing file` and exits with status `2`; a relative path produces an explicit
-absolute-path error.
+Make `/apps/edit.awp` require one file path through this channel; the shell
+delivers it in canonical absolute form. Remove its interactive `edit file:`
+prompt. With no file it prints `edit: missing file` and exits with status `2`.
 
 ## Consequences
 
 The owner can open the configuration directly with `exec /apps/edit.awp
-/owner/arwill.conf`, while other AWP programs may ignore the bounded argument.
-Arwill still has no general argument vector, quoted arguments, spaces inside an
-argument, environment variables, inherited working directory, or POSIX process
+/owner/arwill.conf` or, from `/owner`, with `exec /apps/edit.awp arwill.conf`.
+Other AWP programs may ignore the bounded path. Arwill still has no general
+argument vector, quoted arguments, spaces inside an argument, environment
+variables, inherited working-directory state inside the task, or POSIX process
 startup ABI.
 
 ## Verification
 
 Verify that launching the editor without a file reports the missing-file error,
-that direct launch opens and saves a text file, and that `/owner/arwill.conf`
-opens with its existing contents. Keep the concurrent editor/calculator smoke
-scenario on the direct-launch path.
+that Tab completes both `exec` paths, that a relative file is resolved against
+the shell current directory, and that `/owner/arwill.conf` opens with its
+existing contents. Keep the concurrent editor/calculator smoke scenario on the
+direct-launch path.

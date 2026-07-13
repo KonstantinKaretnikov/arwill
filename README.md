@@ -131,7 +131,7 @@ service stop remote-console
 service restart remote-console
 ps
 run [name]
-exec [path] [argument]
+exec [image] [file]
 step
 exit
 halt
@@ -245,17 +245,19 @@ count, exit code, and name.
 `exec /apps/hello.awp` loads a tiny Arwill Program from ARFS and runs it through
 the ring 3 `int 0x80` syscall boundary. AWP is deliberately small and is not
 ELF, POSIX, dynamic linking, a general argument vector, or environment support.
-`exec` accepts at most one optional argument of 63 bytes. It does not support
-quotes, spaces inside the argument, expansion, or inherited working-directory
-state.
+`exec` accepts at most one optional file path of 63 bytes. Tab completes both
+the image and file paths. A relative file path is resolved against the current
+shell directory before the program starts. There are no quotes, expansion, or
+general argument vectors.
 
 `exec /apps/calc.awp` runs the deliberately plain interactive calculator. Type
 one expression such as `12*7` and press Enter. It supports integer `+`, `-`,
 `*`, and `/`; division by zero and malformed expressions print `error`.
 
 `exec /apps/edit.awp /owner/arwill.conf` opens the bounded ASCII editor directly
-on the supplied absolute path. The file argument is mandatory; launching the
-editor without it exits with `edit: missing file`. Edit with arrows, Enter,
+on the supplied path. After `cd /owner`, the shorter `exec /apps/edit.awp
+arwill.conf` opens the same file. The file argument is mandatory; launching
+the editor without it exits with `edit: missing file`. Edit with arrows, Enter,
 Backspace, Delete, Home/End, save with Ctrl+S, and leave with Ctrl+Q. Ctrl+C
 exits, and Ctrl+Q asks again when unsaved changes exist. There is no undo,
 selection, clipboard, search, Unicode, or syntax highlighting.
@@ -269,9 +271,10 @@ The QEMU path mirrors serial output to a simple framebuffer text console when
 Limine provides a 32-bit framebuffer. `exit` powers off the current QEMU
 session. `halt` remains available as a CPU idle-loop command.
 
-Press `Tab` to complete command names, paths, and built-in process names. If
-there are multiple matches, the shell lists candidates and redraws the current
-prompt. Press Up and Down to browse the in-memory shell command history.
+Press `Tab` to complete command names, paths, and built-in process names. For
+`exec`, Tab completes both the image path and the optional file path. If there
+are multiple matches, the shell lists candidates and redraws the current prompt.
+Press Up and Down to browse the in-memory shell command history.
 
 If the host terminal is left in a Russian keyboard layout, the shell normalizes
 standard Russian-layout UTF-8 input back to ASCII key positions for commands and

@@ -45,6 +45,7 @@ enum {
 enum shell_completion_kind {
     shell_completion_none,
     shell_completion_path,
+    shell_completion_two_paths,
     shell_completion_directory_path,
     shell_completion_process
 };
@@ -91,7 +92,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "service", .completion = shell_completion_none },
     { .name = "ps", .completion = shell_completion_none },
     { .name = "run", .completion = shell_completion_process },
-    { .name = "exec", .completion = shell_completion_path },
+    { .name = "exec", .completion = shell_completion_two_paths },
     { .name = "step", .completion = shell_completion_none },
     { .name = "exit", .completion = shell_completion_none },
     { .name = "halt", .completion = shell_completion_none },
@@ -893,7 +894,7 @@ static void print_help(const struct arwill_console *console, int remote_session)
     arwill_console_write_line(console, "  service    inspect or control built-in services");
     arwill_console_write_line(console, "  ps         show kernel process table");
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
-    arwill_console_write_line(console, "  exec [path] [argument] run a stored program image");
+    arwill_console_write_line(console, "  exec [image] [file] run a stored program image");
     arwill_console_write_line(console, "  step       run one cooperative process step");
     arwill_console_write_line(console, remote_session ?
         "  exit       close the remote session" :
@@ -1056,6 +1057,7 @@ static uint32_t exec_program_image(
     char path_argument[shell_path_capacity];
     char launch_argument[arwill_user_argument_capacity];
     char resolved_path[shell_path_capacity];
+    char resolved_launch_argument[arwill_user_argument_capacity];
 
     if (!copy_first_argument(path_argument, sizeof(path_argument), path)) {
         arwill_console_write_line(console, "exec: path too long");
@@ -1076,6 +1078,18 @@ static uint32_t exec_program_image(
     }
     if (argument_after_command(argument)[0] != '\0') {
         arwill_console_write_line(console, "exec: too many arguments");
+        return 0;
+    }
+
+    resolved_launch_argument[0] = '\0';
+    if (launch_argument[0] != '\0' &&
+        !resolve_path(
+            current_directory,
+            launch_argument,
+            resolved_launch_argument,
+            sizeof(resolved_launch_argument)
+        )) {
+        arwill_console_write_line(console, "exec: file path too long");
         return 0;
     }
 
@@ -1104,7 +1118,7 @@ static uint32_t exec_program_image(
             (const uint8_t *)file.contents,
             file.size_bytes,
             resolved_path,
-            launch_argument,
+            resolved_launch_argument,
             console,
             &pid
         )) {
@@ -2306,6 +2320,36 @@ static int split_command(
     return 1;
 }
 
+static int two_path_completion_start(
+    const char *line,
+    size_t first_path_start,
+    size_t *path_start
+) {
+    size_t index = first_path_start;
+
+    while (line[index] != '\0' && line[index] != ' ') {
+        index++;
+    }
+    if (line[index] == '\0') {
+        *path_start = first_path_start;
+        return 1;
+    }
+
+    while (line[index] == ' ') {
+        index++;
+    }
+    const size_t second_path_start = index;
+    while (line[index] != '\0' && line[index] != ' ') {
+        index++;
+    }
+    if (line[index] != '\0') {
+        return 0;
+    }
+
+    *path_start = second_path_start;
+    return 1;
+}
+
 static void split_path_for_completion(
     const char *path,
     char *parent_path,
@@ -2595,6 +2639,11 @@ static void complete_line(
 
     if (completion == shell_completion_process) {
         complete_process_name(console, current_directory, line, length, argument_start);
+        return;
+    }
+
+    if (completion == shell_completion_two_paths &&
+        !two_path_completion_start(line, argument_start, &argument_start)) {
         return;
     }
 

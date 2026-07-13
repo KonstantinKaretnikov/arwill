@@ -19,6 +19,10 @@ The shell completes a unique match inline. If multiple matches exist and no
 longer common prefix can be inserted, it prints candidates and redraws the
 prompt plus the current input line.
 
+For `exec [image] [file]`, both positions use filesystem path completion. The
+first selects the AWP image and the second selects its one optional launch file.
+No completion is offered after the second path.
+
 ## Consequences
 
 Completion improves the interactive serial workflow without introducing a

@@ -47,8 +47,8 @@ Arwill already has:
 - [x] a tiny fixed-size device registry and `devices` shell command;
 - [x] framebuffer text console mirroring serial output when Limine provides a
   32-bit framebuffer;
-- [x] simple Arwill Program loader through `exec [path] [argument]`, with at
-  most one bounded launch argument;
+- [x] simple Arwill Program loader through `exec [image] [file]`, with at most
+  one bounded, shell-resolved launch file path;
 - [x] QEMU debug-exit poweroff through `exit`;
 - [x] cooperative kernel-managed processes with PID, state, run count, exit
   code, `run [name]`, cooperative `step`, and `ps`;
@@ -549,10 +549,11 @@ driver work, not accidental default access for every ring 3 program.
    and `service` status/start/stop/restart. HTTP and HTTPS remain outside the
    active roadmap.
 
-25. [x] Single AWP launch argument
+25. [x] Single AWP launch file path
 
    Status: implemented in `0.16.0` per ADR-0048.
 
-   Scope: one optional 63-byte argument through `exec`, bounded syscall `7`
-   retrieval, and mandatory direct file-path launch for `/apps/edit.awp`. No
-   `argc`/`argv`, quoting, environment, or inherited working directory.
+   Scope: one optional 63-byte file path through `exec`, Tab completion in both
+   positions, shell-current-directory resolution, bounded syscall `7`
+   retrieval, and mandatory file-path launch for `/apps/edit.awp`. No
+   `argc`/`argv`, quoting, environment, or task working directory.

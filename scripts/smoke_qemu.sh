@@ -288,6 +288,12 @@ run_qemu_to_log() {
     printf 'rm /fault.awp\r'
     wait_for_primary_log "rm: removed /fault.awp"
     sleep 0.1
+    printf 'exec /apps/e\towner/no\t\r'
+    wait_for_primary_log "/owner/note"
+    sleep 0.1
+    printf '\021'
+    wait_for_primary_log_count "exec: exited 0" 2
+    sleep 0.1
     printf 'exec /apps/edit.awp\r'
     wait_for_primary_log "edit: missing file"
     wait_for_primary_log "exec: exited 2"
@@ -533,7 +539,7 @@ check_line "logs       show the complete event log"
 check_line "service    inspect or control built-in services"
 check_line "ps         show kernel process table"
 check_line "run [name] launch a built-in kernel process"
-check_line "exec [path] [argument] run a stored program image"
+check_line "exec [image] [file] run a stored program image"
 check_line "step       run one cooperative process step"
 check_line "Up/Down    browse command history"
 check_absent "  dir [path]  list the current filesystem"
@@ -629,6 +635,8 @@ check_line "writehex: wrote 18 bytes to /fault.awp"
 check_line "exec: fault 6"
 check_line "exec: exited 134"
 check_line "rm: removed /fault.awp"
+check_line "Arwill:/> exec /apps/edit.awp owner/note"
+check_line "/owner/note"
 check_line "edit: missing file"
 check_absent "edit file:"
 check_line "/owner/smoke-edit.txt"
