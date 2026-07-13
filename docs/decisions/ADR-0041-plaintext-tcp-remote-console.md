@@ -1,6 +1,6 @@
 # ADR-0041: Plaintext TCP Remote Console
 
-Status: accepted
+Status: superseded by ADR-0042
 
 ## Context
 

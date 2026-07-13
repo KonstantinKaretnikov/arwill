@@ -15,7 +15,7 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.15.0`
+Version: `0.15.1`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
@@ -165,8 +165,11 @@ diagnostic MAC and `netprobe` transmits a bounded broadcast Ethernet frame.
 gateway (`10.0.2.2`). `arping` constructs and transmits an ARP request for
 that gateway. `ping` completes one bounded ARP/ICMP echo exchange with the
 QEMU gateway. A small TCP listener on guest port `2323` serves the same shell
-command dispatcher as the serial console. DHCP, general routing, a socket API,
-TCP retransmission, and multiple simultaneous connections remain absent.
+command dispatcher as the serial console. The listener validates inbound IPv4
+and TCP checksums, re-ACKs duplicate data, and retains one unacknowledged
+SYN-ACK or output segment for three fixed 250 ms retries. DHCP, general
+routing, a socket API, congestion control, and multiple simultaneous
+connections remain absent.
 
 Interactive `make run` forwards host `127.0.0.1:23232` to guest TCP port
 `2323`. Connect from another terminal with:
@@ -237,7 +240,8 @@ yet.
 
 ## Check
 
-Run all available verification, including the bounded QEMU serial smoke test:
+Run all available verification, including the deterministic host IPv4/TCP test
+and the bounded QEMU serial/TCP smoke test:
 
 ```sh
 make check
@@ -246,7 +250,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.15.0
+Arwill 0.15.1
 architecture: x86_64
 platform: qemu
 console: serial

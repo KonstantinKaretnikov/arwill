@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.15.0`.
+Status: `0.15.1`.
 
 Arwill already has:
 
@@ -23,8 +23,8 @@ Arwill already has:
 - [x] x86-64 plus QEMU as the first target;
 - [x] freestanding C with minimal x86-64 inline assembly for port I/O and CPU
   idle;
-- [x] a buildable bootable ISO and `make check` with a bounded QEMU serial smoke
-  test;
+- [x] a buildable bootable ISO and `make check` with native IPv4/TCP checks plus
+  a bounded QEMU serial/TCP smoke test;
 - [x] QEMU serial console output and blocking serial input;
 - [x] a serial shell with canonical commands only: `help`, `version`, `uptime`,
   `pwd`, `cd`, `clear`, `ls`, `cat`, `mkdir`, `write`, `writehex`, `rm`,
@@ -497,9 +497,16 @@ driver work, not accidental default access for every ring 3 program.
    connections, checks command execution, Backspace, Ctrl+C, remote `exit`,
    and listener reuse.
 
-20. [ ] TCP robustness and socket contract
+20. [x] Bounded TCP robustness
 
-   Goal: add inbound checksum validation, retransmission, explicit close
-   states, and a small kernel socket contract only when another network service
-   needs them. The current console remains a single-connection polling service;
-   it is not a general networking API.
+   Status: done in `0.15.1` per ADR-0042.
+
+   Scope: validate inbound IPv4 and TCP checksums, re-ACK duplicate or
+   out-of-order data, retain one unacknowledged SYN-ACK or console-output
+   segment, retry it three times at a fixed 250 ms interval, and reset a timed
+   out listener. Keep the current console as a single-connection polling
+   service; do not introduce a socket API, congestion control, adaptive timers,
+   or a full close-state machine.
+
+   Verified by: a native host test with fake network and clock devices plus the
+   existing real QEMU/`nc` smoke path.

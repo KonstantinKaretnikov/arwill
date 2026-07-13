@@ -114,7 +114,7 @@ void arwill_limine_entry(void) {
     const struct arwill_interrupts *interrupts = arwill_x86_64_interrupts_init();
     const struct arwill_network_device *network =
         arwill_qemu_e1000_init(&arwill_limine_pci, &arwill_limine_memory, hhdm_offset);
-    const int ipv4_ready = arwill_ipv4_init(&arwill_limine_ipv4, network);
+    const int ipv4_ready = arwill_ipv4_init(&arwill_limine_ipv4, network, clock);
     (void)ipv4_ready;
 
     (void)arwill_device_register(

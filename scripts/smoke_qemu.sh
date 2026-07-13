@@ -92,7 +92,7 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.15.0" 2
+    wait_for_primary_log_count "Arwill 0.15.1" 2
     sleep 0.1
     printf 'uptime\r'
     wait_for_primary_log_count "uptime: " 1
@@ -287,7 +287,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.15.0"
+    wait_for_primary_log "version: 0.15.1"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -375,7 +375,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.15.0"
+check_line "Arwill 0.15.1"
 check_line "uptime     show monotonic time since boot"
 check_line "uptime: "
 check_line "pciinfo    list discovered PCI devices"
@@ -402,6 +402,8 @@ check_line "tcplisten: frames 0, state listen"
 check_line "tcp: port 2323, state listen"
 check_line "remote console: plaintext, connections 0"
 check_line "remote bytes: received 0, sent 0, dropped 0, send failures 0"
+check_line "tcp integrity: checksum drops 0, duplicate acks 0"
+check_line "tcp reliability: retransmissions 0, timeouts 0, pending no"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -421,7 +423,7 @@ check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.15.0"
+check_line "Arwill 0.15.1"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -537,7 +539,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.15.0"
+check_line "version: 0.15.1"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
@@ -550,7 +552,7 @@ check_line "status: powering off"
 for expected in \
     "Arwill remote console" \
     "warning: plaintext localhost access" \
-    "Arwill 0.15.0" \
+    "Arwill 0.15.1" \
     "^C" \
     "remote console: disconnected" \
     "uptime: "
@@ -575,7 +577,7 @@ if ! tr -d '\r' < "$remote_console_log" | grep -x -q '/'; then
     exit 1
 fi
 
-remote_version_count=$(grep -F -c "Arwill 0.15.0" "$remote_console_log")
+remote_version_count=$(grep -F -c "Arwill 0.15.1" "$remote_console_log")
 if [ "$remote_version_count" -lt 2 ]; then
     echo "remote console Up history did not repeat the command" >&2
     cat "$remote_console_log" >&2

@@ -64,10 +64,12 @@ Rules for future work:
   environment handling, or a per-process address-space model.
 - Treat the TCP remote console as a plaintext, unauthenticated QEMU development
   interface bound to host localhost. It reuses the canonical shell dispatcher,
-  supports one connection at a time, and is not Telnet, SSH, a socket API, or
-  safe for exposure to an untrusted network. SSH-specific crypto and host-key
-  storage are intentionally absent per ADR-0041. Use the host raw-terminal
-  wrapper for interactive `nc`; plain canonical-mode `nc` cannot deliver
+  supports one connection at a time, validates inbound checksums, and retains
+  at most one output segment for bounded retransmission. It is not Telnet, SSH,
+  a socket API, a full general-purpose TCP implementation, or safe for exposure
+  to an untrusted network. SSH-specific crypto and host-key storage are
+  intentionally absent per ADR-0042. Use the documented raw-terminal `stty`
+  invocation for interactive `nc`; plain canonical-mode `nc` cannot deliver
   arrows, Tab, or Ctrl+C key-by-key.
 - When a durable workflow agreement is made with the project owner, update this
   file or another appropriate document in the same change so future sessions do

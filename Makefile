@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.15.0
+PROJECT_VERSION := 0.15.1
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -10,6 +10,11 @@ TEST_DISK := $(BUILD_DIR)/arwill-test-disk.img
 SERIAL_LOG := $(BUILD_DIR)/serial-smoke.log
 HELLO_APP := $(BUILD_DIR)/apps/hello.awp
 CALC_APP := $(BUILD_DIR)/apps/calc.awp
+IPV4_HOST_TEST := $(BUILD_DIR)/tests/ipv4_test
+IPV4_HOST_TEST_SOURCES := tests/ipv4_test.c kernel/clock.c kernel/console.c kernel/ipv4.c kernel/network.c kernel/tcp.c
+IPV4_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/console.h \
+	include/arwill/kernel/cpu.h include/arwill/kernel/ipv4.h \
+	include/arwill/kernel/network.h include/arwill/kernel/tcp.h
 
 BREW_LLVM_PREFIX := $(shell brew --prefix llvm 2>/dev/null)
 BREW_LLD_PREFIX := $(shell brew --prefix lld 2>/dev/null)
@@ -76,7 +81,7 @@ DEPENDENCIES := $(OBJECTS:.o=.d)
 
 -include $(DEPENDENCIES)
 
-.PHONY: setup build run check clean check-tools check-artifacts smoke FORCE
+.PHONY: setup build run check check-host clean check-tools check-artifacts smoke FORCE
 
 setup:
 	@scripts/setup_limine.sh
@@ -90,7 +95,10 @@ run: build $(TEST_DISK)
 	if [ "$$status" -eq "$(QEMU_POWEROFF_EXIT_STATUS)" ]; then exit 0; fi; \
 	exit "$$status"
 
-check: build check-artifacts smoke
+check: build check-host check-artifacts smoke
+
+check-host: $(IPV4_HOST_TEST)
+	@$(IPV4_HOST_TEST)
 
 clean:
 	rm -rf $(BUILD_DIR)
@@ -103,6 +111,11 @@ check-artifacts: $(ISO)
 
 smoke: $(ISO) $(TEST_DISK)
 	@scripts/smoke_qemu.sh "$(QEMU)" "$(QEMU_MACHINE)" "$(ISO)" "$(TEST_DISK)" "$(SERIAL_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)"
+
+$(IPV4_HOST_TEST): $(IPV4_HOST_TEST_SOURCES) $(IPV4_HOST_TEST_HEADERS) Makefile
+	@mkdir -p $(dir $@)
+	$(CLANG) -std=c11 -Wall -Wextra -Werror -Wpedantic -Wconversion \
+		-Wsign-conversion -Iinclude $(IPV4_HOST_TEST_SOURCES) -o $@
 
 $(KERNEL): $(OBJECTS) arch/x86_64/linker.ld
 	@mkdir -p $(dir $@)

@@ -510,6 +510,17 @@ static void print_remote_console_info(
     arwill_console_write(console, ", send failures ");
     write_uint64_decimal(console, ipv4->remote_console_send_failures);
     arwill_console_write_line(console, "");
+    arwill_console_write(console, "tcp integrity: checksum drops ");
+    write_uint64_decimal(console, ipv4->tcp_checksum_drops);
+    arwill_console_write(console, ", duplicate acks ");
+    write_uint64_decimal(console, ipv4->tcp_duplicate_acks);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "tcp reliability: retransmissions ");
+    write_uint64_decimal(console, ipv4->tcp_retransmissions);
+    arwill_console_write(console, ", timeouts ");
+    write_uint64_decimal(console, ipv4->tcp_timeouts);
+    arwill_console_write(console, ", pending ");
+    arwill_console_write_line(console, ipv4->tcp_pending.active ? "yes" : "no");
 }
 
 static uint64_t saturating_add_uint64(uint64_t left, uint64_t right) {
