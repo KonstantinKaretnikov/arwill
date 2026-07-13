@@ -9,21 +9,20 @@ fi
 host=${1:-127.0.0.1}
 port=${2:-23232}
 
-if [ ! -t 0 ]; then
+terminal_device=/dev/tty
+if ! terminal_state=$(stty -g 2>/dev/null < "$terminal_device"); then
     exec nc "$host" "$port"
 fi
 
-terminal_state=$(stty -g)
-
 restore_terminal() {
-    stty "$terminal_state"
+    stty "$terminal_state" < "$terminal_device"
 }
 
 trap restore_terminal EXIT HUP INT TERM
-stty raw -echo
+stty raw -echo < "$terminal_device"
 
 status=0
-nc "$host" "$port" || status=$?
+nc "$host" "$port" < "$terminal_device" || status=$?
 
 restore_terminal
 trap - EXIT HUP INT TERM

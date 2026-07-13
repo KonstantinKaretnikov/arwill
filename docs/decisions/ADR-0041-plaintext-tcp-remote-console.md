@@ -30,9 +30,11 @@ close and returns the listener to `listen`; serial `exit` continues to power
 off the machine.
 
 Provide a host-side `remote_console.sh` wrapper that runs `nc` with the local
-terminal in raw, no-echo mode and restores its exact previous settings on
-exit. This is required for arrows, Tab, and Ctrl+C to cross a terminal device
-immediately instead of being consumed or buffered by its canonical mode.
+controlling `/dev/tty` in raw, no-echo mode and restores its exact previous
+settings on exit. Address the controlling TTY directly so build-tool stdin
+handling cannot silently bypass raw mode. This is required for arrows, Tab,
+and Ctrl+C to cross a terminal device immediately instead of being consumed or
+buffered by its canonical mode.
 
 The shell loop polls the service directly. The remote console is not modeled
 as a process because Arwill still has no saved execution contexts or general

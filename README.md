@@ -175,8 +175,9 @@ Interactive `make run` forwards host `127.0.0.1:23232` to guest TCP port
 make remote-console
 ```
 
-This wrapper runs `nc 127.0.0.1 23232` with the host terminal temporarily in
-raw mode and always restores the previous terminal settings after disconnect.
+This wrapper connects `nc 127.0.0.1 23232` directly to the controlling
+`/dev/tty`, temporarily switches that terminal to raw mode, and always restores
+its previous settings after disconnect.
 Raw mode is required for Up/Down, Tab, and Ctrl+C to reach Arwill immediately;
 plain `nc` leaves the host terminal in canonical mode.
 
