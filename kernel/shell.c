@@ -144,6 +144,7 @@ struct shell_session {
     int remote;
     int active;
     int ignore_line_feed;
+    uint32_t foreground_pid;
 };
 
 struct shell_builtin_process {
@@ -1022,7 +1023,7 @@ static void print_file(
     }
 }
 
-static void exec_program_image(
+static uint32_t exec_program_image(
     const struct arwill_console *console,
     const struct arwill_filesystem *filesystem,
     const struct arwill_user_runtime *user_runtime,
@@ -1034,17 +1035,17 @@ static void exec_program_image(
 
     if (!copy_first_argument(path_argument, sizeof(path_argument), path)) {
         arwill_console_write_line(console, "exec: path too long");
-        return;
+        return 0;
     }
 
     if (path_argument[0] == '\0') {
         arwill_console_write_line(console, "exec: missing path");
-        return;
+        return 0;
     }
 
     if (!resolve_path(current_directory, path_argument, resolved_path, sizeof(resolved_path))) {
         arwill_console_write_line(console, "exec: path too long");
-        return;
+        return 0;
     }
 
     struct arwill_fs_file file;
@@ -1052,37 +1053,32 @@ static void exec_program_image(
     if (!arwill_filesystem_read_file(filesystem, resolved_path, &file)) {
         arwill_console_write(console, "exec: no such file: ");
         arwill_console_write_line(console, resolved_path);
-        return;
+        return 0;
     }
 
     if (file.type != arwill_fs_file_binary || file.contents == 0) {
         arwill_console_write(console, "exec: not a program image: ");
         arwill_console_write_line(console, resolved_path);
-        return;
+        return 0;
     }
 
-    struct arwill_user_program_result result;
-
-    if (!arwill_user_run_image(
+    uint32_t pid = 0;
+    if (!arwill_user_spawn_image(
             user_runtime,
             (const uint8_t *)file.contents,
             file.size_bytes,
+            resolved_path,
             console,
-            &result
+            &pid
         )) {
         arwill_console_write(console, "exec: launch failed: ");
         arwill_console_write_line(console, resolved_path);
-        return;
+        return 0;
     }
-
-    if (!result.exited) {
-        arwill_console_write_line(console, "exec: program did not exit");
-        return;
-    }
-
-    arwill_console_write(console, "exec: exited ");
-    write_uint64_decimal(console, (uint64_t)result.exit_code);
+    arwill_console_write(console, "exec: spawned pid ");
+    write_uint64_decimal(console, pid);
     arwill_console_write_line(console, "");
+    return pid;
 }
 
 static const char *second_argument_after_first(const char *argument) {
@@ -1701,6 +1697,12 @@ static void print_user_info(
     arwill_console_write(console, "bad syscalls: ");
     write_uint64_decimal(console, stats.bad_syscalls);
     arwill_console_write_line(console, "");
+    arwill_console_write(console, "user preemptions: ");
+    write_uint64_decimal(console, stats.preemptions);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "user faults: ");
+    write_uint64_decimal(console, stats.faults);
+    arwill_console_write_line(console, "");
 }
 
 static void print_owner_info(const struct arwill_console *console) {
@@ -1850,7 +1852,8 @@ static void print_available_processes(const struct arwill_console *console) {
 
 static void print_process_table(
     const struct arwill_console *console,
-    const struct arwill_process_manager *processes
+    const struct arwill_process_manager *processes,
+    const struct arwill_user_runtime *user_runtime
 ) {
     const struct arwill_process *table = arwill_process_table(processes);
     int saw_process = 0;
@@ -1883,6 +1886,26 @@ static void print_process_table(
 
     if (!saw_process) {
         arwill_console_write_line(console, "no processes");
+    }
+
+    struct arwill_user_task_info tasks[arwill_user_task_capacity];
+    const size_t task_count = arwill_user_tasks(
+        user_runtime, tasks, arwill_user_task_capacity
+    );
+    if (task_count != 0U) {
+        arwill_console_write_line(console, "awp pid state runs exit name");
+    }
+    for (size_t index = 0; index < task_count; index++) {
+        arwill_console_write(console, "awp ");
+        write_uint64_decimal(console, tasks[index].pid);
+        arwill_console_write(console, " ");
+        arwill_console_write(console, arwill_user_task_state_name(tasks[index].state));
+        arwill_console_write(console, " ");
+        write_uint64_decimal(console, tasks[index].run_count);
+        arwill_console_write(console, " ");
+        write_uint64_decimal(console, tasks[index].exit_code);
+        arwill_console_write(console, " ");
+        arwill_console_write_line(console, tasks[index].name);
     }
 }
 
@@ -2389,6 +2412,7 @@ static void run_command(
     char *current_directory,
     const char *line,
     int remote_session,
+    uint32_t *foreground_pid,
     int *close_requested
 ) {
     if (string_equals(line, "")) {
@@ -2648,7 +2672,7 @@ static void run_command(
     }
 
     if (string_equals(line, "ps")) {
-        print_process_table(console, processes);
+        print_process_table(console, processes, user_runtime);
         return;
     }
 
@@ -2658,7 +2682,7 @@ static void run_command(
     }
 
     if (string_equals(line, "exec") || starts_with(line, "exec ")) {
-        exec_program_image(
+        *foreground_pid = exec_program_image(
             console,
             filesystem,
             user_runtime,
@@ -2762,6 +2786,7 @@ static void initialize_shell_session(
     session->remote = remote;
     session->active = 1;
     session->ignore_line_feed = 0;
+    session->foreground_pid = 0;
     session->process_context.console = console;
     session->process_context.user_runtime = user_runtime;
     reset_shell_input(session);
@@ -2773,6 +2798,20 @@ static int handle_shell_byte(
     uint8_t byte
 ) {
     const struct arwill_console *console = session->console;
+
+    if (session->foreground_pid != 0U) {
+        if (byte == ascii_interrupt) {
+            (void)arwill_user_cancel(
+                environment->user_runtime, session->foreground_pid, 130U
+            );
+            arwill_console_write_line(console, "^C");
+        } else {
+            (void)arwill_user_deliver_input(
+                environment->user_runtime, session->foreground_pid, byte
+            );
+        }
+        return 1;
+    }
 
     if (byte == ascii_line_feed && session->ignore_line_feed) {
         session->ignore_line_feed = 0;
@@ -2851,13 +2890,16 @@ static int handle_shell_byte(
             session->current_directory,
             session->line,
             session->remote,
+            &session->foreground_pid,
             &close_requested
         );
         reset_shell_input(session);
         if (close_requested) {
             return 0;
         }
-        write_prompt(console, session->current_directory);
+        if (session->foreground_pid == 0U) {
+            write_prompt(console, session->current_directory);
+        }
         return 1;
     }
 
@@ -2904,6 +2946,12 @@ static void service_remote_shell(
 
     (void)arwill_ipv4_poll_tcp(ipv4);
     if (!arwill_ipv4_remote_console_connected(ipv4)) {
+        if (session->active && session->foreground_pid != 0U) {
+            (void)arwill_user_cancel(
+                environment->user_runtime, session->foreground_pid, 130U
+            );
+            session->foreground_pid = 0;
+        }
         session->active = 0;
         return;
     }
@@ -2930,8 +2978,41 @@ static void service_remote_shell(
     }
 
     if (arwill_ipv4_remote_console_peer_closed(ipv4)) {
+        if (session->foreground_pid != 0U) {
+            (void)arwill_user_cancel(
+                environment->user_runtime, session->foreground_pid, 130U
+            );
+            session->foreground_pid = 0;
+        }
         arwill_ipv4_remote_console_close(ipv4);
         session->active = 0;
+    }
+}
+
+static void finish_foreground_program(
+    struct shell_session *session,
+    const struct arwill_user_runtime *user_runtime
+) {
+    if (session == 0 || session->foreground_pid == 0U) {
+        return;
+    }
+    struct arwill_user_task_info task;
+    if (!arwill_user_task_info(user_runtime, session->foreground_pid, &task) ||
+        (task.state != arwill_user_task_finished &&
+         task.state != arwill_user_task_faulted)) {
+        return;
+    }
+    if (task.state == arwill_user_task_faulted) {
+        arwill_console_write(session->console, "exec: fault ");
+        write_uint64_decimal(session->console, task.fault_vector);
+        arwill_console_write_line(session->console, "");
+    }
+    arwill_console_write(session->console, "exec: exited ");
+    write_uint64_decimal(session->console, task.exit_code);
+    arwill_console_write_line(session->console, "");
+    session->foreground_pid = 0;
+    if (session->active) {
+        write_prompt(session->console, session->current_directory);
     }
 }
 
@@ -2983,5 +3064,8 @@ void arwill_shell_run(
             (void)handle_shell_byte(&serial_session, &environment, byte);
         }
         service_remote_shell(&remote_session, &environment);
+        arwill_user_poll(user_runtime);
+        finish_foreground_program(&serial_session, user_runtime);
+        finish_foreground_program(&remote_session, user_runtime);
     }
 }

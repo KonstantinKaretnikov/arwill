@@ -34,13 +34,12 @@ Rules for future work:
 - Distinguish process kinds precisely. `hello` and `counter` are cooperative
   kernel-managed built-ins. `userhello` and `userbad` are narrow ring 3
   user-mode demos using the first `int 0x80` syscall ABI (`write`, `exit`,
-  `read`, and `clock`). Arwill still does not
-  have a general ELF loader, per-process address spaces, saved CPU contexts,
-  independent kernel stacks, or preemptive user scheduling. Current cooperative
-  yield saves explicit process progress only, not a hardware execution context.
-- For the accepted `0.16.0` work, evolve only AWP ring 3 execution into the
-  fixed four-slot model in ADR-0043. Keep cooperative kernel built-ins distinct;
-  do not describe them as preemptive user processes.
+  `read`, and `clock`). Stored AWP programs use the fixed four-slot model in
+  ADR-0043: saved ring 3 contexts, preallocated per-slot address spaces,
+  PIT preemption, round-robin dispatch, session-bound input, and user-fault
+  containment. Cooperative kernel built-ins remain distinct and do not save a
+  hardware execution context. Arwill still has no ELF loader, independent
+  kernel stacks, kernel preemption, or SMP.
 - Treat Arwill as a single-owner OS. Do not introduce login accounts, groups,
   roles, or multi-user permission checks unless a later ADR explicitly changes
   this direction. The owner has full system control; ring 3 is an engineering

@@ -23,7 +23,7 @@ struct arwill_scheduler_stats {
 
 void arwill_scheduler_init(void);
 
-void arwill_scheduler_tick(void);
+void arwill_scheduler_tick(int user_mode);
 
 void arwill_scheduler_stats(struct arwill_scheduler_stats *stats);
 

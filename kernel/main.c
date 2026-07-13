@@ -67,7 +67,7 @@ void arwill_kernel_start(
     } else {
         arwill_console_write_line(console, interrupts->name);
     }
-    arwill_console_write_line(console, "scheduler: timer tick foundation");
+    arwill_console_write_line(console, "scheduler: AWP round-robin");
     arwill_console_write(console, "user: ");
     if (user_runtime == 0 || user_runtime->name == 0) {
         arwill_console_write_line(console, "unavailable");

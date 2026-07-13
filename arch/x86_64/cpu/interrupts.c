@@ -14,6 +14,9 @@ enum {
     /* Trap gate preserves IF across the user syscall exit-path retq. */
     idt_gate_user_interrupt = 0xef,
     vector_breakpoint = 3,
+    vector_invalid_opcode = 6,
+    vector_general_protection = 13,
+    vector_page_fault = 14,
     vector_irq0_timer = 32,
     vector_syscall = 0x80,
     pic1_command = 0x20,
@@ -165,14 +168,120 @@ static void breakpoint_handler(struct interrupt_frame *frame) {
     interrupt_context.last_exception_vector = vector_breakpoint;
 }
 
-__attribute__((interrupt))
-static void timer_handler(struct interrupt_frame *frame) {
-    (void)frame;
-
+__attribute__((used))
+static int arwill_x86_64_timer_dispatch(
+    const struct arwill_x86_64_user_registers *registers,
+    const struct arwill_x86_64_user_frame *frame
+) {
     interrupt_context.timer_ticks++;
-    arwill_scheduler_tick();
+    arwill_scheduler_tick(
+        frame != 0 && (frame->code_segment & 3U) == 3U
+    );
     arwill_x86_64_out8(pic1_command, pic_eoi);
+    return arwill_x86_64_user_handle_timer(registers, frame);
 }
+
+__attribute__((used))
+static int arwill_x86_64_fault_dispatch(
+    const struct arwill_x86_64_user_registers *registers,
+    const struct arwill_x86_64_user_frame *frame,
+    uint8_t vector,
+    uint64_t error_code
+) {
+    interrupt_context.exception_count++;
+    interrupt_context.last_exception_vector = vector;
+    if (arwill_x86_64_user_handle_fault(registers, frame, vector, error_code)) {
+        return 1;
+    }
+    disable_cpu_interrupts();
+    for (;;) {
+        __asm__ volatile("hlt");
+    }
+}
+
+#define ARWILL_PUSH_USER_REGISTERS \
+    "    pushq %r15\n" \
+    "    pushq %r14\n" \
+    "    pushq %r13\n" \
+    "    pushq %r12\n" \
+    "    pushq %r11\n" \
+    "    pushq %r10\n" \
+    "    pushq %r9\n" \
+    "    pushq %r8\n" \
+    "    pushq %rbp\n" \
+    "    pushq %rdi\n" \
+    "    pushq %rsi\n" \
+    "    pushq %rdx\n" \
+    "    pushq %rcx\n" \
+    "    pushq %rbx\n" \
+    "    pushq %rax\n"
+
+#define ARWILL_POP_USER_REGISTERS \
+    "    popq %rax\n" \
+    "    popq %rbx\n" \
+    "    popq %rcx\n" \
+    "    popq %rdx\n" \
+    "    popq %rsi\n" \
+    "    popq %rdi\n" \
+    "    popq %rbp\n" \
+    "    popq %r8\n" \
+    "    popq %r9\n" \
+    "    popq %r10\n" \
+    "    popq %r11\n" \
+    "    popq %r12\n" \
+    "    popq %r13\n" \
+    "    popq %r14\n" \
+    "    popq %r15\n"
+
+__asm__(
+    ".global arwill_x86_64_user_timer_entry\n"
+    "arwill_x86_64_user_timer_entry:\n"
+    ARWILL_PUSH_USER_REGISTERS
+    "    movq %rsp, %rdi\n"
+    "    leaq 120(%rsp), %rsi\n"
+    "    call arwill_x86_64_timer_dispatch\n"
+    "    testl %eax, %eax\n"
+    "    jne arwill_x86_64_user_return_to_kernel\n"
+    ARWILL_POP_USER_REGISTERS
+    "    iretq\n"
+);
+
+__asm__(
+    ".global arwill_x86_64_user_invalid_opcode_entry\n"
+    "arwill_x86_64_user_invalid_opcode_entry:\n"
+    "    pushq $0\n"
+    ARWILL_PUSH_USER_REGISTERS
+    "    movq %rsp, %rdi\n"
+    "    leaq 128(%rsp), %rsi\n"
+    "    movl $6, %edx\n"
+    "    xorl %ecx, %ecx\n"
+    "    call arwill_x86_64_fault_dispatch\n"
+    "    jmp arwill_x86_64_user_return_to_kernel\n"
+);
+
+__asm__(
+    ".global arwill_x86_64_user_general_protection_entry\n"
+    "arwill_x86_64_user_general_protection_entry:\n"
+    ARWILL_PUSH_USER_REGISTERS
+    "    movq %rsp, %rdi\n"
+    "    leaq 128(%rsp), %rsi\n"
+    "    movl $13, %edx\n"
+    "    movq 120(%rsp), %rcx\n"
+    "    call arwill_x86_64_fault_dispatch\n"
+    "    jmp arwill_x86_64_user_return_to_kernel\n"
+);
+
+__asm__(
+    ".global arwill_x86_64_user_page_fault_entry\n"
+    "arwill_x86_64_user_page_fault_entry:\n"
+    ARWILL_PUSH_USER_REGISTERS
+    "    movq %rsp, %rdi\n"
+    "    leaq 128(%rsp), %rsi\n"
+    "    movl $14, %edx\n"
+    "    movq 120(%rsp), %rcx\n"
+    "    call arwill_x86_64_fault_dispatch\n"
+    "    jmp arwill_x86_64_user_return_to_kernel\n"
+);
 
 static void x86_64_interrupts_enable(void *context) {
     struct x86_64_interrupt_context *interrupts =
@@ -244,7 +353,13 @@ const struct arwill_interrupts *arwill_x86_64_interrupts_init(void) {
     interrupt_context.last_exception_vector = 0;
 
     idt_set_gate(vector_breakpoint, idt_gate_interrupt, (void (*)(void))breakpoint_handler);
-    idt_set_gate(vector_irq0_timer, idt_gate_interrupt, (void (*)(void))timer_handler);
+    idt_set_gate(vector_invalid_opcode, idt_gate_interrupt,
+        arwill_x86_64_user_invalid_opcode_entry);
+    idt_set_gate(vector_general_protection, idt_gate_interrupt,
+        arwill_x86_64_user_general_protection_entry);
+    idt_set_gate(vector_page_fault, idt_gate_interrupt,
+        arwill_x86_64_user_page_fault_entry);
+    idt_set_gate(vector_irq0_timer, idt_gate_interrupt, arwill_x86_64_user_timer_entry);
     idt_set_gate(vector_syscall, idt_gate_user_interrupt, arwill_x86_64_user_syscall_entry);
     arwill_x86_64_user_mode_mark_syscall_gate_loaded();
 
