@@ -172,14 +172,20 @@ Interactive `make run` forwards host `127.0.0.1:23232` to guest TCP port
 `2323`. Connect from another terminal with:
 
 ```sh
-nc 127.0.0.1 23232
+make remote-console
 ```
+
+This wrapper runs `nc 127.0.0.1 23232` with the host terminal temporarily in
+raw mode and always restores the previous terminal settings after disconnect.
+Raw mode is required for Up/Down, Tab, and Ctrl+C to reach Arwill immediately;
+plain `nc` leaves the host terminal in canonical mode.
 
 The remote console supports interactive command echo, Enter, Backspace,
 Ctrl+C line cancellation, command history, completion, and `exit` to close only
 the remote session. A second `nc` connection can then reuse the listener. To
 choose another host port, run for example
-`make run QEMU_REMOTE_CONSOLE_HOST_PORT=23233`.
+`make run QEMU_REMOTE_CONSOLE_HOST_PORT=23233`, then connect with
+`scripts/remote_console.sh 127.0.0.1 23233`.
 
 This interface is deliberately plaintext and unauthenticated. The default
 forward is bound only to host localhost; it must not be exposed to an

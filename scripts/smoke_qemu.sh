@@ -130,7 +130,9 @@ run_qemu_to_log() {
     sleep 0.1
     (
         printf 'versx\010ion\n'
-        printf 'cancel-me\003pwd\n'
+        printf '\033[A\n'
+        printf '\033[A\033[Bpwd\n'
+        printf 'cancel-me\003'
         printf 'exit\n'
     ) | nc -w 5 127.0.0.1 "$remote_console_port" > "$remote_console_log"
     wait_for_log_file "$remote_console_log" "remote console: disconnected"
@@ -550,7 +552,6 @@ for expected in \
     "warning: plaintext localhost access" \
     "Arwill 0.15.0" \
     "^C" \
-    "Arwill:/> pwd" \
     "remote console: disconnected" \
     "uptime: "
 do
@@ -564,6 +565,19 @@ done
 remote_connection_count=$(grep -F -c "Arwill remote console" "$remote_console_log")
 if [ "$remote_connection_count" -lt 2 ]; then
     echo "remote console listener was not reused" >&2
+    cat "$remote_console_log" >&2
+    exit 1
+fi
+
+if ! tr -d '\r' < "$remote_console_log" | grep -x -q '/'; then
+    echo "remote console Down history did not restore an empty line before pwd" >&2
+    cat "$remote_console_log" >&2
+    exit 1
+fi
+
+remote_version_count=$(grep -F -c "Arwill 0.15.0" "$remote_console_log")
+if [ "$remote_version_count" -lt 2 ]; then
+    echo "remote console Up history did not repeat the command" >&2
     cat "$remote_console_log" >&2
     exit 1
 fi

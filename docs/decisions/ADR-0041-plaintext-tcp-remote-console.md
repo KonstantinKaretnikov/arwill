@@ -29,6 +29,11 @@ and CR/LF input are handled by the shared session code. Remote `exit` sends a
 close and returns the listener to `listen`; serial `exit` continues to power
 off the machine.
 
+Provide a host-side `remote_console.sh` wrapper that runs `nc` with the local
+terminal in raw, no-echo mode and restores its exact previous settings on
+exit. This is required for arrows, Tab, and Ctrl+C to cross a terminal device
+immediately instead of being consumed or buffered by its canonical mode.
+
 The shell loop polls the service directly. The remote console is not modeled
 as a process because Arwill still has no saved execution contexts or general
 socket API.
@@ -56,8 +61,8 @@ security. A plain line protocol compatible with `nc` meets the current need.
 ## Verification
 
 The QEMU smoke test connects twice through a real localhost port forward. It
-checks the banner, shared command execution, Backspace correction, Ctrl+C line
-cancellation, remote `exit`, and listener reuse while preserving the full
+checks the banner, shared command execution, Backspace correction, Up/Down
+history, Ctrl+C line cancellation, remote `exit`, and listener reuse while preserving the full
 serial boot, filesystem persistence, AWP, and poweroff checks.
 
 ## Revisit

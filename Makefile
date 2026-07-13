@@ -76,7 +76,7 @@ DEPENDENCIES := $(OBJECTS:.o=.d)
 
 -include $(DEPENDENCIES)
 
-.PHONY: setup build run check clean check-tools check-artifacts smoke FORCE
+.PHONY: setup build run remote-console check clean check-tools check-artifacts smoke FORCE
 
 setup:
 	@scripts/setup_limine.sh
@@ -89,6 +89,9 @@ run: build $(TEST_DISK)
 	status=$$?; \
 	if [ "$$status" -eq "$(QEMU_POWEROFF_EXIT_STATUS)" ]; then exit 0; fi; \
 	exit "$$status"
+
+remote-console:
+	@scripts/remote_console.sh 127.0.0.1 "$(QEMU_REMOTE_CONSOLE_HOST_PORT)"
 
 check: build check-artifacts smoke
 
