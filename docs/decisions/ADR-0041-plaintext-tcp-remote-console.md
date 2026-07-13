@@ -29,12 +29,11 @@ and CR/LF input are handled by the shared session code. Remote `exit` sends a
 close and returns the listener to `listen`; serial `exit` continues to power
 off the machine.
 
-Provide a host-side `remote_console.sh` wrapper that runs `nc` with the local
-controlling `/dev/tty` in raw, no-echo mode and restores its exact previous
-settings on exit. Address the controlling TTY directly so build-tool stdin
-handling cannot silently bypass raw mode. This is required for arrows, Tab,
-and Ctrl+C to cross a terminal device immediately instead of being consumed or
-buffered by its canonical mode.
+Document a direct host-side `stty raw -echo; nc ...; stty <saved-state>`
+invocation. Raw, no-echo mode is required for arrows, Tab, and Ctrl+C to cross
+the host terminal immediately instead of being consumed or buffered by its
+canonical mode. Do not retain a separate client wrapper: the remote console
+protocol remains directly compatible with `nc`.
 
 The shell loop polls the service directly. The remote console is not modeled
 as a process because Arwill still has no saved execution contexts or general
