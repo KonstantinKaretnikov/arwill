@@ -47,7 +47,7 @@ The boot screen is intentionally short:
 
 Arwill 0.16.0 ready
 config: /owner/arwill.conf
-help: type 'help'
+help: type 'help' or press Tab
 Arwill:/>
 ```
 

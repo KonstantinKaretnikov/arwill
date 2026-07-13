@@ -55,7 +55,7 @@ void arwill_kernel_start(
     arwill_console_write(console, ARWILL_PROJECT_VERSION);
     arwill_console_write_line(console, " ready");
     arwill_console_write_line(console, "config: /owner/arwill.conf");
-    arwill_console_write_line(console, "help: type 'help'");
+    arwill_console_write_line(console, "help: type 'help' or press Tab");
 
     arwill_shell_run(
         console,
