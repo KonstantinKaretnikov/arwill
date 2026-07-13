@@ -38,6 +38,9 @@ Rules for future work:
   have a general ELF loader, per-process address spaces, saved CPU contexts,
   independent kernel stacks, or preemptive user scheduling. Current cooperative
   yield saves explicit process progress only, not a hardware execution context.
+- For the accepted `0.16.0` work, evolve only AWP ring 3 execution into the
+  fixed four-slot model in ADR-0043. Keep cooperative kernel built-ins distinct;
+  do not describe them as preemptive user processes.
 - Treat Arwill as a single-owner OS. Do not introduce login accounts, groups,
   roles, or multi-user permission checks unless a later ADR explicitly changes
   this direction. The owner has full system control; ring 3 is an engineering
@@ -62,6 +65,10 @@ Rules for future work:
   the `AWP1` magic, `.awp` extension, and `/apps` directory. It
   is not ELF, POSIX process loading, dynamic linking, argument passing,
   environment handling, or a per-process address-space model.
+- Keep the `0.16.0` owner command surface minimal: `config`, `logs`, and
+  `service` are the only new top-level shell commands; `ps` remains the one
+  process inspection command. Do not add service enable/disable, log filters,
+  or config show/get/set/reload aliases.
 - Treat the TCP remote console as a plaintext, unauthenticated QEMU development
   interface bound to host localhost. It reuses the canonical shell dispatcher,
   supports one connection at a time, validates inbound checksums, and retains

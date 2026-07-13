@@ -510,3 +510,33 @@ driver work, not accidental default access for every ring 3 program.
 
    Verified by: a native host test with fake network and clock devices plus the
    existing real QEMU/`nc` smoke path.
+
+21. [ ] User multitasking v1
+
+   Status: active for `0.16.0` per ADR-0043.
+
+   Scope: four fixed AWP slots, saved ring 3 contexts, per-slot address spaces,
+   PIT-only user preemption, round-robin dispatch, session-bound blocking input,
+   Ctrl+C/disconnect cancellation, and user-fault containment. Cooperative
+   kernel built-ins remain a separate process kind.
+
+22. [ ] AWP file I/O and editor
+
+   Status: planned for `0.16.0` per ADR-0044.
+
+   Scope: bounded whole-text-file read/write syscalls and `/apps/edit.awp`.
+
+23. [ ] Configuration and event log v1
+
+   Status: planned for `0.16.0` per ADR-0045.
+
+   Scope: `/owner/arwill.conf`, one `config` command, a 64-entry in-memory event
+   ring, and one `logs` command.
+
+24. [ ] Authenticated remote-console service
+
+   Status: planned for `0.16.0` per ADR-0046.
+
+   Scope: config-selected port, key gate, explicit LAN host-forward override,
+   and `service` status/start/stop/restart. HTTP and HTTPS remain outside the
+   active roadmap.
