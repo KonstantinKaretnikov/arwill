@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.15.1`.
+Status: `0.16.0`.
 
 Arwill already has:
 
@@ -29,8 +29,8 @@ Arwill already has:
 - [x] a serial shell with canonical commands only: `help`, `version`, `uptime`,
   `pwd`, `cd`, `clear`, `ls`, `cat`, `mkdir`, `write`, `writehex`, `rm`,
   `stat`, `meminfo`, `blkinfo`, `heaptest`, `irqinfo`, `irqprobe`,
-  `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`, `exec`, `step`, `exit`,
-  and `halt`;
+  `schedinfo`, `userinfo`, `ownerinfo`, `config`, `logs`, `service`, `ps`,
+  `run`, `exec`, `step`, `exit`, and `halt`;
 - [x] shell current directory state, path resolution, Tab completion, command
   history, and Russian-layout command-entry normalization;
 - [x] a static read-only boot catalog used by `ls`, `cd`, `cat`, `stat`, and
@@ -62,14 +62,21 @@ Arwill already has:
   to the bounded network path;
 - [x] a plaintext single-connection TCP remote console for `nc`, forwarded
   only through host localhost by default;
+- [x] a fixed four-slot preemptive AWP runtime with saved ring 3 contexts,
+  per-slot address spaces, session input, and user-fault containment;
+- [x] bounded AWP whole-text-file syscalls and `/apps/edit.awp`;
+- [x] persistent owner configuration, a 64-entry event ring, and the minimal
+  `config`, `logs`, and `service` command surface;
+- [x] a three-attempt remote access-key gate plus explicit trusted-LAN QEMU
+  bind override;
 - [x] single-owner OS model: one owner, no accounts or multi-user permission
   system, with the kernel/user boundary kept as an engineering guardrail.
 
 Arwill has an ARFS v2 mutable core exposed through bounded shell creation,
-whole-file write, and removal commands. Arwill does not have append, rename, saved CPU
-contexts, preemptive context switching,
-per-process address spaces, ELF program loading, dynamic linking, multi-user
-accounts, or a general-purpose writable storage subsystem.
+whole-file write, and removal commands. Arwill does not have append, rename,
+ELF program loading, dynamic linking, independent kernel stacks, kernel
+preemption, SMP, multi-user accounts, or a general-purpose writable storage
+subsystem.
 
 ## Product Direction
 
@@ -511,9 +518,9 @@ driver work, not accidental default access for every ring 3 program.
    Verified by: a native host test with fake network and clock devices plus the
    existing real QEMU/`nc` smoke path.
 
-21. [ ] User multitasking v1
+21. [x] User multitasking v1
 
-   Status: active for `0.16.0` per ADR-0043.
+   Status: implemented for `0.16.0` per ADR-0043.
 
    Scope: four fixed AWP slots, saved ring 3 contexts, per-slot address spaces,
    PIT-only user preemption, round-robin dispatch, session-bound blocking input,
@@ -533,9 +540,9 @@ driver work, not accidental default access for every ring 3 program.
    Scope: `/owner/arwill.conf`, one `config` command, a 64-entry in-memory event
    ring, and one `logs` command.
 
-24. [ ] Authenticated remote-console service
+24. [x] Authenticated remote-console service
 
-   Status: planned for `0.16.0` per ADR-0046.
+   Status: implemented for `0.16.0` per ADR-0046.
 
    Scope: config-selected port, key gate, explicit LAN host-forward override,
    and `service` status/start/stop/restart. HTTP and HTTPS remain outside the

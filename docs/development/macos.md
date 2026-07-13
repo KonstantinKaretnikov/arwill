@@ -1,6 +1,6 @@
 # macOS Development Setup
 
-Arwill 0.0.1 is developed on macOS with Homebrew tools.
+Arwill is developed on macOS with Homebrew tools.
 
 Install the required packages:
 

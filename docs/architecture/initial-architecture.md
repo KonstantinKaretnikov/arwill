@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.14.0 has one executable path:
+Arwill 0.16.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -13,14 +13,16 @@ Limine bootloader
   -> Limine framebuffer text console mirror
   -> QEMU ATA PIO block-device initialization
   -> ARFS filesystem mount from the raw test disk
+  -> owner configuration and event-log initialization
   -> single-owner model publication
+  -> QEMU e1000 initialization and supervisor-only MMIO mapping
   -> x86-64 GDT, TSS, and user runtime initialization
   -> x86-64 IDT, PIC, and PIT timer initialization
   -> architecture-independent kernel startup
   -> cooperative kernel process manager initialization
-  -> scheduler tick foundation initialization
+  -> kernel/user scheduler accounting initialization
   -> CPU interrupt enable
-  -> serial shell
+  -> serial shell and authenticated TCP remote-console service
   -> storage-backed filesystem
   -> persistent owner-note write when write /owner/note is requested
   -> device registry listing when devices is requested
@@ -30,7 +32,7 @@ Limine bootloader
   -> scheduler tick diagnostics when schedinfo is requested
   -> cooperative built-in kernel process launch when run is requested
   -> yielded cooperative process continuation when step is requested
-  -> stored Arwill Program load and ring 3 launch when exec is requested
+  -> stored Arwill Program spawn into one of four AWP slots when exec is requested
   -> user page mapping and built-in ring 3 user program launch when userhello
      or userbad is run
   -> QEMU debug-exit poweroff when exit is requested
@@ -67,16 +69,14 @@ Framebuffer text console:
 Input contract:
 
 - Lives in `include/arwill/kernel/input.h`.
-- Provides blocking byte input.
+- Provides blocking byte input and nonblocking byte polling.
 - It is not yet a general keyboard driver or event system.
 
 Shell:
 
 - Lives in `kernel/shell.c`.
-- Owns command parsing for `help`, `version`, `pwd`, `cd`, `clear`, `ls`,
-  `cat`, `write`, `stat`, `meminfo`, `heaptest`, `devices`, `blkinfo`,
-  `irqinfo`, `irqprobe`, `schedinfo`, `userinfo`, `ownerinfo`, `ps`, `run`,
-  `exec`, `step`, `exit`, and `halt`.
+- Owns the canonical command table, including filesystem, diagnostic, process,
+  network, `config`, `logs`, and `service` operations.
 - Keeps one canonical command name per operation; alias commands are not
   accepted.
 - Holds the current working directory as local shell state.
@@ -137,10 +137,10 @@ Process manager:
   process run count.
 - Built-in `userhello` and `userbad` process entries enter ring 3 through the
   user runtime and return user exit status to this same process table.
-- `ps` displays the process table.
-- The process manager is still not a full scheduler. It does not own separate
-  address spaces, ELF program loading, saved CPU contexts, independent kernel
-  stacks, or preemptive context switching.
+- `ps` displays cooperative kernel entries and the separate AWP task table.
+- The cooperative process manager is not a hardware-context scheduler. AWP
+  saved contexts, address spaces, and PIT preemption belong to the user
+  runtime. There are no independent kernel stacks or kernel preemption.
 
 Interrupt controller contract:
 
@@ -172,20 +172,19 @@ PCI discovery:
   `arch/x86_64/cpu/pci.c`.
 - `pciinfo` scans bus 0 with configuration mechanism #1 and exposes vendor,
   device, class, and raw BAR values.
-- This is discovery only: there is no BAR mapping, IRQ/MSI setup, resource
-  allocator, hotplug, or driver binding yet.
+- The QEMU e1000 driver consumes its known BAR and maps MMIO in a dedicated
+  supervisor-only high-half range. There is still no general PCI resource
+  allocator, IRQ/MSI setup, hotplug, or driver binding model.
 
-Scheduler foundation:
+Scheduler accounting:
 
 - Public contract lives in `include/arwill/kernel/scheduler.h`.
 - Implementation lives in `kernel/scheduler.c`.
 - The PIT timer interrupt calls `arwill_scheduler_tick()`.
-- The first implementation records timer ticks and alternates accounting
-  between two named slots, `shell` and `idle`, so scheduler progress is visible
-  through `schedinfo`.
-- This is deliberately only a foundation. It does not save CPU contexts, switch
-  stacks, preempt kernel code, wake sleeping tasks, or preempt user-space
-  programs.
+- It records kernel and user timer ticks, while the x86-64 user runtime applies
+  a fixed two-tick quantum to AWP execution.
+- It does not preempt kernel code, switch kernel stacks, implement priorities,
+  or provide SMP scheduling.
 
 User runtime:
 
@@ -194,12 +193,13 @@ User runtime:
 - The first x86-64 implementation lives in `arch/x86_64/cpu/user_mode.c`.
 - Limine HHDM is requested so the kernel can initialize newly allocated
   physical pages before mapping them into user virtual memory.
-- The x86-64 implementation installs a GDT with kernel and user descriptors,
-  loads a TSS with an `rsp0` stack for privilege transitions, maps one user code
-  page and one user stack page, and enters ring 3 with `iretq`.
-- The first syscall ABI uses `int 0x80`: syscall `1` writes bytes to the serial
-  console, syscall `2` exits with a status code, syscall `3` reads serial input,
-  and syscall `4` returns monotonic milliseconds since PIT initialization.
+- The x86-64 implementation installs a GDT and TSS, preallocates four AWP
+  slots, and gives each slot its own CR3, two read/execute code pages, two
+  read/write non-executable stack pages, and an unmapped stack guard.
+- The syscall ABI uses `int 0x80`: syscall `1` writes to the originating
+  session, syscall `2` exits, syscall `3` reads session input, syscall `4`
+  returns monotonic milliseconds, and syscalls `5` and `6` perform bounded
+  whole-text-file reads and writes.
 - `run userhello` executes a tiny generated user program that writes
   `user hello: hello from ring 3` through syscall `write` and exits with code
   `7`.
@@ -207,9 +207,12 @@ User runtime:
   the kernel converts it to exit code `127` and records a bad-syscall count.
 - `userinfo` reports HHDM, GDT, TSS, syscall gate, run, syscall, byte, and
   bad-syscall counters.
-- This is not a general program loader. There is no ELF loader, file-backed
-  executable, per-process page table, argument passing, heap, signal model, or
-  preemptive user scheduling yet.
+- AWP execution saves the complete ring 3 context, round-robins ready tasks,
+  blocks only the calling task for input, and contains user invalid-opcode,
+  general-protection, and page faults.
+- This is not a general process model. There is no ELF loader, demand paging,
+  argument passing, userspace heap, signal model, fork, independent kernel
+  stacks, kernel preemption, or SMP.
 - "User" here means CPU user mode, not an Arwill account model.
 
 Program loader:
@@ -218,14 +221,12 @@ Program loader:
   `AWP1` binary header.
 - The shell command `exec [path]` reads a binary file from ARFS and asks the
   user runtime to map and execute its code bytes in ring 3.
-- The current image format contains a small header, entry offset, and code
-  bytes for one user code page.
-- `/apps/hello.awp` is the first test program.
-- Its build recipe lives under `apps/hello/`; the test-disk builder only
-  packages the finished `build/apps/hello.awp` artifact.
+- The current image format contains a small header, entry offset, and at most
+  two code pages.
+- The fixture packages `/apps/hello.awp`, `/apps/calc.awp`, and
+  `/apps/edit.awp`.
 - This is deliberately not ELF: there is no linker, relocation, dynamic
-  loading, arguments, environment, file descriptors, or per-process address
-  spaces yet.
+  loading, arguments, environment, or file descriptors.
 
 Power contract:
 
@@ -255,10 +256,10 @@ Memory contract:
 Filesystem contract:
 
 - Lives in `include/arwill/kernel/filesystem.h`.
-- Provides directory listing, whole-file reads by path, and a narrow whole-file
-  overwrite operation.
-- It does not yet provide open handles, streaming reads, allocation, append,
-  delete, rename, directories creation, or mount behavior.
+- Provides directory listing, whole-file reads and writes by path, directory
+  creation, and removal.
+- It does not provide open handles, streaming, append, seek, rename, or atomic
+  metadata updates.
 
 ARFS filesystem:
 
@@ -268,12 +269,11 @@ ARFS filesystem:
   manifest from the deterministic raw test disk image.
 - Provides the primary filesystem for `ls`, `cd`, Tab completion, `cat`, and
   `stat` in the normal QEMU test path.
-- Provides the first persistent write path for `/owner/note`. The note's data
-  lives in a reserved data sector, and its size lives in a reserved ARFS state
-  sector so the value survives a rebooted QEMU session.
-- It is intentionally simple: fixed-size manifest parsing, one reserved
-  writable text file, no general allocation, no arbitrary file creation, no
-  append, no delete, no open handles, no block cache, and no partition table.
+- Persists bounded catalog mutations and contiguous data allocation across a
+  rebooted QEMU session.
+- It is intentionally simple: a fixed 24-entry table, short paths, 8192-byte
+  file limit, no append, rename, journal, atomic metadata update, open handles,
+  block cache, or partition table.
 
 Static boot catalog:
 
@@ -289,11 +289,11 @@ ARFS mutable core:
 
 - ARFS v2 stores its fixed-size mutable catalog in a two-sector text manifest.
 - It supports directory creation, whole-file text or binary writes, removal,
-  and contiguous allocation for files smaller than 2048 bytes.
+  and contiguous allocation for files of at most 8192 bytes.
 - Free ranges are inferred from catalog entries; there is no bitmap, journal,
   cache, append, rename, or crash-consistency model.
-- The shell still exposes only `write /owner/note` until dedicated mutation
-  commands are added.
+- The shell exposes these operations through `mkdir`, `write`, `writehex`, and
+  `rm`; AWP syscalls expose only bounded whole-text-file read/write.
 
 QEMU ATA PIO block device:
 
@@ -309,6 +309,26 @@ QEMU serial I/O:
 - Owns COM1 initialization, byte output, and byte input for the QEMU x86-64
   platform.
 - Keeps x86-64 port I/O behind `arch/x86_64/include/`.
+
+Configuration, event log, and service:
+
+- `/owner/arwill.conf` is a strict versioned five-key ASCII file exposed by
+  the single `config` command; secret input is never echoed.
+- `kernel/log.c` retains 64 structured in-memory lifecycle events and `logs`
+  prints the complete chronological ring.
+- `kernel/service.c` owns the one built-in `remote-console` service with
+  running, stopped, failed, and unavailable states.
+- Authentication is a three-attempt access gate for trusted networks, not
+  encrypted transport or a multi-user login model.
+
+QEMU e1000 and remote output:
+
+- The e1000 driver maps its BAR in a dedicated supervisor-only high-half range
+  before AWP address spaces inherit kernel mappings.
+- TCP retains one segment for bounded retransmission. A fixed transmit byte
+  ring prevents an AWP `write` syscall from waiting for a peer ACK.
+- The path remains one polling connection, not a socket API or general TCP
+  implementation.
 
 QEMU poweroff:
 
@@ -329,8 +349,9 @@ Boot infrastructure:
 - Limine is fetched into `third_party/limine/`.
 - The x86-64 boot block requests the Limine memory map and HHDM offset before
   entering architecture-independent kernel startup.
-- The x86-64 boot block wires QEMU storage, ARFS, and the x86-64 interrupt
-  controller and user runtime into the architecture-independent kernel entry.
+- The x86-64 boot block wires QEMU storage, ARFS, configuration, e1000,
+  user-address-space initialization, interrupts, and the built-in service into
+  the architecture-independent kernel entry in that dependency order.
 - Limine config lives in `platform/qemu/limine.conf`.
 - ISO construction is host-side development tooling, not kernel code.
 

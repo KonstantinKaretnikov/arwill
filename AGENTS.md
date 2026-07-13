@@ -66,20 +66,25 @@ Rules for future work:
 - Treat Arwill Program v1 as the first tiny stored executable format. It uses
   the `AWP1` magic, `.awp` extension, and `/apps` directory. It
   is not ELF, POSIX process loading, dynamic linking, argument passing,
-  environment handling, or a per-process address-space model.
+  environment handling, or a dynamic virtual-memory ABI.
 - Keep the `0.16.0` owner command surface minimal: `config`, `logs`, and
   `service` are the only new top-level shell commands; `ps` remains the one
   process inspection command. Do not add service enable/disable, log filters,
   or config show/get/set/reload aliases.
-- Treat the TCP remote console as a plaintext, unauthenticated QEMU development
-  interface bound to host localhost. It reuses the canonical shell dispatcher,
-  supports one connection at a time, validates inbound checksums, and retains
-  at most one output segment for bounded retransmission. It is not Telnet, SSH,
-  a socket API, a full general-purpose TCP implementation, or safe for exposure
-  to an untrusted network. SSH-specific crypto and host-key storage are
-  intentionally absent per ADR-0042. Use the documented raw-terminal `stty`
-  invocation for interactive `nc`; plain canonical-mode `nc` cannot deliver
-  arrows, Tab, or Ctrl+C key-by-key.
+- Treat the TCP remote console as a plaintext, access-key-gated QEMU
+  development service bound to host localhost by default. It reuses the
+  canonical shell dispatcher, supports one connection at a time, validates
+  inbound checksums, retains at most one segment for bounded retransmission,
+  and queues bounded output so an AWP syscall never waits for a peer ACK. The
+  explicit `QEMU_REMOTE_CONSOLE_BIND=0.0.0.0` override is for a trusted LAN
+  only; the key and shell traffic are still observable. It is not Telnet, SSH,
+  TLS, a socket API, a full general-purpose TCP implementation, or safe for
+  Internet exposure. SSH-specific crypto and host-key storage remain absent.
+  Use the documented raw-terminal `stty` invocation for interactive `nc`;
+  plain canonical-mode `nc` cannot deliver arrows, Tab, or Ctrl+C key-by-key.
+- Initialize supervisor-only platform MMIO mappings before AWP address spaces
+  copy kernel PML4 entries. Keep device MMIO in a dedicated high-half range,
+  separate from Limine HHDM. See ADR-0047.
 - When a durable workflow agreement is made with the project owner, update this
   file or another appropriate document in the same change so future sessions do
   not need to rediscover it.
