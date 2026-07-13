@@ -10,6 +10,7 @@ TEST_DISK := $(BUILD_DIR)/arwill-test-disk.img
 SERIAL_LOG := $(BUILD_DIR)/serial-smoke.log
 HELLO_APP := $(BUILD_DIR)/apps/hello.awp
 CALC_APP := $(BUILD_DIR)/apps/calc.awp
+EDIT_APP := $(BUILD_DIR)/apps/edit.awp
 IPV4_HOST_TEST := $(BUILD_DIR)/tests/ipv4_test
 IPV4_HOST_TEST_SOURCES := tests/ipv4_test.c kernel/clock.c kernel/console.c kernel/ipv4.c kernel/network.c kernel/tcp.c
 IPV4_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/console.h \
@@ -143,8 +144,8 @@ $(ISO): $(KERNEL) platform/qemu/limine.conf third_party/limine/limine
 		$(ISO_ROOT) -o $(ISO)
 	third_party/limine/limine bios-install $(ISO)
 
-$(TEST_DISK): scripts/create_test_disk.sh $(HELLO_APP) $(CALC_APP) Makefile FORCE
-	@sh scripts/create_test_disk.sh "$@" "$(PROJECT_VERSION)" "$(HELLO_APP)" "$(CALC_APP)"
+$(TEST_DISK): scripts/create_test_disk.sh $(HELLO_APP) $(CALC_APP) $(EDIT_APP) Makefile FORCE
+	@sh scripts/create_test_disk.sh "$@" "$(PROJECT_VERSION)" "$(HELLO_APP)" "$(CALC_APP)" "$(EDIT_APP)"
 
 FORCE:
 
@@ -153,6 +154,9 @@ $(HELLO_APP): apps/hello/build.sh Makefile
 
 $(CALC_APP): apps/calc/build.sh apps/calc/calc.c apps/calc/start.S apps/calc/linker.ld Makefile
 	@sh apps/calc/build.sh "$@"
+
+$(EDIT_APP): apps/edit/build.sh apps/edit/edit.c apps/edit/start.S apps/edit/linker.ld Makefile
+	@sh apps/edit/build.sh "$@"
 
 third_party/limine/limine:
 	@scripts/setup_limine.sh

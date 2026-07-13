@@ -110,7 +110,9 @@ void arwill_limine_entry(void) {
     const struct arwill_clock *clock = arwill_x86_64_pit_clock();
     (void)arwill_kernel_heap_init(&arwill_limine_memory, hhdm_offset, 4);
     const struct arwill_user_runtime *user_runtime =
-        arwill_x86_64_user_mode_init(&arwill_limine_memory, hhdm_offset, input, clock);
+        arwill_x86_64_user_mode_init(
+            &arwill_limine_memory, hhdm_offset, input, clock, filesystem
+        );
     const struct arwill_interrupts *interrupts = arwill_x86_64_interrupts_init();
     const struct arwill_network_device *network =
         arwill_qemu_e1000_init(&arwill_limine_pci, &arwill_limine_memory, hhdm_offset);

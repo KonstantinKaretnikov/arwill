@@ -9,12 +9,12 @@ enum {
     arfs_sector_size = 512,
     arfs_superblock_lba = 3,
     arfs_max_manifest_sectors = 2,
-    arfs_max_entries = 16,
-    arfs_max_listing_entries = 16,
+    arfs_max_entries = 24,
+    arfs_max_listing_entries = 24,
     arfs_max_path_length = 64,
     arfs_max_name_length = 32,
-    arfs_file_buffer_capacity = 2048,
-    arfs_write_buffer_capacity = 2048
+    arfs_file_buffer_capacity = 8193,
+    arfs_write_buffer_capacity = 8192
 };
 
 enum arfs_entry_kind {
@@ -664,7 +664,8 @@ static int arfs_write_bytes(
 
     if (!path_is_valid(path) || !parent_directory_exists(path) ||
         (type != arwill_fs_file_text && type != arwill_fs_file_binary) ||
-        size >= arfs_file_buffer_capacity || (contents == 0 && size != 0U)) {
+        size >= arfs_file_buffer_capacity || size > arfs_write_buffer_capacity ||
+        (contents == 0 && size != 0U)) {
         return 0;
     }
 

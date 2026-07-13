@@ -4,6 +4,7 @@
 #include <arwill/arch/x86_64/user_mode.h>
 #include <arwill/kernel/clock.h>
 #include <arwill/kernel/console.h>
+#include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/user.h>
@@ -27,12 +28,16 @@ enum {
     syscall_exit = 2,
     syscall_read = 3,
     syscall_clock = 4,
+    syscall_read_file = 5,
+    syscall_write_file = 6,
     user_code_message_offset = 0x100,
     user_write_limit = 256,
     user_input_capacity = 128,
     user_code_page_count = 2,
     user_stack_page_count = 2,
     user_quantum_ticks = 2,
+    user_file_limit = 2048,
+    user_path_limit = 63,
     bad_syscall_exit_code = 127,
     canceled_exit_code = 130,
     awp_header_size = 16,
@@ -137,6 +142,9 @@ struct x86_64_user_context {
     uint64_t faults;
     const struct arwill_input *legacy_input;
     const struct arwill_clock *clock;
+    const struct arwill_filesystem *filesystem;
+    uint8_t filesystem_buffer[user_file_limit];
+    char path_buffer[user_path_limit + 1];
     struct x86_64_user_task tasks[arwill_user_task_capacity];
     struct x86_64_user_task *active_task;
     uint32_t next_pid;
@@ -636,6 +644,46 @@ static uint8_t *task_writable_pointer(
     return physical_to_virtual(context, task->address_space.stack_physical[page]) + offset;
 }
 
+static int copy_user_path(
+    struct x86_64_user_context *context,
+    uint64_t user_pointer,
+    uint64_t length
+) {
+    if (length == 0U || length > user_path_limit ||
+        !user_range_readable(user_pointer, length)) {
+        return 0;
+    }
+    const uint8_t *source = (const uint8_t *)(uintptr_t)user_pointer;
+    for (uint64_t index = 0; index < length; index++) {
+        if (source[index] == 0U || source[index] == '\n' || source[index] == '\r') {
+            return 0;
+        }
+        context->path_buffer[index] = (char)source[index];
+    }
+    context->path_buffer[length] = '\0';
+    return 1;
+}
+
+static int copy_to_task(
+    struct x86_64_user_context *context,
+    struct x86_64_user_task *task,
+    uint64_t user_pointer,
+    const uint8_t *source,
+    size_t length
+) {
+    if (!user_range_writable(user_pointer, length)) {
+        return 0;
+    }
+    for (size_t index = 0; index < length; index++) {
+        uint8_t *destination = task_writable_pointer(context, task, user_pointer + index);
+        if (destination == 0) {
+            return 0;
+        }
+        *destination = source[index];
+    }
+    return 1;
+}
+
 static void copy_active_context(
     struct x86_64_user_task *task,
     const struct arwill_x86_64_user_registers *registers,
@@ -777,6 +825,52 @@ static int arwill_x86_64_user_handle_syscall(
 
     if (registers->rax == syscall_clock) {
         registers->rax = arwill_clock_monotonic_milliseconds(user_context.clock);
+        return 0;
+    }
+
+    if (registers->rax == syscall_read_file) {
+        const uint64_t capacity = registers->rcx > user_file_limit
+            ? user_file_limit : registers->rcx;
+        struct arwill_fs_file file;
+        if (user_context.filesystem == 0 ||
+            !copy_user_path(&user_context, registers->rdi, registers->rsi) ||
+            !user_range_writable(registers->rdx, capacity) ||
+            !arwill_filesystem_read_file(
+                user_context.filesystem, user_context.path_buffer, &file
+            ) || file.type != arwill_fs_file_text || file.contents == 0 ||
+            file.size_bytes > capacity || file.size_bytes > user_file_limit ||
+            !copy_to_task(&user_context, task, registers->rdx,
+                (const uint8_t *)file.contents, (size_t)file.size_bytes)) {
+            registers->rax = UINT64_MAX;
+            return 0;
+        }
+        registers->rax = file.size_bytes;
+        return 0;
+    }
+
+    if (registers->rax == syscall_write_file) {
+        const uint64_t length = registers->rcx;
+        if (user_context.filesystem == 0 || length > user_file_limit ||
+            !copy_user_path(&user_context, registers->rdi, registers->rsi) ||
+            !user_range_readable(registers->rdx, length)) {
+            registers->rax = UINT64_MAX;
+            return 0;
+        }
+        const uint8_t *source = (const uint8_t *)(uintptr_t)registers->rdx;
+        for (uint64_t index = 0; index < length; index++) {
+            user_context.filesystem_buffer[index] = source[index];
+        }
+        if (!arwill_filesystem_write_bytes(
+                user_context.filesystem,
+                user_context.path_buffer,
+                arwill_fs_file_text,
+                user_context.filesystem_buffer,
+                (size_t)length
+            )) {
+            registers->rax = UINT64_MAX;
+            return 0;
+        }
+        registers->rax = length;
         return 0;
     }
 
@@ -1187,7 +1281,8 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     struct arwill_memory *memory,
     uint64_t hhdm_offset,
     const struct arwill_input *input,
-    const struct arwill_clock *clock
+    const struct arwill_clock *clock,
+    const struct arwill_filesystem *filesystem
 ) {
     user_context.memory = memory;
     user_context.hhdm_offset = hhdm_offset;
@@ -1206,6 +1301,7 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     user_context.faults = 0;
     user_context.legacy_input = input;
     user_context.clock = clock;
+    user_context.filesystem = filesystem;
     user_context.active_task = 0;
     user_context.next_pid = 1000U;
     user_context.next_slot = 0;

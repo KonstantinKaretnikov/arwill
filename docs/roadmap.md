@@ -520,9 +520,9 @@ driver work, not accidental default access for every ring 3 program.
    Ctrl+C/disconnect cancellation, and user-fault containment. Cooperative
    kernel built-ins remain a separate process kind.
 
-22. [ ] AWP file I/O and editor
+22. [x] AWP file I/O and editor
 
-   Status: planned for `0.16.0` per ADR-0044.
+   Status: implemented for `0.16.0` per ADR-0044.
 
    Scope: bounded whole-text-file read/write syscalls and `/apps/edit.awp`.
 

@@ -40,6 +40,9 @@ Rules for future work:
   containment. Cooperative kernel built-ins remain distinct and do not save a
   hardware execution context. Arwill still has no ELF loader, independent
   kernel stacks, kernel preemption, or SMP.
+- The AWP syscall ABI also includes bounded whole-text-file `read_file` and
+  `write_file` operations for current consumers such as `/apps/edit.awp`.
+  These are not file descriptors, streams, append, seek, or a POSIX file API.
 - Treat Arwill as a single-owner OS. Do not introduce login accounts, groups,
   roles, or multi-user permission checks unless a later ADR explicitly changes
   this direction. The owner has full system control; ring 3 is an engineering
