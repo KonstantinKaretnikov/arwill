@@ -7,6 +7,7 @@
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/clock.h>
 #include <arwill/kernel/filesystem.h>
+#include <arwill/kernel/log.h>
 #include <arwill/kernel/user.h>
 
 struct arwill_x86_64_user_registers {
@@ -45,7 +46,8 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     uint64_t hhdm_offset,
     const struct arwill_input *input,
     const struct arwill_clock *clock,
-    const struct arwill_filesystem *filesystem
+    const struct arwill_filesystem *filesystem,
+    struct arwill_event_log *log
 );
 
 void arwill_x86_64_user_resume(

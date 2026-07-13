@@ -16,6 +16,10 @@ IPV4_HOST_TEST_SOURCES := tests/ipv4_test.c kernel/clock.c kernel/console.c kern
 IPV4_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/console.h \
 	include/arwill/kernel/cpu.h include/arwill/kernel/ipv4.h \
 	include/arwill/kernel/network.h include/arwill/kernel/tcp.h
+CONFIG_LOG_HOST_TEST := $(BUILD_DIR)/tests/config_log_test
+CONFIG_LOG_HOST_TEST_SOURCES := tests/config_log_test.c kernel/clock.c kernel/config.c kernel/filesystem.c kernel/log.c
+CONFIG_LOG_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/config.h \
+	include/arwill/kernel/filesystem.h include/arwill/kernel/log.h
 
 BREW_LLVM_PREFIX := $(shell brew --prefix llvm 2>/dev/null)
 BREW_LLD_PREFIX := $(shell brew --prefix lld 2>/dev/null)
@@ -50,11 +54,13 @@ SOURCES := \
 	kernel/block_device.c \
 	kernel/clock.c \
 	kernel/console.c \
+	kernel/config.c \
 	kernel/device.c \
 	kernel/filesystem.c \
 	kernel/interrupts.c \
 	kernel/input.c \
 	kernel/ipv4.c \
+	kernel/log.c \
 	kernel/main.c \
 	kernel/memory.c \
 	kernel/network.c \
@@ -98,8 +104,9 @@ run: build $(TEST_DISK)
 
 check: build check-host check-artifacts smoke
 
-check-host: $(IPV4_HOST_TEST)
+check-host: $(IPV4_HOST_TEST) $(CONFIG_LOG_HOST_TEST)
 	@$(IPV4_HOST_TEST)
+	@$(CONFIG_LOG_HOST_TEST)
 
 clean:
 	rm -rf $(BUILD_DIR)
@@ -117,6 +124,11 @@ $(IPV4_HOST_TEST): $(IPV4_HOST_TEST_SOURCES) $(IPV4_HOST_TEST_HEADERS) Makefile
 	@mkdir -p $(dir $@)
 	$(CLANG) -std=c11 -Wall -Wextra -Werror -Wpedantic -Wconversion \
 		-Wsign-conversion -Iinclude $(IPV4_HOST_TEST_SOURCES) -o $@
+
+$(CONFIG_LOG_HOST_TEST): $(CONFIG_LOG_HOST_TEST_SOURCES) $(CONFIG_LOG_HOST_TEST_HEADERS) Makefile
+	@mkdir -p $(dir $@)
+	$(CLANG) -std=c11 -Wall -Wextra -Werror -Wpedantic -Wconversion \
+		-Wsign-conversion -Iinclude $(CONFIG_LOG_HOST_TEST_SOURCES) -o $@
 
 $(KERNEL): $(OBJECTS) arch/x86_64/linker.ld
 	@mkdir -p $(dir $@)

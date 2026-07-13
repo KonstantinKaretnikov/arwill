@@ -11,9 +11,11 @@
 #include <arwill/kernel/arfs.h>
 #include <arwill/kernel/boot_catalog.h>
 #include <arwill/kernel/cpu.h>
+#include <arwill/kernel/config.h>
 #include <arwill/kernel/kernel.h>
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/ipv4.h>
+#include <arwill/kernel/log.h>
 #include <arwill/kernel/pci.h>
 #include <arwill/platform/qemu/ata_pio.h>
 #include <arwill/platform/qemu/e1000.h>
@@ -31,6 +33,8 @@ static struct arwill_memory arwill_limine_memory;
 static struct arwill_device_registry arwill_limine_devices;
 static struct arwill_pci_bus arwill_limine_pci;
 static struct arwill_ipv4_stack arwill_limine_ipv4;
+static struct arwill_config arwill_limine_config;
+static struct arwill_event_log arwill_limine_log;
 
 static enum arwill_memory_region_type convert_limine_memory_region_type(uint64_t type) {
     switch (type) {
@@ -108,10 +112,26 @@ void arwill_limine_entry(void) {
     const struct limine_hhdm_response *hhdm = arwill_limine_hhdm_response();
     const uint64_t hhdm_offset = hhdm == 0 ? 0 : hhdm->offset;
     const struct arwill_clock *clock = arwill_x86_64_pit_clock();
+    arwill_event_log_init(&arwill_limine_log, clock);
+    arwill_event_log_record(
+        &arwill_limine_log, arwill_log_info, arwill_log_system,
+        arwill_log_boot, 0, 0
+    );
+    arwill_config_init(&arwill_limine_config, filesystem);
+    const int config_ready = arwill_config_load(&arwill_limine_config);
+    arwill_event_log_record(
+        &arwill_limine_log,
+        config_ready ? arwill_log_info : arwill_log_error,
+        arwill_log_config,
+        config_ready ? arwill_log_config_loaded : arwill_log_config_error,
+        arwill_limine_config.loaded_from_file != 0,
+        arwill_limine_config.remote_port
+    );
     (void)arwill_kernel_heap_init(&arwill_limine_memory, hhdm_offset, 4);
     const struct arwill_user_runtime *user_runtime =
         arwill_x86_64_user_mode_init(
-            &arwill_limine_memory, hhdm_offset, input, clock, filesystem
+            &arwill_limine_memory, hhdm_offset, input, clock, filesystem,
+            &arwill_limine_log
         );
     const struct arwill_interrupts *interrupts = arwill_x86_64_interrupts_init();
     const struct arwill_network_device *network =
@@ -207,7 +227,9 @@ void arwill_limine_entry(void) {
         interrupts,
         clock,
         user_runtime,
-        &arwill_limine_devices
+        &arwill_limine_devices,
+        &arwill_limine_config,
+        &arwill_limine_log
     );
     arwill_cpu_idle_forever();
 }

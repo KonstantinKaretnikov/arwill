@@ -5,11 +5,13 @@
 #include <arwill/kernel/block_device.h>
 #include <arwill/kernel/console.h>
 #include <arwill/kernel/clock.h>
+#include <arwill/kernel/config.h>
 #include <arwill/kernel/cpu.h>
 #include <arwill/kernel/device.h>
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/interrupts.h>
+#include <arwill/kernel/log.h>
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/network.h>
 #include <arwill/kernel/power.h>
@@ -81,6 +83,8 @@ static const struct shell_command shell_commands[] = {
     { .name = "schedinfo", .completion = shell_completion_none },
     { .name = "userinfo", .completion = shell_completion_none },
     { .name = "ownerinfo", .completion = shell_completion_none },
+    { .name = "config", .completion = shell_completion_none },
+    { .name = "logs", .completion = shell_completion_none },
     { .name = "ps", .completion = shell_completion_none },
     { .name = "run", .completion = shell_completion_process },
     { .name = "exec", .completion = shell_completion_path },
@@ -129,6 +133,8 @@ struct shell_environment {
     const struct arwill_clock *clock;
     const struct arwill_user_runtime *user_runtime;
     const struct arwill_device_registry *devices;
+    struct arwill_config *config;
+    struct arwill_event_log *log;
 };
 
 struct shell_session {
@@ -145,6 +151,9 @@ struct shell_session {
     int active;
     int ignore_line_feed;
     uint32_t foreground_pid;
+    int config_key_pending;
+    char config_key[arwill_config_remote_key_capacity];
+    size_t config_key_length;
 };
 
 struct shell_builtin_process {
@@ -868,6 +877,8 @@ static void print_help(const struct arwill_console *console, int remote_session)
     arwill_console_write_line(console, "  schedinfo  show scheduler tick diagnostics");
     arwill_console_write_line(console, "  userinfo   show user-mode diagnostics");
     arwill_console_write_line(console, "  ownerinfo  show the OS ownership model");
+    arwill_console_write_line(console, "  config     show or change system configuration");
+    arwill_console_write_line(console, "  logs       show the complete event log");
     arwill_console_write_line(console, "  ps         show kernel process table");
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
     arwill_console_write_line(console, "  exec [path] run a stored program image");
@@ -1713,6 +1724,111 @@ static void print_owner_info(const struct arwill_console *console) {
     arwill_console_write_line(console, "privileged code: explicit kernel or driver work");
 }
 
+static void print_config(
+    const struct arwill_console *console,
+    const struct arwill_config *config
+) {
+    if (config == 0) {
+        arwill_console_write_line(console, "config: unavailable");
+        return;
+    }
+    arwill_console_write(console, "config.version=");
+    write_uint64_decimal(console, config->version);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "remote.enabled=");
+    arwill_console_write_line(console, config->remote_enabled ? "true" : "false");
+    arwill_console_write(console, "remote.port=");
+    write_uint64_decimal(console, config->remote_port);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "remote.key=");
+    arwill_console_write_line(
+        console, config->remote_key[0] == '\0' ? "(empty)" : "********"
+    );
+    arwill_console_write(console, "log.level=");
+    arwill_console_write_line(
+        console, arwill_config_log_level_name(config->log_level)
+    );
+    arwill_console_write(console, "config.source=");
+    arwill_console_write_line(
+        console, config->loaded_from_file ? "/owner/arwill.conf" : "defaults"
+    );
+    arwill_console_write(console, "config.valid=");
+    arwill_console_write_line(console, config->valid ? "yes" : "no");
+}
+
+static void configure_value(
+    const struct arwill_console *console,
+    struct arwill_config *config,
+    struct arwill_event_log *log,
+    const char *argument,
+    int *key_requested
+) {
+    char key[shell_line_capacity];
+    char value[shell_line_capacity];
+    if (!copy_first_argument(key, sizeof(key), argument)) {
+        arwill_console_write_line(console, "config: key too long");
+        return;
+    }
+    if (key[0] == '\0') {
+        print_config(console, config);
+        return;
+    }
+    const char *value_argument = second_argument_after_first(argument);
+    if (string_equals(key, "remote.key")) {
+        if (value_argument[0] != '\0') {
+            arwill_console_write_line(console, "config: remote.key uses hidden input");
+            return;
+        }
+        *key_requested = 1;
+        arwill_console_write(console, "new remote key: ");
+        return;
+    }
+    if (!copy_first_argument(value, sizeof(value), value_argument) || value[0] == '\0') {
+        arwill_console_write_line(console, "config: expected config <key> <value>");
+        return;
+    }
+    if (!arwill_config_set(config, key, value)) {
+        arwill_console_write_line(console, "config: invalid value or write failed");
+        return;
+    }
+    arwill_event_log_record(
+        log, arwill_log_info, arwill_log_config, arwill_log_config_changed, 0, 0
+    );
+    arwill_console_write_line(console, "config: saved");
+}
+
+static void print_logs(
+    const struct arwill_console *console,
+    const struct arwill_event_log *log
+) {
+    if (log == 0) {
+        arwill_console_write_line(console, "logs: unavailable");
+        return;
+    }
+    arwill_console_write_line(console, "ms severity subsystem event arg0 arg1");
+    for (size_t index = 0; index < log->count; index++) {
+        struct arwill_log_entry entry;
+        if (!arwill_event_log_entry(log, index, &entry)) {
+            continue;
+        }
+        write_uint64_decimal(console, entry.milliseconds);
+        arwill_console_write(console, " ");
+        arwill_console_write(console, arwill_log_severity_name(entry.severity));
+        arwill_console_write(console, " ");
+        arwill_console_write(console, arwill_log_subsystem_name(entry.subsystem));
+        arwill_console_write(console, " ");
+        arwill_console_write(console, arwill_log_code_name(entry.code));
+        arwill_console_write(console, " ");
+        write_uint64_decimal(console, entry.argument0);
+        arwill_console_write(console, " ");
+        write_uint64_decimal(console, entry.argument1);
+        arwill_console_write_line(console, "");
+    }
+    arwill_console_write(console, "logs overwritten: ");
+    write_uint64_decimal(console, log->overwritten);
+    arwill_console_write_line(console, "");
+}
+
 static struct arwill_process_result shell_hello_process(
     const struct arwill_process_runtime *runtime
 ) {
@@ -2408,11 +2524,14 @@ static void run_command(
     const struct arwill_clock *clock,
     const struct arwill_user_runtime *user_runtime,
     const struct arwill_device_registry *devices,
+    struct arwill_config *config,
+    struct arwill_event_log *log,
     struct shell_process_context *process_context,
     char *current_directory,
     const char *line,
     int remote_session,
     uint32_t *foreground_pid,
+    int *config_key_requested,
     int *close_requested
 ) {
     if (string_equals(line, "")) {
@@ -2671,6 +2790,18 @@ static void run_command(
         return;
     }
 
+    if (string_equals(line, "config") || starts_with(line, "config ")) {
+        configure_value(
+            console, config, log, argument_after_command(line), config_key_requested
+        );
+        return;
+    }
+
+    if (string_equals(line, "logs")) {
+        print_logs(console, log);
+        return;
+    }
+
     if (string_equals(line, "ps")) {
         print_process_table(console, processes, user_runtime);
         return;
@@ -2689,6 +2820,12 @@ static void run_command(
             current_directory,
             argument_after_command(line)
         );
+        if (*foreground_pid != 0U) {
+            arwill_event_log_record(
+                log, arwill_log_info, arwill_log_awp, arwill_log_awp_started,
+                *foreground_pid, remote_session != 0
+            );
+        }
         return;
     }
 
@@ -2787,6 +2924,8 @@ static void initialize_shell_session(
     session->active = 1;
     session->ignore_line_feed = 0;
     session->foreground_pid = 0;
+    session->config_key_pending = 0;
+    session->config_key_length = 0;
     session->process_context.console = console;
     session->process_context.user_runtime = user_runtime;
     reset_shell_input(session);
@@ -2798,6 +2937,46 @@ static int handle_shell_byte(
     uint8_t byte
 ) {
     const struct arwill_console *console = session->console;
+
+    if (session->config_key_pending) {
+        if (byte == ascii_interrupt) {
+            arwill_console_write_line(console, "^C");
+            session->config_key_pending = 0;
+            session->config_key_length = 0;
+            write_prompt(console, session->current_directory);
+            return 1;
+        }
+        if (byte == ascii_carriage_return || byte == ascii_line_feed) {
+            session->config_key[session->config_key_length] = '\0';
+            arwill_console_write_line(console, "");
+            if (arwill_config_set_remote_key(
+                    environment->config, session->config_key
+                )) {
+                arwill_event_log_record(
+                    environment->log, arwill_log_info, arwill_log_config,
+                    arwill_log_config_changed, 0, 0
+                );
+                arwill_console_write_line(console, "config: saved");
+            } else {
+                arwill_console_write_line(console, "config: invalid key or write failed");
+            }
+            session->config_key_pending = 0;
+            session->config_key_length = 0;
+            write_prompt(console, session->current_directory);
+            return 1;
+        }
+        if (byte == ascii_backspace || byte == ascii_delete) {
+            if (session->config_key_length != 0U) {
+                session->config_key_length--;
+            }
+            return 1;
+        }
+        if (is_printable_ascii(byte) && byte != '=' &&
+            session->config_key_length + 1U < sizeof(session->config_key)) {
+            session->config_key[session->config_key_length++] = (char)byte;
+        }
+        return 1;
+    }
 
     if (session->foreground_pid != 0U) {
         if (byte == ascii_interrupt) {
@@ -2886,18 +3065,21 @@ static int handle_shell_byte(
             environment->clock,
             environment->user_runtime,
             environment->devices,
+            environment->config,
+            environment->log,
             &session->process_context,
             session->current_directory,
             session->line,
             session->remote,
             &session->foreground_pid,
+            &session->config_key_pending,
             &close_requested
         );
         reset_shell_input(session);
         if (close_requested) {
             return 0;
         }
-        if (session->foreground_pid == 0U) {
+        if (session->foreground_pid == 0U && !session->config_key_pending) {
             write_prompt(console, session->current_directory);
         }
         return 1;
@@ -2991,7 +3173,8 @@ static void service_remote_shell(
 
 static void finish_foreground_program(
     struct shell_session *session,
-    const struct arwill_user_runtime *user_runtime
+    const struct arwill_user_runtime *user_runtime,
+    struct arwill_event_log *log
 ) {
     if (session == 0 || session->foreground_pid == 0U) {
         return;
@@ -3007,6 +3190,15 @@ static void finish_foreground_program(
         write_uint64_decimal(session->console, task.fault_vector);
         arwill_console_write_line(session->console, "");
     }
+    arwill_event_log_record(
+        log,
+        task.state == arwill_user_task_faulted ? arwill_log_error : arwill_log_info,
+        arwill_log_awp,
+        task.state == arwill_user_task_faulted
+            ? arwill_log_awp_faulted : arwill_log_awp_exited,
+        task.pid,
+        task.state == arwill_user_task_faulted ? task.fault_vector : task.exit_code
+    );
     arwill_console_write(session->console, "exec: exited ");
     write_uint64_decimal(session->console, task.exit_code);
     arwill_console_write_line(session->console, "");
@@ -3030,7 +3222,9 @@ void arwill_shell_run(
     const struct arwill_interrupts *interrupts,
     const struct arwill_clock *clock,
     const struct arwill_user_runtime *user_runtime,
-    const struct arwill_device_registry *devices
+    const struct arwill_device_registry *devices,
+    struct arwill_config *config,
+    struct arwill_event_log *log
 ) {
     struct shell_environment environment;
     struct shell_session serial_session;
@@ -3049,6 +3243,8 @@ void arwill_shell_run(
     environment.clock = clock;
     environment.user_runtime = user_runtime;
     environment.devices = devices;
+    environment.config = config;
+    environment.log = log;
 
     remote_console.context = ipv4;
     remote_console.write = remote_console_write;
@@ -3065,7 +3261,7 @@ void arwill_shell_run(
         }
         service_remote_shell(&remote_session, &environment);
         arwill_user_poll(user_runtime);
-        finish_foreground_program(&serial_session, user_runtime);
-        finish_foreground_program(&remote_session, user_runtime);
+        finish_foreground_program(&serial_session, user_runtime, log);
+        finish_foreground_program(&remote_session, user_runtime, log);
     }
 }

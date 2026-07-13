@@ -30,6 +30,7 @@ identity=$payload_dir/identity
 limine_conf=$payload_dir/limine.conf
 readme=$payload_dir/readme
 owner_note=$payload_dir/owner-note
+arwill_config=$payload_dir/arwill.conf
 app_hello=$payload_dir/hello.awp
 app_calc=$payload_dir/calc.awp
 app_edit=$payload_dir/edit.awp
@@ -44,11 +45,14 @@ printf 'Arwill storage-backed filesystem\nsource: qemu ata pio test disk\nwritab
     > "$readme"
 
 printf 'owner note: empty\n' > "$owner_note"
+printf 'config.version=1\nremote.enabled=true\nremote.port=23232\nremote.key=arwill\nlog.level=info\n' \
+    > "$arwill_config"
 
 identity_size=$(wc -c < "$identity" | tr -d ' ')
 limine_conf_size=$(wc -c < "$limine_conf" | tr -d ' ')
 readme_size=$(wc -c < "$readme" | tr -d ' ')
 owner_note_size=$(wc -c < "$owner_note" | tr -d ' ')
+arwill_config_size=$(wc -c < "$arwill_config" | tr -d ' ')
 
 cp "$hello_app" "$app_hello"
 app_hello_size=$(wc -c < "$app_hello" | tr -d ' ')
@@ -63,8 +67,8 @@ if [ "$app_hello_size" -gt 512 ] || [ "$app_calc_size" -gt 2048 ] ||
     exit 1
 fi
 
-printf 'D /apps\nD /boot\nD /boot/limine\nD /docs\nD /owner\nD /system\nF /apps/hello.awp binary 13 %s\nF /apps/calc.awp binary 14 %s\nF /apps/edit.awp binary 18 %s\nF /boot/kernel.elf binary 0 0\nF /boot/limine/limine.conf text 10 %s\nF /docs/readme text 11 %s\nF /owner/note text 12 %s\nF /system/identity text 8 %s\n' \
-    "$app_hello_size" "$app_calc_size" "$app_edit_size" "$limine_conf_size" "$readme_size" "$owner_note_size" "$identity_size" > "$manifest"
+printf 'D /apps\nD /boot\nD /boot/limine\nD /docs\nD /owner\nD /system\nF /apps/hello.awp binary 13 %s\nF /apps/calc.awp binary 14 %s\nF /apps/edit.awp binary 18 %s\nF /boot/kernel.elf binary 0 0\nF /boot/limine/limine.conf text 10 %s\nF /docs/readme text 11 %s\nF /owner/arwill.conf text 34 %s\nF /owner/note text 12 %s\nF /system/identity text 8 %s\n' \
+    "$app_hello_size" "$app_calc_size" "$app_edit_size" "$limine_conf_size" "$readme_size" "$arwill_config_size" "$owner_note_size" "$identity_size" > "$manifest"
 
 printf 'ARFS2\nmanifest_lba=4\nmanifest_sectors=2\ndata_lba=14\n' > "$superblock"
 
@@ -77,5 +81,6 @@ dd if="$owner_note" of="$temporary" bs=512 seek=12 conv=notrunc >/dev/null 2>&1
 dd if="$app_hello" of="$temporary" bs=512 seek=13 conv=notrunc >/dev/null 2>&1
 dd if="$app_calc" of="$temporary" bs=512 seek=14 conv=notrunc >/dev/null 2>&1
 dd if="$app_edit" of="$temporary" bs=512 seek=18 conv=notrunc >/dev/null 2>&1
+dd if="$arwill_config" of="$temporary" bs=512 seek=34 conv=notrunc >/dev/null 2>&1
 
 mv "$temporary" "$output"

@@ -6,6 +6,7 @@
 #include <arwill/kernel/console.h>
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
+#include <arwill/kernel/log.h>
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/user.h>
 
@@ -143,6 +144,7 @@ struct x86_64_user_context {
     const struct arwill_input *legacy_input;
     const struct arwill_clock *clock;
     const struct arwill_filesystem *filesystem;
+    struct arwill_event_log *log;
     uint8_t filesystem_buffer[user_file_limit];
     char path_buffer[user_path_limit + 1];
     struct x86_64_user_task tasks[arwill_user_task_capacity];
@@ -870,6 +872,14 @@ static int arwill_x86_64_user_handle_syscall(
             registers->rax = UINT64_MAX;
             return 0;
         }
+        arwill_event_log_record(
+            user_context.log,
+            arwill_log_info,
+            arwill_log_filesystem,
+            arwill_log_file_written,
+            task->pid,
+            length
+        );
         registers->rax = length;
         return 0;
     }
@@ -1282,7 +1292,8 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     uint64_t hhdm_offset,
     const struct arwill_input *input,
     const struct arwill_clock *clock,
-    const struct arwill_filesystem *filesystem
+    const struct arwill_filesystem *filesystem,
+    struct arwill_event_log *log
 ) {
     user_context.memory = memory;
     user_context.hhdm_offset = hhdm_offset;
@@ -1302,6 +1313,7 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     user_context.legacy_input = input;
     user_context.clock = clock;
     user_context.filesystem = filesystem;
+    user_context.log = log;
     user_context.active_task = 0;
     user_context.next_pid = 1000U;
     user_context.next_slot = 0;

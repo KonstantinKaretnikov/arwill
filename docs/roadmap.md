@@ -526,9 +526,9 @@ driver work, not accidental default access for every ring 3 program.
 
    Scope: bounded whole-text-file read/write syscalls and `/apps/edit.awp`.
 
-23. [ ] Configuration and event log v1
+23. [x] Configuration and event log v1
 
-   Status: planned for `0.16.0` per ADR-0045.
+   Status: implemented for `0.16.0` per ADR-0045.
 
    Scope: `/owner/arwill.conf`, one `config` command, a 64-entry in-memory event
    ring, and one `logs` command.
