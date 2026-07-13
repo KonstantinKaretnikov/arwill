@@ -4,11 +4,9 @@
 #include <arwill/identity.h>
 #include <arwill/kernel/block_device.h>
 #include <arwill/kernel/console.h>
-#include <arwill/kernel/crypto.h>
 #include <arwill/kernel/clock.h>
 #include <arwill/kernel/cpu.h>
 #include <arwill/kernel/device.h>
-#include <arwill/kernel/entropy.h>
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/interrupts.h>
@@ -18,7 +16,6 @@
 #include <arwill/kernel/process.h>
 #include <arwill/kernel/scheduler.h>
 #include <arwill/kernel/shell.h>
-#include <arwill/kernel/ssh.h>
 #include <arwill/kernel/tcp.h>
 #include <arwill/kernel/user.h>
 
@@ -26,6 +23,7 @@ enum {
     shell_line_capacity = 96,
     shell_path_capacity = 96,
     shell_history_capacity = 8,
+    ascii_interrupt = 0x03,
     ascii_backspace = 0x08,
     ascii_escape = 0x1b,
     ascii_tab = '\t',
@@ -64,9 +62,6 @@ static const struct shell_command shell_commands[] = {
     { .name = "tcpcheck", .completion = shell_completion_none },
     { .name = "tcplisten", .completion = shell_completion_none },
     { .name = "tcpinfo", .completion = shell_completion_none },
-    { .name = "cryptocheck", .completion = shell_completion_none },
-    { .name = "entropyinfo", .completion = shell_completion_none },
-    { .name = "sshcheck", .completion = shell_completion_none },
     { .name = "pwd", .completion = shell_completion_none },
     { .name = "cd", .completion = shell_completion_directory_path },
     { .name = "clear", .completion = shell_completion_none },
@@ -121,6 +116,36 @@ struct shell_process_context {
     const struct arwill_user_runtime *user_runtime;
 };
 
+struct shell_environment {
+    const struct arwill_filesystem *filesystem;
+    struct arwill_memory *memory;
+    const struct arwill_power *power;
+    struct arwill_process_manager *processes;
+    const struct arwill_pci_bus *pci;
+    const struct arwill_network_device *network;
+    struct arwill_ipv4_stack *ipv4;
+    const struct arwill_block_device *block_device;
+    const struct arwill_interrupts *interrupts;
+    const struct arwill_clock *clock;
+    const struct arwill_user_runtime *user_runtime;
+    const struct arwill_device_registry *devices;
+};
+
+struct shell_session {
+    const struct arwill_console *console;
+    char line[shell_line_capacity];
+    char current_directory[shell_path_capacity];
+    size_t length;
+    struct shell_history history;
+    size_t history_position;
+    enum shell_escape_state escape_state;
+    struct shell_input_normalizer normalizer;
+    struct shell_process_context process_context;
+    int remote;
+    int active;
+    int ignore_line_feed;
+};
+
 struct shell_builtin_process {
     const char *name;
     arwill_process_entry entry;
@@ -139,7 +164,6 @@ static int string_equals(const char *left, const char *right) {
 
     return left[index] == right[index];
 }
-
 static int starts_with(const char *text, const char *prefix) {
     size_t index = 0;
 
@@ -172,6 +196,30 @@ static size_t string_length(const char *text) {
     }
 
     return length;
+}
+
+static void remote_console_write(void *context, const char *text) {
+    struct arwill_ipv4_stack *ipv4 = (struct arwill_ipv4_stack *)context;
+    uint8_t chunk[128];
+    size_t chunk_length = 0;
+
+    for (size_t index = 0; text[index] != '\0'; index++) {
+        if (text[index] == '\n') {
+            if (chunk_length == sizeof(chunk)) {
+                (void)arwill_ipv4_remote_console_write(ipv4, chunk, chunk_length);
+                chunk_length = 0;
+            }
+            chunk[chunk_length++] = '\r';
+        }
+        if (chunk_length == sizeof(chunk)) {
+            (void)arwill_ipv4_remote_console_write(ipv4, chunk, chunk_length);
+            chunk_length = 0;
+        }
+        chunk[chunk_length++] = (uint8_t)text[index];
+    }
+    if (chunk_length != 0U) {
+        (void)arwill_ipv4_remote_console_write(ipv4, chunk, chunk_length);
+    }
 }
 
 static size_t common_prefix_length(const char *left, const char *right, size_t limit) {
@@ -444,41 +492,23 @@ static void write_uint8_hex(const struct arwill_console *console, uint8_t value)
     arwill_console_write(console, text);
 }
 
-static void print_ssh_host_key(
-    const struct arwill_console *console,
-    const struct arwill_ssh_host_key *host_key
-) {
-    if (host_key == 0 || !host_key->ready) {
-        arwill_console_write(console, "ssh host key: unavailable, error ");
-        write_uint64_decimal(console, host_key == 0 ?
-            (uint64_t)arwill_ssh_host_key_error_storage : (uint64_t)host_key->error);
-        arwill_console_write_line(console, "");
-        return;
-    }
-
-    arwill_console_write(console, "ssh host key: ");
-    arwill_console_write_line(console, host_key->created ? "created" : "loaded");
-    arwill_console_write(console, "ssh host fingerprint: SHA256-hex:");
-    for (size_t index = 0; index < sizeof(host_key->fingerprint); index++) {
-        write_uint8_hex(console, host_key->fingerprint[index]);
-    }
-    arwill_console_write_line(console, "");
-}
-
-static void print_ssh_ecdh(
+static void print_remote_console_info(
     const struct arwill_console *console,
     const struct arwill_ipv4_stack *ipv4
 ) {
-    arwill_console_write(console, "ssh ecdh: init ");
-    arwill_console_write(console,
-        ipv4->ssh.client_ecdh_init_received ? "received" : "pending");
-    arwill_console_write(console, ", reply ");
-    arwill_console_write_line(console,
-        ipv4->ssh.server_ecdh_reply_sent ? "sent" : "pending");
-    arwill_console_write(console, "ssh ecdh failures: build ");
-    write_uint64_decimal(console, ipv4->ssh_ecdh_reply_build_failures);
-    arwill_console_write(console, ", send ");
-    write_uint64_decimal(console, ipv4->ssh_ecdh_reply_send_failures);
+    arwill_console_write(console, "remote console: plaintext, connections ");
+    write_uint64_decimal(console, ipv4->remote_console_connections);
+    arwill_console_write(console, ", disconnects ");
+    write_uint64_decimal(console, ipv4->remote_console_disconnects);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "remote bytes: received ");
+    write_uint64_decimal(console, ipv4->remote_console_bytes_received);
+    arwill_console_write(console, ", sent ");
+    write_uint64_decimal(console, ipv4->remote_console_bytes_sent);
+    arwill_console_write(console, ", dropped ");
+    write_uint64_decimal(console, ipv4->remote_console_bytes_dropped);
+    arwill_console_write(console, ", send failures ");
+    write_uint64_decimal(console, ipv4->remote_console_send_failures);
     arwill_console_write_line(console, "");
 }
 
@@ -793,7 +823,7 @@ static void redraw_line(
     arwill_console_write(console, line);
 }
 
-static void print_help(const struct arwill_console *console) {
+static void print_help(const struct arwill_console *console, int remote_session) {
     arwill_console_write_line(console, "commands:");
     arwill_console_write_line(console, "  help       show commands");
     arwill_console_write_line(console, "  version    show kernel version");
@@ -805,11 +835,8 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  arping     transmit an ARP request to the gateway");
     arwill_console_write_line(console, "  ping       send one ICMP echo to the gateway");
     arwill_console_write_line(console, "  tcpcheck   exercise the TCP listener handshake");
-    arwill_console_write_line(console, "  tcplisten  poll for TCP port 22 connections");
-    arwill_console_write_line(console, "  tcpinfo    show TCP port 22 listener state");
-    arwill_console_write_line(console, "  cryptocheck verify the SHA-256 primitive");
-    arwill_console_write_line(console, "  entropyinfo show hardware entropy status");
-    arwill_console_write_line(console, "  sshcheck   verify SSH KEX framing and ECDH reply");
+    arwill_console_write_line(console, "  tcplisten  poll the remote console TCP listener");
+    arwill_console_write_line(console, "  tcpinfo    show remote console TCP state");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
@@ -833,7 +860,9 @@ static void print_help(const struct arwill_console *console) {
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
     arwill_console_write_line(console, "  exec [path] run a stored program image");
     arwill_console_write_line(console, "  step       run one cooperative process step");
-    arwill_console_write_line(console, "  exit       power off the machine");
+    arwill_console_write_line(console, remote_session ?
+        "  exit       close the remote session" :
+        "  exit       power off the machine");
     arwill_console_write_line(console, "  Tab        complete commands, paths, and processes");
     arwill_console_write_line(console, "  Up/Down    browse command history");
     arwill_console_write_line(console, "  halt       enter the CPU idle loop");
@@ -2347,14 +2376,16 @@ static void run_command(
     const struct arwill_device_registry *devices,
     struct shell_process_context *process_context,
     char *current_directory,
-    const char *line
+    const char *line,
+    int remote_session,
+    int *close_requested
 ) {
     if (string_equals(line, "")) {
         return;
     }
 
     if (string_equals(line, "help")) {
-        print_help(console);
+        print_help(console, remote_session);
         return;
     }
 
@@ -2485,9 +2516,9 @@ static void run_command(
         struct arwill_tcp_segment reply;
         struct arwill_tcp_segment ack;
 
-        arwill_tcp_listener_init(&listener, 22U, 0x41520000U);
+        arwill_tcp_listener_init(&listener, arwill_remote_console_port, 0x41520000U);
         syn.source_port = 4242U;
-        syn.destination_port = 22U;
+        syn.destination_port = arwill_remote_console_port;
         syn.sequence = 100U;
         syn.acknowledgement = 0U;
         syn.flags = arwill_tcp_flag_syn;
@@ -2499,7 +2530,7 @@ static void run_command(
             return;
         }
         ack.source_port = syn.source_port;
-        ack.destination_port = 22U;
+        ack.destination_port = arwill_remote_console_port;
         ack.sequence = 101U;
         ack.acknowledgement = reply.sequence + 1U;
         ack.flags = arwill_tcp_flag_ack;
@@ -2527,27 +2558,8 @@ static void run_command(
         write_uint64_decimal(console, ipv4->tcp_frames_received);
         arwill_console_write(console, ", syn-ack: ");
         write_uint64_decimal(console, ipv4->tcp_syn_ack_sent);
-        arwill_console_write(console, ", ssh banners: ");
-        write_uint64_decimal(console, ipv4->ssh_banners_sent);
         arwill_console_write_line(console, "");
-        arwill_console_write(console, "ssh client: ");
-        arwill_console_write_line(console, ipv4->ssh.client_identification_received ?
-            ipv4->ssh.client_identification : "not received");
-        arwill_console_write(console, "ssh kexinit: server ");
-        arwill_console_write(console, ipv4->ssh.server_kexinit_sent ? "sent" : "pending");
-        arwill_console_write(console, ", client ");
-        arwill_console_write_line(console,
-            ipv4->ssh.client_kexinit_received ? "received" : "pending");
-        arwill_console_write(console, "ssh kex failures: build ");
-        write_uint64_decimal(console, ipv4->ssh_kexinit_build_failures);
-        arwill_console_write(console, ", send ");
-        write_uint64_decimal(console, ipv4->ssh_kexinit_send_failures);
-        arwill_console_write(console, ", receive ");
-        write_uint64_decimal(console, ipv4->ssh_receive_failures);
-        arwill_console_write(console, ", last ");
-        write_uint64_decimal(console, ipv4->ssh.last_error);
-        arwill_console_write_line(console, "");
-        print_ssh_ecdh(console, ipv4);
+        print_remote_console_info(console, ipv4);
         return;
     }
 
@@ -2564,217 +2576,8 @@ static void run_command(
         write_uint64_decimal(console, ipv4->tcp_frames_received);
         arwill_console_write(console, ", syn-ack: ");
         write_uint64_decimal(console, ipv4->tcp_syn_ack_sent);
-        arwill_console_write(console, ", ssh banners: ");
-        write_uint64_decimal(console, ipv4->ssh_banners_sent);
         arwill_console_write_line(console, "");
-        print_ssh_host_key(console, ipv4->ssh_host_key);
-        print_ssh_ecdh(console, ipv4);
-        return;
-    }
-
-    if (string_equals(line, "cryptocheck")) {
-        static const uint8_t expected_sha256[arwill_sha256_size] = {
-            0xbaU, 0x78U, 0x16U, 0xbfU, 0x8fU, 0x01U, 0xcfU, 0xeaU,
-            0x41U, 0x41U, 0x40U, 0xdeU, 0x5dU, 0xaeU, 0x22U, 0x23U,
-            0xb0U, 0x03U, 0x61U, 0xa3U, 0x96U, 0x17U, 0x7aU, 0x9cU,
-            0xb4U, 0x10U, 0xffU, 0x61U, 0xf2U, 0x00U, 0x15U, 0xadU,
-        };
-        static const uint8_t x25519_scalar[arwill_x25519_size] = {
-            0xa5U, 0x46U, 0xe3U, 0x6bU, 0xf0U, 0x52U, 0x7cU, 0x9dU,
-            0x3bU, 0x16U, 0x15U, 0x4bU, 0x82U, 0x46U, 0x5eU, 0xddU,
-            0x62U, 0x14U, 0x4cU, 0x0aU, 0xc1U, 0xfcU, 0x5aU, 0x18U,
-            0x50U, 0x6aU, 0x22U, 0x44U, 0xbaU, 0x44U, 0x9aU, 0xc4U,
-        };
-        static const uint8_t x25519_point[arwill_x25519_size] = {
-            0xe6U, 0xdbU, 0x68U, 0x67U, 0x58U, 0x30U, 0x30U, 0xdbU,
-            0x35U, 0x94U, 0xc1U, 0xa4U, 0x24U, 0xb1U, 0x5fU, 0x7cU,
-            0x72U, 0x66U, 0x24U, 0xecU, 0x26U, 0xb3U, 0x35U, 0x3bU,
-            0x10U, 0xa9U, 0x03U, 0xa6U, 0xd0U, 0xabU, 0x1cU, 0x4cU,
-        };
-        static const uint8_t expected_x25519[arwill_x25519_size] = {
-            0xc3U, 0xdaU, 0x55U, 0x37U, 0x9dU, 0xe9U, 0xc6U, 0x90U,
-            0x8eU, 0x94U, 0xeaU, 0x4dU, 0xf2U, 0x8dU, 0x08U, 0x4fU,
-            0x32U, 0xecU, 0xcfU, 0x03U, 0x49U, 0x1cU, 0x71U, 0xf7U,
-            0x54U, 0xb4U, 0x07U, 0x55U, 0x77U, 0xa2U, 0x85U, 0x52U,
-        };
-        static const uint8_t p256_scalar[arwill_p256_scalar_size] = {
-            [arwill_p256_scalar_size - 1] = 1U,
-        };
-        static const uint8_t expected_p256[arwill_p256_point_size] = {
-            0x04U, 0x6bU, 0x17U, 0xd1U, 0xf2U, 0xe1U, 0x2cU, 0x42U,
-            0x47U, 0xf8U, 0xbcU, 0xe6U, 0xe5U, 0x63U, 0xa4U, 0x40U,
-            0xf2U, 0x77U, 0x03U, 0x7dU, 0x81U, 0x2dU, 0xebU, 0x33U,
-            0xa0U, 0xf4U, 0xa1U, 0x39U, 0x45U, 0xd8U, 0x98U, 0xc2U,
-            0x96U, 0x4fU, 0xe3U, 0x42U, 0xe2U, 0xfeU, 0x1aU, 0x7fU,
-            0x9bU, 0x8eU, 0xe7U, 0xebU, 0x4aU, 0x7cU, 0x0fU, 0x9eU,
-            0x16U, 0x2bU, 0xceU, 0x33U, 0x57U, 0x6bU, 0x31U, 0x5eU,
-            0xceU, 0xcbU, 0xb6U, 0x40U, 0x68U, 0x37U, 0xbfU, 0x51U,
-            0xf5U,
-        };
-        uint8_t digest[arwill_sha256_size];
-        static struct arwill_sha256_context streaming_sha256;
-        uint8_t x25519_output[arwill_x25519_size];
-        uint8_t p256_output[arwill_p256_point_size];
-        int sha256_matches = 1;
-        int x25519_matches;
-
-        arwill_crypto_sha256("abc", 3U, digest);
-        for (size_t index = 0; index < arwill_sha256_size; index++) {
-            if (digest[index] != expected_sha256[index]) {
-                sha256_matches = 0;
-            }
-        }
-
-        arwill_console_write_line(console, sha256_matches ?
-            "cryptocheck: sha256 abc passed" : "cryptocheck: sha256 abc failed");
-
-        arwill_crypto_sha256_init(&streaming_sha256);
-        arwill_crypto_sha256_update(&streaming_sha256, "a", 1U);
-        arwill_crypto_sha256_update(&streaming_sha256, "bc", 2U);
-        arwill_crypto_sha256_finish(&streaming_sha256, digest);
-        int sha256_stream_matches = 1;
-        for (size_t index = 0; index < arwill_sha256_size; index++) {
-            if (digest[index] != expected_sha256[index]) {
-                sha256_stream_matches = 0;
-            }
-        }
-        arwill_console_write_line(console, sha256_stream_matches ?
-            "cryptocheck: sha256 stream passed" :
-            "cryptocheck: sha256 stream failed");
-
-        x25519_matches = arwill_crypto_x25519(
-            x25519_output,
-            x25519_scalar,
-            x25519_point
-        );
-        for (size_t index = 0; index < arwill_x25519_size; index++) {
-            if (x25519_output[index] != expected_x25519[index]) {
-                x25519_matches = 0;
-            }
-        }
-        arwill_console_write_line(console, x25519_matches ?
-            "cryptocheck: x25519 rfc7748 passed" :
-            "cryptocheck: x25519 rfc7748 failed");
-
-        int p256_matches = arwill_crypto_p256_public(p256_output, p256_scalar);
-        for (size_t index = 0; index < arwill_p256_point_size; index++) {
-            if (p256_output[index] != expected_p256[index]) {
-                p256_matches = 0;
-            }
-        }
-        arwill_console_write_line(console, p256_matches ?
-            "cryptocheck: p256 generator passed" :
-            "cryptocheck: p256 generator failed");
-
-        static const uint8_t ecdsa_key[32] = {
-            0xc9U, 0xafU, 0xa9U, 0xd8U, 0x45U, 0xbaU, 0x75U, 0x16U,
-            0x6bU, 0x5cU, 0x21U, 0x57U, 0x67U, 0xb1U, 0xd6U, 0x93U,
-            0x4eU, 0x50U, 0xc3U, 0xdbU, 0x36U, 0xe8U, 0x9bU, 0x12U,
-            0x7bU, 0x8aU, 0x62U, 0x2bU, 0x12U, 0x0fU, 0x67U, 0x21U,
-        };
-        static const uint8_t ecdsa_hash[32] = {
-            0xafU, 0x2bU, 0xdbU, 0xe1U, 0xaaU, 0x9bU, 0x6eU, 0xc1U,
-            0xe2U, 0xadU, 0xe1U, 0xd6U, 0x94U, 0xf4U, 0x1fU, 0xc7U,
-            0x1aU, 0x83U, 0x1dU, 0x02U, 0x68U, 0xe9U, 0x89U, 0x15U,
-            0x62U, 0x11U, 0x3dU, 0x8aU, 0x62U, 0xadU, 0xd1U, 0xbfU,
-        };
-        static const uint8_t expected_ecdsa[64] = {
-            0xefU, 0xd4U, 0x8bU, 0x2aU, 0xacU, 0xb6U, 0xa8U, 0xfdU,
-            0x11U, 0x40U, 0xddU, 0x9cU, 0xd4U, 0x5eU, 0x81U, 0xd6U,
-            0x9dU, 0x2cU, 0x87U, 0x7bU, 0x56U, 0xaaU, 0xf9U, 0x91U,
-            0xc3U, 0x4dU, 0x0eU, 0xa8U, 0x4eU, 0xafU, 0x37U, 0x16U,
-            0xf7U, 0xcbU, 0x1cU, 0x94U, 0x2dU, 0x65U, 0x7cU, 0x41U,
-            0xd4U, 0x36U, 0xc7U, 0xa1U, 0xb6U, 0xe2U, 0x9fU, 0x65U,
-            0xf3U, 0xe9U, 0x00U, 0xdbU, 0xb9U, 0xafU, 0xf4U, 0x06U,
-            0x4dU, 0xc4U, 0xabU, 0x2fU, 0x84U, 0x3aU, 0xcdU, 0xa8U,
-        };
-        uint8_t ecdsa_signature[64];
-        int ecdsa_matches = arwill_crypto_p256_sign(ecdsa_signature, ecdsa_key, ecdsa_hash);
-        for (size_t index = 0; index < sizeof(ecdsa_signature); index++) {
-            if (ecdsa_signature[index] != expected_ecdsa[index]) {
-                ecdsa_matches = 0;
-            }
-        }
-        arwill_console_write_line(console, ecdsa_matches ?
-            "cryptocheck: ecdsa p256 rfc6979 passed" :
-            "cryptocheck: ecdsa p256 rfc6979 failed");
-        return;
-    }
-
-    if (string_equals(line, "entropyinfo")) {
-        uint8_t sample[32];
-        const int available = arwill_entropy_available();
-
-        arwill_console_write(console, "entropy: ");
-        arwill_console_write_line(console, arwill_entropy_source_name());
-        arwill_console_write(console, "available: ");
-        arwill_console_write_line(console, available ? "yes" : "no");
-        if (!available) {
-            arwill_console_write_line(console, "sample: unavailable");
-            return;
-        }
-
-        arwill_console_write_line(console, arwill_entropy_fill(sample, sizeof(sample)) ?
-            "sample: acquired 32 bytes" : "sample: acquisition failed");
-        return;
-    }
-
-    if (string_equals(line, "sshcheck")) {
-        static const uint8_t client_identification[] = "SSH-2.0-Smoke\r\n";
-        static const uint8_t client_kexinit[] = {
-            0U, 0U, 0U, 12U, 10U, 20U,
-            0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
-        };
-        static const uint8_t client_ecdh_init[] = {
-            0U, 0U, 0U, 44U, 6U, 30U, 0U, 0U, 0U, 32U,
-            9U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
-            0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
-            0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
-            0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
-            0U, 0U, 0U, 0U, 0U, 0U,
-        };
-        static struct arwill_ssh_transport transport;
-        static struct arwill_ssh_host_key host_key;
-        static uint8_t server_kexinit[arwill_ssh_server_packet_capacity];
-        size_t server_kexinit_length = 0;
-
-        arwill_ssh_transport_init(&transport);
-        const int passed = arwill_ssh_transport_receive(
-            &transport,
-            client_identification,
-            sizeof(client_identification) - 1U
-        ) && arwill_ssh_host_key_init(&host_key, filesystem)
-            && arwill_ssh_transport_build_kexinit(
-                &transport,
-                server_kexinit,
-                sizeof(server_kexinit),
-                &server_kexinit_length
-            ) && server_kexinit_length >= 6U
-            && server_kexinit[5] == 20U
-            && arwill_ssh_transport_receive(
-                &transport,
-                client_kexinit,
-                sizeof(client_kexinit)
-            ) && transport.client_kexinit_received;
-
-        transport.server_kexinit_sent = passed;
-        const int ecdh_passed = passed && arwill_ssh_transport_receive(
-            &transport,
-            client_ecdh_init,
-            sizeof(client_ecdh_init)
-        ) && transport.client_ecdh_init_received
-            && arwill_ssh_transport_build_ecdh_reply(
-                &transport,
-                &host_key,
-                server_kexinit,
-                sizeof(server_kexinit),
-                &server_kexinit_length
-            ) && server_kexinit_length >= 6U
-            && server_kexinit[5] == 31U;
-
-        arwill_console_write_line(console, ecdh_passed ?
-            "sshcheck: identification, kexinit, and ecdh reply passed" :
-            "sshcheck: identification, kexinit, or ecdh reply failed");
+        print_remote_console_info(console, ipv4);
         return;
     }
 
@@ -2860,6 +2663,11 @@ static void run_command(
     }
 
     if (string_equals(line, "exit")) {
+        if (remote_session) {
+            arwill_console_write_line(console, "remote console: disconnected");
+            *close_requested = 1;
+            return;
+        }
         arwill_console_write_line(console, "status: powering off");
         arwill_poweroff(power);
     }
@@ -2921,6 +2729,201 @@ static void run_command(
     arwill_console_write_line(console, line);
 }
 
+static void reset_shell_input(struct shell_session *session) {
+    session->length = 0;
+    session->escape_state = shell_escape_none;
+    session->normalizer.utf8_state = shell_utf8_none;
+    session->normalizer.utf8_lead = 0;
+    session->normalizer.russian_layout_active = 0;
+}
+
+static void initialize_shell_session(
+    struct shell_session *session,
+    const struct arwill_console *console,
+    const struct arwill_user_runtime *user_runtime,
+    int remote
+) {
+    session->console = console;
+    session->current_directory[0] = '/';
+    session->current_directory[1] = '\0';
+    session->history.count = 0;
+    session->history_position = 0;
+    session->remote = remote;
+    session->active = 1;
+    session->ignore_line_feed = 0;
+    session->process_context.console = console;
+    session->process_context.user_runtime = user_runtime;
+    reset_shell_input(session);
+}
+
+static int handle_shell_byte(
+    struct shell_session *session,
+    const struct shell_environment *environment,
+    uint8_t byte
+) {
+    const struct arwill_console *console = session->console;
+
+    if (byte == ascii_line_feed && session->ignore_line_feed) {
+        session->ignore_line_feed = 0;
+        return 1;
+    }
+    session->ignore_line_feed = 0;
+
+    if (byte == ascii_interrupt) {
+        arwill_console_write_line(console, "^C");
+        reset_shell_input(session);
+        session->history_position = session->history.count;
+        write_prompt(console, session->current_directory);
+        return 1;
+    }
+
+    if (session->escape_state == shell_escape_started) {
+        if (byte == ascii_left_bracket) {
+            session->escape_state = shell_escape_bracket;
+        } else {
+            session->escape_state = shell_escape_none;
+        }
+        return 1;
+    }
+
+    if (session->escape_state == shell_escape_bracket) {
+        if (byte == ascii_arrow_up) {
+            history_previous(
+                console,
+                &session->history,
+                session->line,
+                &session->length,
+                &session->history_position
+            );
+        } else if (byte == ascii_arrow_down) {
+            history_next(
+                console,
+                &session->history,
+                session->line,
+                &session->length,
+                &session->history_position
+            );
+        }
+        session->escape_state = shell_escape_none;
+        return 1;
+    }
+
+    if (byte == ascii_escape) {
+        session->escape_state = shell_escape_started;
+        return 1;
+    }
+
+    if (byte == ascii_carriage_return || byte == ascii_line_feed) {
+        if (session->remote && byte == ascii_carriage_return) {
+            session->ignore_line_feed = 1;
+        }
+        session->line[session->length] = '\0';
+        arwill_console_write_line(console, "");
+        history_add(&session->history, session->line);
+        session->history_position = session->history.count;
+        int close_requested = 0;
+        run_command(
+            console,
+            environment->filesystem,
+            environment->memory,
+            environment->power,
+            environment->processes,
+            environment->pci,
+            environment->network,
+            environment->ipv4,
+            environment->block_device,
+            environment->interrupts,
+            environment->clock,
+            environment->user_runtime,
+            environment->devices,
+            &session->process_context,
+            session->current_directory,
+            session->line,
+            session->remote,
+            &close_requested
+        );
+        reset_shell_input(session);
+        if (close_requested) {
+            return 0;
+        }
+        write_prompt(console, session->current_directory);
+        return 1;
+    }
+
+    if (byte == ascii_backspace || byte == ascii_delete) {
+        if (session->length > 0U) {
+            session->length--;
+            arwill_console_write(console, "\b \b");
+            if (session->length == 0U) {
+                session->normalizer.russian_layout_active = 0;
+            }
+        }
+        return 1;
+    }
+
+    if (byte == ascii_tab) {
+        complete_line(
+            console,
+            environment->filesystem,
+            session->current_directory,
+            session->line,
+            &session->length
+        );
+        return 1;
+    }
+
+    char input_char;
+    if (!normalize_text_input_byte(&session->normalizer, byte, &input_char)) {
+        return 1;
+    }
+
+    session->history_position = session->history.count;
+    (void)append_char_to_line(console, session->line, &session->length, input_char);
+    return 1;
+}
+
+static void service_remote_shell(
+    struct shell_session *session,
+    const struct shell_environment *environment
+) {
+    struct arwill_ipv4_stack *ipv4 = environment->ipv4;
+    if (ipv4 == 0) {
+        return;
+    }
+
+    (void)arwill_ipv4_poll_tcp(ipv4);
+    if (!arwill_ipv4_remote_console_connected(ipv4)) {
+        session->active = 0;
+        return;
+    }
+
+    if (!session->active) {
+        initialize_shell_session(
+            session,
+            session->console,
+            environment->user_runtime,
+            1
+        );
+        arwill_console_write_line(session->console, "Arwill remote console");
+        arwill_console_write_line(session->console, "warning: plaintext localhost access");
+        write_prompt(session->console, session->current_directory);
+    }
+
+    uint8_t byte = 0;
+    while (arwill_ipv4_remote_console_read_byte(ipv4, &byte)) {
+        if (!handle_shell_byte(session, environment, byte)) {
+            arwill_ipv4_remote_console_close(ipv4);
+            session->active = 0;
+            return;
+        }
+    }
+
+    if (arwill_ipv4_remote_console_peer_closed(ipv4)) {
+        arwill_ipv4_remote_console_close(ipv4);
+        session->active = 0;
+    }
+}
+
 void arwill_shell_run(
     const struct arwill_console *console,
     const struct arwill_input *input,
@@ -2937,110 +2940,37 @@ void arwill_shell_run(
     const struct arwill_user_runtime *user_runtime,
     const struct arwill_device_registry *devices
 ) {
-    char line[shell_line_capacity];
-    char current_directory[shell_path_capacity] = "/";
-    size_t length = 0;
-    struct shell_history history;
-    size_t history_position = 0;
-    enum shell_escape_state escape_state = shell_escape_none;
-    struct shell_input_normalizer normalizer;
-    struct shell_process_context process_context;
+    struct shell_environment environment;
+    struct shell_session serial_session;
+    struct shell_session remote_session;
+    struct arwill_console remote_console;
 
-    history.count = 0;
-    normalizer.utf8_state = shell_utf8_none;
-    normalizer.utf8_lead = 0;
-    normalizer.russian_layout_active = 0;
-    process_context.console = console;
-    process_context.user_runtime = user_runtime;
+    environment.filesystem = filesystem;
+    environment.memory = memory;
+    environment.power = power;
+    environment.processes = processes;
+    environment.pci = pci;
+    environment.network = network;
+    environment.ipv4 = ipv4;
+    environment.block_device = block_device;
+    environment.interrupts = interrupts;
+    environment.clock = clock;
+    environment.user_runtime = user_runtime;
+    environment.devices = devices;
 
-    write_prompt(console, current_directory);
+    remote_console.context = ipv4;
+    remote_console.write = remote_console_write;
+    remote_session.console = &remote_console;
+    remote_session.active = 0;
+
+    initialize_shell_session(&serial_session, console, user_runtime, 0);
+    write_prompt(console, serial_session.current_directory);
 
     for (;;) {
         uint8_t byte = 0;
-        while (!arwill_input_try_read_byte(input, &byte)) {
-            if (ipv4 != 0) {
-                (void)arwill_ipv4_poll_tcp(ipv4);
-            }
+        if (arwill_input_try_read_byte(input, &byte)) {
+            (void)handle_shell_byte(&serial_session, &environment, byte);
         }
-
-        if (escape_state == shell_escape_started) {
-            if (byte == ascii_left_bracket) {
-                escape_state = shell_escape_bracket;
-            } else {
-                escape_state = shell_escape_none;
-            }
-            continue;
-        }
-
-        if (escape_state == shell_escape_bracket) {
-            if (byte == ascii_arrow_up) {
-                history_previous(console, &history, line, &length, &history_position);
-            } else if (byte == ascii_arrow_down) {
-                history_next(console, &history, line, &length, &history_position);
-            }
-
-            escape_state = shell_escape_none;
-            continue;
-        }
-
-        if (byte == ascii_escape) {
-            escape_state = shell_escape_started;
-            continue;
-        }
-
-        if (byte == ascii_carriage_return || byte == ascii_line_feed) {
-            line[length] = '\0';
-            arwill_console_write_line(console, "");
-            history_add(&history, line);
-            history_position = history.count;
-            run_command(
-                console,
-                filesystem,
-                memory,
-                power,
-                processes,
-                pci,
-                network,
-                ipv4,
-                block_device,
-                interrupts,
-                clock,
-                user_runtime,
-                devices,
-                &process_context,
-                current_directory,
-                line
-            );
-            length = 0;
-            normalizer.utf8_state = shell_utf8_none;
-            normalizer.russian_layout_active = 0;
-            write_prompt(console, current_directory);
-            continue;
-        }
-
-        if (byte == ascii_backspace || byte == ascii_delete) {
-            if (length > 0) {
-                length--;
-                arwill_console_write(console, "\b \b");
-                if (length == 0U) {
-                    normalizer.russian_layout_active = 0;
-                }
-            }
-            continue;
-        }
-
-        if (byte == ascii_tab) {
-            complete_line(console, filesystem, current_directory, line, &length);
-            continue;
-        }
-
-        char input_char;
-
-        if (!normalize_text_input_byte(&normalizer, byte, &input_char)) {
-            continue;
-        }
-
-        history_position = history.count;
-        (void)append_char_to_line(console, line, &length, input_char);
+        service_remote_shell(&remote_session, &environment);
     }
 }

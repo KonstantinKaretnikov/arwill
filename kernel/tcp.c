@@ -12,6 +12,15 @@ void arwill_tcp_listener_init(struct arwill_tcp_listener *listener, uint16_t por
     listener->state = arwill_tcp_state_listen;
 }
 
+void arwill_tcp_listener_reset(struct arwill_tcp_listener *listener,
+    uint32_t initial_sequence) {
+    if (listener == 0) {
+        return;
+    }
+
+    arwill_tcp_listener_init(listener, listener->port, initial_sequence);
+}
+
 int arwill_tcp_listener_receive(struct arwill_tcp_listener *listener,
     const struct arwill_tcp_segment *incoming, struct arwill_tcp_segment *reply) {
     if (listener == 0 || incoming == 0 || reply == 0 ||
@@ -50,7 +59,7 @@ int arwill_tcp_listener_receive(struct arwill_tcp_listener *listener,
     if (listener->state == arwill_tcp_state_established
         && incoming->source_port == listener->peer_port
         && (incoming->flags & arwill_tcp_flag_ack) != 0U
-        && incoming->acknowledgement == listener->sequence
+        && incoming->acknowledgement <= listener->sequence
         && incoming->sequence == listener->acknowledgement) {
         size_t consumed = incoming->payload_length;
         if ((incoming->flags & arwill_tcp_flag_fin) != 0U) {

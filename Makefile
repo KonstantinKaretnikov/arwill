@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.14.0
+PROJECT_VERSION := 0.15.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -18,12 +18,11 @@ LD_LLD ?= $(if $(BREW_LLD_PREFIX),$(BREW_LLD_PREFIX)/bin/ld.lld,ld.lld)
 XORRISO ?= xorriso
 QEMU ?= qemu-system-x86_64
 QEMU_MACHINE := pc
-QEMU_CPU ?= max
 QEMU_POWEROFF_EXIT_STATUS := 33
 QEMU_POWEROFF_ARGS := -device isa-debug-exit,iobase=0xf4,iosize=0x04
 QEMU_STORAGE_ARGS := -drive file=$(TEST_DISK),format=raw,if=ide,index=0,media=disk
-QEMU_SSH_HOST_PORT ?= 22224
-QEMU_NETWORK_ARGS := -netdev user,id=net0,hostfwd=tcp:127.0.0.1:$(QEMU_SSH_HOST_PORT)-:22 -device e1000,netdev=net0,mac=52:54:00:12:34:56
+QEMU_REMOTE_CONSOLE_HOST_PORT ?= 23232
+QEMU_NETWORK_ARGS := -netdev user,id=net0,hostfwd=tcp:127.0.0.1:$(QEMU_REMOTE_CONSOLE_HOST_PORT)-:2323 -device e1000,netdev=net0,mac=52:54:00:12:34:56
 
 CFLAGS := --target=x86_64-elf
 CFLAGS += -std=c11 -ffreestanding -fno-stack-protector -fno-stack-check
@@ -33,10 +32,6 @@ CFLAGS += -Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion
 CFLAGS += -Wmissing-prototypes -Wstrict-prototypes
 CFLAGS += -MMD -MP
 CFLAGS += -Iinclude -Iarch/x86_64/include -Iplatform/qemu/include -Ithird_party/limine
-CFLAGS += -Ithird_party/bearssl_sha256
-CFLAGS += -Ithird_party/bearssl_x25519
-CFLAGS += -Ithird_party/bearssl_p256
-CFLAGS += -Ithird_party/bearssl_ecdsa
 CFLAGS += -DARWILL_PROJECT_NAME=\"$(PROJECT_NAME)\"
 CFLAGS += -DARWILL_PROJECT_VERSION=\"$(PROJECT_VERSION)\"
 
@@ -49,7 +44,6 @@ SOURCES := \
 	kernel/block_device.c \
 	kernel/clock.c \
 	kernel/console.c \
-	kernel/crypto.c \
 	kernel/device.c \
 	kernel/filesystem.c \
 	kernel/interrupts.c \
@@ -63,14 +57,12 @@ SOURCES := \
 	kernel/process.c \
 	kernel/scheduler.c \
 	kernel/shell.c \
-	kernel/ssh.c \
 	kernel/tcp.c \
 	kernel/user.c \
 	arch/x86_64/boot/framebuffer_console.c \
 	arch/x86_64/boot/entry.c \
 	arch/x86_64/boot/limine_requests.c \
 	arch/x86_64/cpu/idle.c \
-	arch/x86_64/cpu/entropy.c \
 	arch/x86_64/cpu/interrupts.c \
 	arch/x86_64/cpu/pci.c \
 	arch/x86_64/cpu/user_mode.c \
@@ -79,48 +71,8 @@ SOURCES := \
 	platform/qemu/x86_64/power.c \
 	platform/qemu/x86_64/serial_console.c
 
-SOURCES += \
-	third_party/bearssl_sha256/sha2small.c \
-	third_party/bearssl_sha256/dec32be.c \
-	third_party/bearssl_sha256/enc32be.c \
-	third_party/bearssl_x25519/ec_c25519_m31.c \
-	third_party/bearssl_x25519/ccopy.c \
-	third_party/bearssl_x25519/x25519_adapter.c \
-	third_party/bearssl_p256/ec_p256_m31.c \
-	third_party/bearssl_p256/p256_adapter.c \
-	third_party/bearssl_ecdsa/ec_secp256r1.c \
-	third_party/bearssl_ecdsa/ecdsa_i31_bits.c \
-	third_party/bearssl_ecdsa/ecdsa_i31_sign_raw.c \
-	third_party/bearssl_ecdsa/hmac.c \
-	third_party/bearssl_ecdsa/hmac_drbg.c \
-	third_party/bearssl_ecdsa/i31_add.c \
-	third_party/bearssl_ecdsa/i31_bitlen.c \
-	third_party/bearssl_ecdsa/i31_decmod.c \
-	third_party/bearssl_ecdsa/i31_decode.c \
-	third_party/bearssl_ecdsa/i31_encode.c \
-	third_party/bearssl_ecdsa/i31_fmont.c \
-	third_party/bearssl_ecdsa/i31_iszero.c \
-	third_party/bearssl_ecdsa/i31_modpow.c \
-	third_party/bearssl_ecdsa/i31_montmul.c \
-	third_party/bearssl_ecdsa/i31_muladd.c \
-	third_party/bearssl_ecdsa/i31_ninv31.c \
-	third_party/bearssl_ecdsa/i31_rshift.c \
-	third_party/bearssl_ecdsa/i31_sub.c \
-	third_party/bearssl_ecdsa/i31_tmont.c \
-	third_party/bearssl_ecdsa/i32_div32.c \
-	third_party/bearssl_ecdsa/ecdsa_adapter.c
-
 OBJECTS := $(SOURCES:%.c=$(OBJ_DIR)/%.o)
 DEPENDENCIES := $(OBJECTS:.o=.d)
-BEARSSL_SHA256_OBJECTS := $(filter $(OBJ_DIR)/third_party/bearssl_sha256/%.o,$(OBJECTS))
-BEARSSL_X25519_OBJECTS := $(filter $(OBJ_DIR)/third_party/bearssl_x25519/%.o,$(OBJECTS))
-BEARSSL_P256_OBJECTS := $(filter $(OBJ_DIR)/third_party/bearssl_p256/%.o,$(OBJECTS))
-BEARSSL_ECDSA_OBJECTS := $(filter $(OBJ_DIR)/third_party/bearssl_ecdsa/%.o,$(OBJECTS))
-
-$(BEARSSL_SHA256_OBJECTS): CFLAGS += -Wno-error=sign-conversion
-$(BEARSSL_X25519_OBJECTS): CFLAGS += -Wno-error=sign-conversion -Wno-error=implicit-int-conversion
-$(BEARSSL_P256_OBJECTS): CFLAGS += -Wno-error=sign-conversion -Wno-error=implicit-int-conversion
-$(BEARSSL_ECDSA_OBJECTS): CFLAGS += -Wno-error=sign-conversion -Wno-error=implicit-int-conversion
 
 -include $(DEPENDENCIES)
 
@@ -133,7 +85,7 @@ build: check-tools setup $(ISO)
 
 run: build $(TEST_DISK)
 	@set +e; \
-	$(QEMU) -M $(QEMU_MACHINE) -cpu $(QEMU_CPU) -m 128M -cdrom $(ISO) -boot d -serial stdio -monitor none -display none -no-reboot $(QEMU_POWEROFF_ARGS) $(QEMU_STORAGE_ARGS) $(QEMU_NETWORK_ARGS); \
+	$(QEMU) -M $(QEMU_MACHINE) -m 128M -cdrom $(ISO) -boot d -serial stdio -monitor none -display none -no-reboot $(QEMU_POWEROFF_ARGS) $(QEMU_STORAGE_ARGS) $(QEMU_NETWORK_ARGS); \
 	status=$$?; \
 	if [ "$$status" -eq "$(QEMU_POWEROFF_EXIT_STATUS)" ]; then exit 0; fi; \
 	exit "$$status"
@@ -150,7 +102,7 @@ check-artifacts: $(ISO)
 	@scripts/check_artifacts.sh "$(KERNEL)" "$(ISO)"
 
 smoke: $(ISO) $(TEST_DISK)
-	@scripts/smoke_qemu.sh "$(QEMU)" "$(QEMU_MACHINE)" "$(QEMU_CPU)" "$(ISO)" "$(TEST_DISK)" "$(SERIAL_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)"
+	@scripts/smoke_qemu.sh "$(QEMU)" "$(QEMU_MACHINE)" "$(ISO)" "$(TEST_DISK)" "$(SERIAL_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)"
 
 $(KERNEL): $(OBJECTS) arch/x86_64/linker.ld
 	@mkdir -p $(dir $@)

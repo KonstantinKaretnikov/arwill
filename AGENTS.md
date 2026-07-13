@@ -62,6 +62,11 @@ Rules for future work:
   the `AWP1` magic, `.awp` extension, and `/apps` directory. It
   is not ELF, POSIX process loading, dynamic linking, argument passing,
   environment handling, or a per-process address-space model.
+- Treat the TCP remote console as a plaintext, unauthenticated QEMU development
+  interface bound to host localhost. It reuses the canonical shell dispatcher,
+  supports one connection at a time, and is not Telnet, SSH, a socket API, or
+  safe for exposure to an untrusted network. SSH-specific crypto and host-key
+  storage are intentionally absent per ADR-0041.
 - When a durable workflow agreement is made with the project owner, update this
   file or another appropriate document in the same change so future sessions do
   not need to rediscover it.

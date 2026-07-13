@@ -1,6 +1,6 @@
 # ADR-0040: SSH Curve25519 ECDH Reply
 
-Status: accepted
+Status: superseded by ADR-0041
 
 ## Context
 

@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.14.0`.
+Status: `0.15.0`.
 
 Arwill already has:
 
@@ -59,7 +59,9 @@ Arwill already has:
   process-table exit status for built-in user programs;
 - [x] a PIT-backed monotonic clock exposed through `uptime` and syscall `4`;
 - [x] bounded PCI discovery and `pciinfo`, with a QEMU e1000 device attached
-  for the next network milestone;
+  to the bounded network path;
+- [x] a plaintext single-connection TCP remote console for `nc`, forwarded
+  only through host localhost by default;
 - [x] single-owner OS model: one owner, no accounts or multi-user permission
   system, with the kernel/user boundary kept as an engineering guardrail.
 
@@ -481,28 +483,23 @@ driver work, not accidental default access for every ring 3 program.
 
    Verified by: QEMU smoke observes `ping: reply received`.
 
-19. [ ] TCP and socket foundation
+19. [x] TCP remote console
 
-   Status: started: port-22 listener handshake state and in-order payload ACKs
-   are wired to bounded Ethernet/IPv4 polling through `tcplisten`.
+   Status: done in `0.15.0` per ADR-0041.
 
-   Goal: wire the listener to IPv4 TCP packet parsing, checksums,
-   retransmission, and a small kernel socket contract for a later owner-only
-   SSH service.
+   Scope: retain the bounded e1000/ARP/IPv4/TCP path, listen on guest port
+   `2323`, and expose an interactive plaintext shell to `nc` through a
+   localhost-only QEMU forward. Serial and TCP sessions have independent input
+   state and share one canonical command dispatcher. Remote `exit` closes the
+   connection without powering off Arwill.
 
-20. [ ] Owner-only SSH v2
+   Verified by: the QEMU smoke test opens two sequential real `nc`
+   connections, checks command execution, Backspace, Ctrl+C, remote `exit`,
+   and listener reuse.
 
-   Status: cryptographic foundation selected in ADR-0037. SHA-256 and the first
-   fail-closed x86-64/QEMU entropy source are implemented and smoke-tested per
-   ADR-0038. X25519 is implemented and checked against RFC 7748. SSH binary
-   framing and bidirectional KEXINIT are verified with OpenSSH 10.2. P-256
-   public-point derivation is also checked against the standard generator.
-   Remaining crypto work is ChaCha20-Poly1305. Deterministic P-256 ECDSA
-   signing is implemented and checked against the RFC 6979 SHA-256 `sample`
-   vector. A P-256 host key is
-   generated once, persisted at `/system/ssh-host-key`, validated on load, and
-   smoke-tested for a stable public fingerprint across reboot per ADR-0039.
-   `SSH_MSG_KEX_ECDH_INIT`, Curve25519 shared-secret derivation, the RFC 5656
-   exchange hash, ECDSA SSH signature encoding, and `ECDH_REPLY` construction
-   are implemented and smoke-tested per ADR-0040. Live OpenSSH verification of
-   the reply remains pending before `NEWKEYS` work begins.
+20. [ ] TCP robustness and socket contract
+
+   Goal: add inbound checksum validation, retransmission, explicit close
+   states, and a small kernel socket contract only when another network service
+   needs them. The current console remains a single-connection polling service;
+   it is not a general networking API.

@@ -1,6 +1,6 @@
 # ADR-0039: Persistent SSH Host Key
 
-Status: accepted
+Status: superseded by ADR-0041
 
 ## Context
 

@@ -15,7 +15,7 @@ Arwill is an early experimental project, not a production operating system.
 
 ## Current Status
 
-Version: `0.14.0`
+Version: `0.15.0`
 
 The current milestone boots an x86-64 kernel in QEMU through Limine, writes
 initialization status to the serial console, and starts a tiny serial shell.
@@ -159,19 +159,32 @@ calendar time: Arwill still has no RTC/CMOS reader, date, timezone, or NTP.
 
 `pciinfo` lists the bounded PCI scan used to discover platform devices. The
 current QEMU path attaches an Intel e1000 NIC. `netinfo` reports its fixed
-diagnostic MAC and `netprobe` transmits a bounded broadcast Ethernet frame;
-ARP, IP, sockets, and SSH are not implemented yet.
+diagnostic MAC and `netprobe` transmits a bounded broadcast Ethernet frame.
 
 `netcfg` shows the fixed QEMU user-network address (`10.0.2.15/24`) and
 gateway (`10.0.2.2`). `arping` constructs and transmits an ARP request for
 that gateway. `ping` completes one bounded ARP/ICMP echo exchange with the
-QEMU gateway. DHCP, routing, TCP, sockets, and SSH are still planned.
+QEMU gateway. A small TCP listener on guest port `2323` serves the same shell
+command dispatcher as the serial console. DHCP, general routing, a socket API,
+TCP retransmission, and multiple simultaneous connections remain absent.
 
-Interactive `make run` forwards host `127.0.0.1:22224` to guest TCP port 22.
-If that port is occupied, set `QEMU_SSH_HOST_PORT`, for example
-`make run QEMU_SSH_HOST_PORT=22225`.
-The current listener performs only the TCP handshake; it has no SSH payload
-service yet.
+Interactive `make run` forwards host `127.0.0.1:23232` to guest TCP port
+`2323`. Connect from another terminal with:
+
+```sh
+nc 127.0.0.1 23232
+```
+
+The remote console supports interactive command echo, Enter, Backspace,
+Ctrl+C line cancellation, command history, completion, and `exit` to close only
+the remote session. A second `nc` connection can then reuse the listener. To
+choose another host port, run for example
+`make run QEMU_REMOTE_CONSOLE_HOST_PORT=23233`.
+
+This interface is deliberately plaintext and unauthenticated. The default
+forward is bound only to host localhost; it must not be exposed to an
+untrusted or external network. SSH and its temporary cryptographic layer were
+removed in favor of this bounded development console.
 
 `userinfo` displays the current x86-64 user-mode setup, including HHDM, GDT,
 TSS, syscall-gate, run, syscall, byte, and bad-syscall counters.
@@ -228,7 +241,7 @@ make check
 ## Expected Serial Output
 
 ```text
-Arwill 0.14.0
+Arwill 0.15.0
 architecture: x86_64
 platform: qemu
 console: serial

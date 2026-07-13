@@ -38,6 +38,9 @@ struct arwill_tcp_listener {
 void arwill_tcp_listener_init(struct arwill_tcp_listener *listener, uint16_t port,
     uint32_t initial_sequence);
 
+void arwill_tcp_listener_reset(struct arwill_tcp_listener *listener,
+    uint32_t initial_sequence);
+
 int arwill_tcp_listener_receive(struct arwill_tcp_listener *listener,
     const struct arwill_tcp_segment *incoming, struct arwill_tcp_segment *reply);
 

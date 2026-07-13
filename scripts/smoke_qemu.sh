@@ -1,23 +1,24 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 7 ]; then
-    echo "usage: smoke_qemu.sh <qemu-system-x86_64> <machine> <cpu> <image.iso> <test-disk> <serial-log> <poweroff-exit-status>" >&2
+if [ "$#" -ne 6 ]; then
+    echo "usage: smoke_qemu.sh <qemu-system-x86_64> <machine> <image.iso> <test-disk> <serial-log> <poweroff-exit-status>" >&2
     exit 2
 fi
 
 qemu=$1
 machine=$2
-cpu=$3
-iso=$4
-test_disk=$5
-serial_log=$6
-expected_qemu_status=$7
+iso=$3
+test_disk=$4
+serial_log=$5
+expected_qemu_status=$6
 qemu_status_log=$serial_log.status
 reboot_serial_log=$serial_log.reboot
 reboot_status_log=$serial_log.reboot.status
+remote_console_log=$serial_log.remote
+remote_console_port=$((30000 + $$ % 20000))
 
-rm -f "$serial_log" "$qemu_status_log" "$reboot_serial_log" "$reboot_status_log"
+rm -f "$serial_log" "$qemu_status_log" "$reboot_serial_log" "$reboot_status_log" "$remote_console_log"
 
 wait_for_log_file() {
     log_file=$1
@@ -72,11 +73,12 @@ wait_for_reboot_log() {
 run_qemu_to_log() {
     log_file=$1
 
-    "$qemu" -M "$machine" -cpu "$cpu" -m 128M -cdrom "$iso" -boot d \
+    "$qemu" -M "$machine" -m 128M -cdrom "$iso" -boot d \
         -serial stdio -monitor none -display none -no-reboot \
         -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
         -drive file="$test_disk",format=raw,if=ide,index=0,media=disk \
-        -netdev user,id=net0 -device e1000,netdev=net0,mac=52:54:00:12:34:56 \
+        -netdev user,id=net0,hostfwd=tcp:127.0.0.1:"$remote_console_port"-:2323 \
+        -device e1000,netdev=net0,mac=52:54:00:12:34:56 \
         > "$log_file" 2>&1
 }
 
@@ -90,7 +92,7 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.14.0" 2
+    wait_for_primary_log_count "Arwill 0.15.0" 2
     sleep 0.1
     printf 'uptime\r'
     wait_for_primary_log_count "uptime: " 1
@@ -124,26 +126,20 @@ run_qemu_to_log() {
     wait_for_primary_log "tcplisten: frames 0, state listen"
     sleep 0.1
     printf 'tcpinfo\r'
-    wait_for_primary_log "tcp: port 22, state listen"
-    wait_for_primary_log "ssh host key: created"
-    wait_for_primary_log "ssh host fingerprint: SHA256-hex:"
+    wait_for_primary_log "tcp: port 2323, state listen"
     sleep 0.1
-    printf 'stat /system/ssh-host-key\r'
-    wait_for_primary_log "path: /system/ssh-host-key"
-    wait_for_primary_log "size: 32 bytes"
+    (
+        printf 'versx\010ion\n'
+        printf 'cancel-me\003pwd\n'
+        printf 'exit\n'
+    ) | nc -w 5 127.0.0.1 "$remote_console_port" > "$remote_console_log"
+    wait_for_log_file "$remote_console_log" "remote console: disconnected"
     sleep 0.1
-    printf 'cryptocheck\r'
-    wait_for_primary_log "cryptocheck: sha256 abc passed"
-    wait_for_primary_log "cryptocheck: sha256 stream passed"
-    wait_for_primary_log "cryptocheck: x25519 rfc7748 passed"
-    wait_for_primary_log "cryptocheck: p256 generator passed"
-    wait_for_primary_log "cryptocheck: ecdsa p256 rfc6979 passed"
-    sleep 0.1
-    printf 'entropyinfo\r'
-    wait_for_primary_log "sample: acquired 32 bytes"
-    sleep 0.1
-    printf 'sshcheck\r'
-    wait_for_primary_log "sshcheck: identification, kexinit, and ecdh reply passed"
+    (
+        printf 'uptime\n'
+        printf 'exit\n'
+    ) | nc -w 5 127.0.0.1 "$remote_console_port" >> "$remote_console_log"
+    wait_for_log_count_file "$remote_console_log" "Arwill remote console" 2
     sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
@@ -289,7 +285,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.14.0"
+    wait_for_primary_log "version: 0.15.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -317,7 +313,7 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-deadline=100
+deadline=50
 count=0
 
 while [ "$count" -lt "$deadline" ]; do
@@ -377,7 +373,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.14.0"
+check_line "Arwill 0.15.0"
 check_line "uptime     show monotonic time since boot"
 check_line "uptime: "
 check_line "pciinfo    list discovered PCI devices"
@@ -389,11 +385,8 @@ check_line "netcfg     show fixed IPv4 network configuration"
 check_line "arping     transmit an ARP request to the gateway"
 check_line "ping       send one ICMP echo to the gateway"
 check_line "tcpcheck   exercise the TCP listener handshake"
-check_line "tcplisten  poll for TCP port 22 connections"
-check_line "tcpinfo    show TCP port 22 listener state"
-check_line "cryptocheck verify the SHA-256 primitive"
-check_line "entropyinfo show hardware entropy status"
-check_line "sshcheck   verify SSH KEX framing and ECDH reply"
+check_line "tcplisten  poll the remote console TCP listener"
+check_line "tcpinfo    show remote console TCP state"
 check_line "network: qemu e1000"
 check_line "mac: 52:54:00:12:34:56"
 check_line "frame path: tx/rx bounded polling ready"
@@ -404,21 +397,9 @@ check_line "arping: request transmitted to 10.0.2.2"
 check_line "ping: reply received"
 check_line "tcpcheck: listener state established"
 check_line "tcplisten: frames 0, state listen"
-check_line "tcp: port 22, state listen"
-check_line "ssh host key: created"
-check_line "ssh host fingerprint: SHA256-hex:"
-check_line "ssh ecdh: init pending, reply pending"
-check_line "ssh ecdh failures: build 0, send 0"
-check_line "path: /system/ssh-host-key"
-check_line "cryptocheck: sha256 abc passed"
-check_line "cryptocheck: sha256 stream passed"
-check_line "cryptocheck: x25519 rfc7748 passed"
-check_line "cryptocheck: p256 generator passed"
-check_line "cryptocheck: ecdsa p256 rfc6979 passed"
-check_line "entropy: x86_64 rdrand"
-check_line "available: yes"
-check_line "sample: acquired 32 bytes"
-check_line "sshcheck: identification, kexinit, and ecdh reply passed"
+check_line "tcp: port 2323, state listen"
+check_line "remote console: plaintext, connections 0"
+check_line "remote bytes: received 0, sent 0, dropped 0, send failures 0"
 check_line "architecture: x86_64"
 check_line "platform: qemu"
 check_line "console: serial"
@@ -438,7 +419,7 @@ check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.14.0"
+check_line "Arwill 0.15.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -465,7 +446,6 @@ check_absent "info [path]"
 check_absent "poweroff"
 check_line "memory map:"
 check_line "usable"
-check_line "bootloader reclaimable 0x0000000000001000"
 check_line "physical allocator:"
 check_line "page size: 4096 bytes"
 check_line "kernel heap:"
@@ -555,7 +535,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.14.0"
+check_line "version: 0.15.0"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
@@ -564,6 +544,29 @@ check_line "cat: no such file: /docs/missing"
 check_line "Arwill:/boot/limine> "
 check_line "Arwill:/boot> exit"
 check_line "status: powering off"
+
+for expected in \
+    "Arwill remote console" \
+    "warning: plaintext localhost access" \
+    "Arwill 0.15.0" \
+    "^C" \
+    "Arwill:/> pwd" \
+    "remote console: disconnected" \
+    "uptime: "
+do
+    if ! grep -F -q "$expected" "$remote_console_log"; then
+        echo "missing remote console output: $expected" >&2
+        cat "$remote_console_log" >&2
+        exit 1
+    fi
+done
+
+remote_connection_count=$(grep -F -c "Arwill remote console" "$remote_console_log")
+if [ "$remote_connection_count" -lt 2 ]; then
+    echo "remote console listener was not reused" >&2
+    cat "$remote_console_log" >&2
+    exit 1
+fi
 
 uptime_values=$(sed -n 's/.*uptime: \([0-9][0-9]*\) ms.*/\1/p' "$serial_log")
 set -- $uptime_values
@@ -578,10 +581,6 @@ fi
 
     (
     wait_for_reboot_log "Arwill:/> "
-    sleep 0.1
-    printf 'tcpinfo\r'
-    wait_for_reboot_log "ssh host key: loaded"
-    wait_for_reboot_log "ssh host fingerprint: SHA256-hex:"
     sleep 0.1
     printf 'cat /owner/note\r'
     wait_for_reboot_log "owner note persisted across reboot"
@@ -686,13 +685,6 @@ if ! grep -F -q "owner note persisted across reboot" "$reboot_serial_log"; then
     exit 1
 fi
 
-primary_fingerprint=$(sed -n 's/^ssh host fingerprint: //p' "$serial_log" | head -n 1 | tr -d '\r')
-reboot_fingerprint=$(sed -n 's/^ssh host fingerprint: //p' "$reboot_serial_log" | head -n 1 | tr -d '\r')
-if [ -z "$primary_fingerprint" ] || [ "$primary_fingerprint" != "$reboot_fingerprint" ]; then
-    echo "SSH host-key fingerprint changed across reboot" >&2
-    exit 1
-fi
-
 for expected in \
     "persistent mutable text" \
     "cat: cannot display binary file: /scratch/data.bin" \
@@ -712,13 +704,13 @@ do
     fi
 done
 
-reused_data=$(dd if="$test_disk" bs=512 skip=19 count=1 2>/dev/null | LC_ALL=C tr -d '\000')
+reused_data=$(dd if="$test_disk" bs=512 skip=18 count=1 2>/dev/null | LC_ALL=C tr -d '\000')
 if [ "$reused_data" != "reused sector" ]; then
     echo "released ARFS data sector was not reused as expected" >&2
     exit 1
 fi
 
-binary_hex=$(od -An -tx1 -N7 -j $((20 * 512)) "$test_disk" | tr -d ' \n')
+binary_hex=$(od -An -tx1 -N7 -j $((19 * 512)) "$test_disk" | tr -d ' \n')
 if [ "$binary_hex" != "0001027f80feff" ]; then
     echo "persisted ARFS binary contents differ: $binary_hex" >&2
     exit 1

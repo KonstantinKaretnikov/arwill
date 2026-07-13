@@ -1,6 +1,6 @@
 # ADR-0036: TCP Listener State v1
 
-Status: accepted
+Status: superseded by ADR-0041
 
 ## Context
 

@@ -26,6 +26,7 @@ check_tool "curl" "curl"
 check_tool "tar" "tar"
 check_tool "shasum" "shasum"
 check_tool "make" "make"
+check_tool "nc" "nc"
 
 if [ "$missing" -ne 0 ]; then
     echo "install prerequisites with: brew install llvm xorriso qemu" >&2

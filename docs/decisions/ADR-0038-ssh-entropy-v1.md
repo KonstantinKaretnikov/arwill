@@ -1,6 +1,6 @@
 # ADR-0038: SSH Entropy v1
 
-Status: accepted
+Status: superseded by ADR-0041
 
 ## Context
 
