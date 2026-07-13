@@ -42,47 +42,20 @@ void arwill_kernel_start(
     arwill_process_manager_init(&process_manager);
     arwill_scheduler_init();
 
+    arwill_interrupts_enable(interrupts);
+
+    arwill_console_write_line(console, "   A    RRR   W   W  III  L     L");
+    arwill_console_write_line(console, "  A A   R  R  W   W   I   L     L");
+    arwill_console_write_line(console, " AAAAA  RRR   W W W   I   L     L");
+    arwill_console_write_line(console, " A   A  R R   WW WW   I   L     L");
+    arwill_console_write_line(console, " A   A  R  R  W   W  III  LLLL  LLLL");
+    arwill_console_write_line(console, "");
     arwill_console_write(console, ARWILL_PROJECT_NAME);
     arwill_console_write(console, " ");
-    arwill_console_write_line(console, ARWILL_PROJECT_VERSION);
-    arwill_console_write_line(console, "architecture: " ARWILL_TARGET_ARCHITECTURE);
-    arwill_console_write_line(console, "platform: " ARWILL_TARGET_PLATFORM);
-    arwill_console_write_line(console, "console: serial");
-    arwill_console_write_line(console, "input: serial");
-    arwill_console_write_line(console, "owner: " ARWILL_OWNER_MODEL);
-    arwill_console_write_line(console, "shell: ready");
-    arwill_console_write(console, "filesystem: ");
-    if (filesystem == 0 || filesystem->name == 0) {
-        arwill_console_write_line(console, "unknown");
-    } else {
-        arwill_console_write_line(console, filesystem->name);
-    }
-    arwill_console_write(console, "block: ");
-    if (block_device == 0 || block_device->name == 0) {
-        arwill_console_write_line(console, "unavailable");
-    } else {
-        arwill_console_write_line(console, block_device->name);
-    }
-    arwill_console_write_line(console, "memory: boot memory map");
-    arwill_console_write_line(console, "allocator: physical page bump allocator + kernel heap");
-    arwill_console_write_line(console, "devices: registry");
-    arwill_console_write_line(console, "processes: kernel cooperative");
-    arwill_console_write(console, "interrupts: ");
-    if (interrupts == 0 || interrupts->name == 0) {
-        arwill_console_write_line(console, "unavailable");
-    } else {
-        arwill_console_write_line(console, interrupts->name);
-    }
-    arwill_console_write_line(console, "scheduler: AWP round-robin");
-    arwill_console_write(console, "user: ");
-    if (user_runtime == 0 || user_runtime->name == 0) {
-        arwill_console_write_line(console, "unavailable");
-    } else {
-        arwill_console_write_line(console, user_runtime->name);
-    }
-    arwill_console_write_line(console, "power: qemu debug exit");
-    arwill_interrupts_enable(interrupts);
-    arwill_console_write_line(console, "status: kernel initialized");
+    arwill_console_write(console, ARWILL_PROJECT_VERSION);
+    arwill_console_write_line(console, " ready");
+    arwill_console_write_line(console, "config: /owner/arwill.conf");
+    arwill_console_write_line(console, "help: type 'help'");
 
     arwill_shell_run(
         console,

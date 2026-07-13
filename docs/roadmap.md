@@ -242,13 +242,12 @@ driver work, not accidental default access for every ring 3 program.
    - keep the owner fully in control of the machine;
    - keep ring 3 as a safety boundary for ordinary programs, not as a
      multi-user permissions mechanism;
-   - expose the model through startup output and `ownerinfo`;
+   - expose the model through `ownerinfo` and system documentation;
    - record the decision as an ADR.
 
    Verified by:
 
-   - smoke test observes `owner: single-owner`;
-   - smoke test runs `ownerinfo`;
+   - smoke test runs `ownerinfo` and observes the single-owner model;
    - docs and AGENTS distinguish CPU user mode from OS user accounts.
 
 6. [x] Writable filesystem
