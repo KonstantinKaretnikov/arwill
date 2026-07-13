@@ -48,7 +48,7 @@ enum {
     e1000_poll_limit = 100000,
 };
 
-static const uint64_t e1000_mmio_virtual_base = 0xffffc00000000000ULL;
+static const uint64_t e1000_mmio_virtual_base = 0xffff900000000000ULL;
 
 struct e1000_descriptor {
     uint64_t address;

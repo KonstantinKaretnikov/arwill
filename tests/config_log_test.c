@@ -6,6 +6,7 @@
 #include <arwill/kernel/config.h>
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/log.h>
+#include <arwill/kernel/service.h>
 
 enum {
     fake_file_capacity = 1024
@@ -73,6 +74,22 @@ static uint64_t fake_milliseconds(void *context) {
     return time == 0 ? 0U : time->milliseconds;
 }
 
+int arwill_ipv4_remote_console_start(struct arwill_ipv4_stack *stack,
+    uint16_t port) {
+    if (stack == 0 || port == 0U) {
+        return 0;
+    }
+    stack->tcp_listener.port = port;
+    stack->remote_console_running = 1;
+    return 1;
+}
+
+void arwill_ipv4_remote_console_stop(struct arwill_ipv4_stack *stack) {
+    if (stack != 0) {
+        stack->remote_console_running = 0;
+    }
+}
+
 static int expect(int condition, const char *message) {
     if (condition) {
         return 1;
@@ -123,17 +140,12 @@ int main(void) {
             "invalid port rejected")) {
         return 1;
     }
-
-    if (!copy_text(&storage,
-            "config.version=1\n"
-            "remote.enabled=true\n"
-            "remote.port=23232\n"
-            "remote.port=23233\n"
-            "remote.key=owner-key\n"
-            "log.level=info\n") ||
-        !expect(!arwill_config_load(&config), "duplicate field rejected") ||
-        !expect(!config.valid && !config.remote_enabled,
-            "invalid file disables remote access")) {
+    if (!expect(arwill_config_set_remote_key(&config, "long-owner-key"),
+            "long key persists") ||
+        !expect(arwill_config_set_remote_key(&config, "short"),
+            "shorter key persists") ||
+        !expect(config.remote_key[5] == '\0' && config.remote_key[14] == '\0',
+            "shorter key clears old tail")) {
         return 1;
     }
 
@@ -144,6 +156,51 @@ int main(void) {
         .monotonic_milliseconds = fake_milliseconds,
     };
     struct arwill_event_log log;
+    arwill_event_log_init(&log, &clock);
+    struct arwill_ipv4_stack ipv4 = { 0 };
+    struct arwill_service_manager services;
+    arwill_service_manager_init(
+        &services, &ipv4, &config, &log, 1
+    );
+    if (!expect(services.remote_console_state == arwill_service_running,
+            "enabled service starts") ||
+        !expect(ipv4.tcp_listener.port == 23232U, "service uses config port") ||
+        !expect(arwill_service_remote_console_stop(&services), "service stops") ||
+        !expect(services.remote_console_state == arwill_service_stopped,
+            "stopped state")) {
+        return 1;
+    }
+
+    if (!copy_text(&storage,
+            "config.version=1\n"
+            "remote.enabled=true\n"
+            "remote.port=24001\n"
+            "remote.key=owner-key\n"
+            "log.level=info\n") ||
+        !expect(arwill_service_remote_console_restart(&services),
+            "restart reloads configuration") ||
+        !expect(config.remote_port == 24001U &&
+            ipv4.tcp_listener.port == 24001U,
+            "restarted service applies new port")) {
+        return 1;
+    }
+
+    if (!copy_text(&storage,
+            "config.version=1\n"
+            "remote.enabled=true\n"
+            "remote.port=23232\n"
+            "remote.port=23233\n"
+            "remote.key=owner-key\n"
+            "log.level=info\n") ||
+        !expect(!arwill_service_remote_console_restart(&services),
+            "invalid restart rejected") ||
+        !expect(!config.valid && !config.remote_enabled,
+            "invalid file disables remote access") ||
+        !expect(services.remote_console_state == arwill_service_failed,
+            "invalid restart enters failed state")) {
+        return 1;
+    }
+
     arwill_event_log_init(&log, &clock);
     for (uint64_t index = 0; index < 70U; index++) {
         time.milliseconds = index * 10U;

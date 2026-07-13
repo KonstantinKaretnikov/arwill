@@ -26,7 +26,7 @@ wait_for_log_file() {
     count=0
 
     while [ "$count" -lt 100 ]; do
-        if [ -f "$log_file" ] && grep -q "$pattern" "$log_file"; then
+        if [ -f "$log_file" ] && grep -F -q "$pattern" "$log_file"; then
             return 0
         fi
 
@@ -45,7 +45,7 @@ wait_for_log_count_file() {
 
     while [ "$count" -lt 100 ]; do
         if [ -f "$log_file" ]; then
-            seen_count=$(grep -c "$pattern" "$log_file" 2>/dev/null || true)
+            seen_count=$(grep -F -c "$pattern" "$log_file" 2>/dev/null || true)
             if [ "$seen_count" -ge "$expected_count" ]; then
                 return 0
             fi
@@ -77,7 +77,7 @@ run_qemu_to_log() {
         -serial stdio -monitor none -display none -no-reboot \
         -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
         -drive file="$test_disk",format=raw,if=ide,index=0,media=disk \
-        -netdev user,id=net0,hostfwd=tcp:127.0.0.1:"$remote_console_port"-:2323 \
+        -netdev user,id=net0,hostfwd=tcp:127.0.0.1:"$remote_console_port"-:23232 \
         -device e1000,netdev=net0,mac=52:54:00:12:34:56 \
         > "$log_file" 2>&1
 }
@@ -92,7 +92,7 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.15.1" 2
+    wait_for_primary_log_count "Arwill 0.16.0" 2
     sleep 0.1
     printf 'uptime\r'
     wait_for_primary_log_count "uptime: " 1
@@ -126,22 +126,53 @@ run_qemu_to_log() {
     wait_for_primary_log "tcplisten: frames 0, state listen"
     sleep 0.1
     printf 'tcpinfo\r'
-    wait_for_primary_log "tcp: port 2323, state listen"
+    wait_for_primary_log "tcp: port 23232, state listen"
     sleep 0.1
     (
+        printf 'wrong\rwrong\rwrong\r'
+    ) | nc -w 5 127.0.0.1 "$remote_console_port" > "$remote_console_log"
+    wait_for_log_file "$remote_console_log" "Access denied"
+    sleep 0.1
+    (
+        printf 'arwill\r'
         printf 'versx\010ion\n'
         printf '\033[A\n'
         printf '\033[A\033[Bpwd\n'
         printf 'cancel-me\003'
         printf 'exit\n'
-    ) | nc -w 5 127.0.0.1 "$remote_console_port" > "$remote_console_log"
+    ) | nc -w 5 127.0.0.1 "$remote_console_port" >> "$remote_console_log"
     wait_for_log_file "$remote_console_log" "remote console: disconnected"
     sleep 0.1
     (
+        printf 'arwill\r'
         printf 'uptime\n'
         printf 'exit\n'
     ) | nc -w 5 127.0.0.1 "$remote_console_port" >> "$remote_console_log"
     wait_for_log_count_file "$remote_console_log" "Arwill remote console" 2
+    sleep 0.1
+    printf 'config\r'
+    wait_for_primary_log "remote.key=********"
+    wait_for_primary_log "config.valid=yes"
+    sleep 0.1
+    printf 'service status\r'
+    wait_for_primary_log "remote-console: running, port 23232"
+    sleep 0.1
+    printf 'service stop remote-console\r'
+    wait_for_primary_log "service: remote-console stopped"
+    sleep 0.1
+    printf 'service status\r'
+    wait_for_primary_log "remote-console: stopped, port 23232"
+    sleep 0.1
+    printf 'service start remote-console\r'
+    wait_for_primary_log "service: remote-console running"
+    sleep 0.1
+    printf 'service restart remote-console\r'
+    wait_for_primary_log "service: remote-console restarted"
+    sleep 0.1
+    printf 'logs\r'
+    wait_for_primary_log "warning auth rejected"
+    wait_for_primary_log "info auth accepted"
+    wait_for_primary_log "info service restarted"
     sleep 0.1
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/> " 4
@@ -167,7 +198,7 @@ run_qemu_to_log() {
     wait_for_primary_log "fb0 console limine framebuffer text ready"
     wait_for_primary_log "disk0 block qemu ata pio ready"
     wait_for_primary_log "heap0 memory hhdm free-list ready"
-    wait_for_primary_log "user0 user x86_64 ring3 int80 ready"
+    wait_for_primary_log "user0 user x86_64 ring3 awp scheduler ready"
     sleep 0.1
     printf 'blk\t\r'
     wait_for_primary_log "sample: ARWILL-BLOCK-DEVICE-TEST"
@@ -179,7 +210,7 @@ run_qemu_to_log() {
     wait_for_primary_log "exception probe: handled vector 3"
     sleep 0.1
     printf 'sched\t\r'
-    wait_for_primary_log "scheduler: timer tick round-robin foundation"
+    wait_for_primary_log "scheduler: kernel/user tick accounting + AWP round-robin"
     sleep 0.1
     printf 'run he\t\r'
     wait_for_primary_log "process hello: hello from pid"
@@ -219,7 +250,7 @@ run_qemu_to_log() {
     wait_for_primary_log "pid state runs exit name"
     wait_for_primary_log "finished"
     sleep 0.1
-    printf 'l\t\r'
+    printf 'ls\r'
     wait_for_primary_log "system/"
     wait_for_primary_log "apps/"
     sleep 0.1
@@ -234,6 +265,62 @@ run_qemu_to_log() {
     sleep 0.1
     printf 'exit\r'
     wait_for_primary_log "exec: exited 0"
+    sleep 0.1
+    printf 'writehex /spin.awp 41575031100000000200000000000000ebfe\r'
+    wait_for_primary_log "writehex: wrote 18 bytes to /spin.awp"
+    sleep 0.1
+    printf 'exec /spin.awp\r'
+    wait_for_primary_log "exec: spawned pid"
+    sleep 0.3
+    printf '\003'
+    wait_for_primary_log "exec: exited 130"
+    sleep 0.1
+    printf 'rm /spin.awp\r'
+    wait_for_primary_log "rm: removed /spin.awp"
+    sleep 0.1
+    printf 'writehex /fault.awp 415750311000000002000000000000000f0b\r'
+    wait_for_primary_log "writehex: wrote 18 bytes to /fault.awp"
+    sleep 0.1
+    printf 'exec /fault.awp\r'
+    wait_for_primary_log "exec: fault 6"
+    wait_for_primary_log "exec: exited 134"
+    sleep 0.1
+    printf 'rm /fault.awp\r'
+    wait_for_primary_log "rm: removed /fault.awp"
+    sleep 0.1
+    printf 'exec /apps/edit.awp\r'
+    wait_for_primary_log "edit file: "
+    (
+        (
+            printf 'arwill\r'
+            sleep 0.5
+            printf 'exec /apps/calc.awp\r'
+            sleep 0.5
+            printf '9*9\r'
+            sleep 1
+            printf 'exit\r'
+            sleep 0.5
+            printf 'exit\r'
+        ) | nc -w 6 127.0.0.1 "$remote_console_port" >> "$remote_console_log"
+    ) &
+    concurrent_remote_pid=$!
+    sleep 0.2
+    printf '/owner/smoke-edit.txt\r'
+    wait_for_primary_log "/owner/smoke-edit.txt"
+    sleep 0.1
+    printf 'parallel editor\023\021'
+    wait_for_primary_log "parallel editor"
+    wait "$concurrent_remote_pid" || true
+    wait_for_log_file "$remote_console_log" "9*9=81"
+    sleep 0.1
+    printf 'cat /owner/smoke-edit.txt\r'
+    wait_for_primary_log_count "parallel editor" 2
+    sleep 0.1
+    printf 'rm /owner/smoke-edit.txt\r'
+    wait_for_primary_log "rm: removed /owner/smoke-edit.txt"
+    sleep 0.1
+    printf 'ps\r'
+    wait_for_primary_log "awp pid state runs exit name"
     sleep 0.1
     printf 'irqinfo\r'
     wait_for_primary_log_count "timer observed: yes" 2
@@ -268,13 +355,13 @@ run_qemu_to_log() {
     printf 'pwd\r'
     wait_for_primary_log_count "Arwill:/boot> " 2
     sleep 0.1
-    printf 'l\t\r'
+    printf 'ls\r'
     wait_for_primary_log "limine/"
     sleep 0.1
     printf 'cd l\t\r'
     wait_for_primary_log "Arwill:/boot/limine> "
     sleep 0.1
-    printf 'l\t\r'
+    printf 'ls\r'
     wait_for_primary_log "limine.conf"
     sleep 0.1
     printf 'cat limine.c\t\r'
@@ -287,7 +374,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.15.1"
+    wait_for_primary_log "version: 0.16.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -315,7 +402,7 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-deadline=50
+deadline=150
 count=0
 
 while [ "$count" -lt "$deadline" ]; do
@@ -375,7 +462,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.15.1"
+check_line "Arwill 0.16.0"
 check_line "uptime     show monotonic time since boot"
 check_line "uptime: "
 check_line "pciinfo    list discovered PCI devices"
@@ -399,7 +486,7 @@ check_line "arping: request transmitted to 10.0.2.2"
 check_line "ping: reply received"
 check_line "tcpcheck: listener state established"
 check_line "tcplisten: frames 0, state listen"
-check_line "tcp: port 2323, state listen"
+check_line "tcp: port 23232, state listen"
 check_line "remote console: plaintext, connections 0"
 check_line "remote bytes: received 0, sent 0, dropped 0, send failures 0"
 check_line "tcp integrity: checksum drops 0, duplicate acks 0"
@@ -417,13 +504,13 @@ check_line "allocator: physical page bump allocator + kernel heap"
 check_line "devices: registry"
 check_line "processes: kernel cooperative"
 check_line "interrupts: x86_64 idt pic pit"
-check_line "scheduler: timer tick foundation"
-check_line "user: x86_64 ring3 int80"
+check_line "scheduler: AWP round-robin"
+check_line "user: x86_64 ring3 awp scheduler"
 check_line "power: qemu debug exit"
 check_line "status: kernel initialized"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.15.1"
+check_line "Arwill 0.16.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -440,6 +527,9 @@ check_line "irqprobe   trigger a safe breakpoint exception"
 check_line "schedinfo  show scheduler tick diagnostics"
 check_line "userinfo   show user-mode diagnostics"
 check_line "ownerinfo  show the OS ownership model"
+check_line "config     show or change system configuration"
+check_line "logs       show the complete event log"
+check_line "service    inspect or control built-in services"
 check_line "ps         show kernel process table"
 check_line "run [name] launch a built-in kernel process"
 check_line "exec [path] run a stored program image"
@@ -466,7 +556,7 @@ check_line "fs0 filesystem arfs mutable mounted"
 check_line "heap0 memory hhdm free-list ready"
 check_line "timer0 interrupts x86_64 idt pic pit ready"
 check_line "power0 power qemu debug exit ready"
-check_line "user0 user x86_64 ring3 int80 ready"
+check_line "user0 user x86_64 ring3 awp scheduler ready"
 check_line "block device: qemu ata pio"
 check_line "sector size: 512 bytes"
 check_line "sample lba: 1"
@@ -478,11 +568,11 @@ check_line "enabled: yes"
 check_line "timer observed: yes"
 check_line "timer ticks:"
 check_line "exception probe: handled vector 3"
-check_line "scheduler: timer tick round-robin foundation"
+check_line "scheduler: kernel/user tick accounting + AWP round-robin"
 check_line "scheduler ticks:"
 check_line "scheduler slots: 2"
-check_line "slot shell ticks:"
-check_line "slot idle ticks:"
+check_line "slot kernel ticks:"
+check_line "slot user ticks:"
 check_line "run: spawned pid"
 check_line "process hello: hello from pid"
 check_line "process counter: pid 2 step 1/3"
@@ -495,7 +585,7 @@ check_line "user hello: hello from ring 3"
 check_line "run: spawned pid 4: userbad"
 check_line "awp hello from storage"
 check_line "exec: exited 9"
-check_line "user: x86_64 ring3 int80"
+check_line "user: x86_64 ring3 awp scheduler"
 check_line "available: yes"
 check_line "hhdm: yes"
 check_line "gdt: loaded"
@@ -522,6 +612,26 @@ check_line "calc> "
 check_line "84"
 check_line "11"
 check_line "exec: exited 0"
+check_line "remote.key=********"
+check_line "config.valid=yes"
+check_line "remote-console: running, port 23232"
+check_line "remote-console: stopped, port 23232"
+check_line "service: remote-console running"
+check_line "service: remote-console restarted"
+check_line "warning auth rejected"
+check_line "info auth accepted"
+check_line "info service restarted"
+check_line "writehex: wrote 18 bytes to /spin.awp"
+check_line "exec: exited 130"
+check_line "rm: removed /spin.awp"
+check_line "writehex: wrote 18 bytes to /fault.awp"
+check_line "exec: fault 6"
+check_line "exec: exited 134"
+check_line "rm: removed /fault.awp"
+check_line "edit file: /owner/smoke-edit.txt"
+check_line "parallel editor"
+check_line "rm: removed /owner/smoke-edit.txt"
+check_line "awp pid state runs exit name"
 check_line "system/"
 check_line "cat: cannot display binary file: /apps/hello.awp"
 check_line "mkdir: created /scratch"
@@ -539,7 +649,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.15.1"
+check_line "version: 0.16.0"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
@@ -550,12 +660,15 @@ check_line "Arwill:/boot> exit"
 check_line "status: powering off"
 
 for expected in \
+    "Access key: " \
+    "Access denied" \
     "Arwill remote console" \
-    "warning: plaintext localhost access" \
-    "Arwill 0.15.1" \
+    "warning: plaintext trusted-LAN access" \
+    "Arwill 0.16.0" \
     "^C" \
     "remote console: disconnected" \
-    "uptime: "
+    "uptime: " \
+    "9*9=81"
 do
     if ! grep -F -q "$expected" "$remote_console_log"; then
         echo "missing remote console output: $expected" >&2
@@ -577,7 +690,7 @@ if ! tr -d '\r' < "$remote_console_log" | grep -x -q '/'; then
     exit 1
 fi
 
-remote_version_count=$(grep -F -c "Arwill 0.15.1" "$remote_console_log")
+remote_version_count=$(grep -F -c "Arwill 0.16.0" "$remote_console_log")
 if [ "$remote_version_count" -lt 2 ]; then
     echo "remote console Up history did not repeat the command" >&2
     cat "$remote_console_log" >&2
@@ -720,13 +833,13 @@ do
     fi
 done
 
-reused_data=$(dd if="$test_disk" bs=512 skip=18 count=1 2>/dev/null | LC_ALL=C tr -d '\000')
+reused_data=$(dd if="$test_disk" bs=512 skip=24 count=1 2>/dev/null | LC_ALL=C tr -d '\000')
 if [ "$reused_data" != "reused sector" ]; then
     echo "released ARFS data sector was not reused as expected" >&2
     exit 1
 fi
 
-binary_hex=$(od -An -tx1 -N7 -j $((19 * 512)) "$test_disk" | tr -d ' \n')
+binary_hex=$(od -An -tx1 -N7 -j $((25 * 512)) "$test_disk" | tr -d ' \n')
 if [ "$binary_hex" != "0001027f80feff" ]; then
     echo "persisted ARFS binary contents differ: $binary_hex" >&2
     exit 1

@@ -21,6 +21,10 @@ struct fake_clock {
     uint64_t milliseconds;
 };
 
+enum {
+    test_remote_console_port = 23232
+};
+
 static const uint8_t guest_mac[arwill_network_mac_length] = {
     0x52U, 0x54U, 0x00U, 0x12U, 0x34U, 0x56U
 };
@@ -153,7 +157,7 @@ static void queue_segment(struct fake_network *network, uint16_t source_port,
     ip[19] = 15U;
     put16(ip, 10U, checksum(ip, 20U));
     put16(tcp, 0U, source_port);
-    put16(tcp, 2U, arwill_remote_console_port);
+    put16(tcp, 2U, test_remote_console_port);
     put32(tcp, 4U, sequence);
     put32(tcp, 8U, acknowledgement);
     tcp[12] = 0x50U;
@@ -194,7 +198,9 @@ int main(void) {
     const uint16_t peer_port = 42000U;
     const uint32_t peer_initial_sequence = 1000U;
 
-    if (!expect(arwill_ipv4_init(&stack, &network, &clock), "stack initialization")) {
+    if (!expect(arwill_ipv4_init(
+            &stack, &network, &clock, test_remote_console_port
+        ), "stack initialization")) {
         return 1;
     }
 

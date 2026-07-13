@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.15.1
+PROJECT_VERSION := 0.16.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -17,9 +17,10 @@ IPV4_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/co
 	include/arwill/kernel/cpu.h include/arwill/kernel/ipv4.h \
 	include/arwill/kernel/network.h include/arwill/kernel/tcp.h
 CONFIG_LOG_HOST_TEST := $(BUILD_DIR)/tests/config_log_test
-CONFIG_LOG_HOST_TEST_SOURCES := tests/config_log_test.c kernel/clock.c kernel/config.c kernel/filesystem.c kernel/log.c
+CONFIG_LOG_HOST_TEST_SOURCES := tests/config_log_test.c kernel/clock.c kernel/config.c kernel/filesystem.c kernel/log.c kernel/service.c
 CONFIG_LOG_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/config.h \
-	include/arwill/kernel/filesystem.h include/arwill/kernel/log.h
+	include/arwill/kernel/filesystem.h include/arwill/kernel/ipv4.h \
+	include/arwill/kernel/log.h include/arwill/kernel/service.h
 
 BREW_LLVM_PREFIX := $(shell brew --prefix llvm 2>/dev/null)
 BREW_LLD_PREFIX := $(shell brew --prefix lld 2>/dev/null)
@@ -31,8 +32,10 @@ QEMU_MACHINE := pc
 QEMU_POWEROFF_EXIT_STATUS := 33
 QEMU_POWEROFF_ARGS := -device isa-debug-exit,iobase=0xf4,iosize=0x04
 QEMU_STORAGE_ARGS := -drive file=$(TEST_DISK),format=raw,if=ide,index=0,media=disk
+QEMU_REMOTE_CONSOLE_BIND ?= 127.0.0.1
 QEMU_REMOTE_CONSOLE_HOST_PORT ?= 23232
-QEMU_NETWORK_ARGS := -netdev user,id=net0,hostfwd=tcp:127.0.0.1:$(QEMU_REMOTE_CONSOLE_HOST_PORT)-:2323 -device e1000,netdev=net0,mac=52:54:00:12:34:56
+QEMU_REMOTE_CONSOLE_GUEST_PORT ?= 23232
+QEMU_NETWORK_ARGS := -netdev user,id=net0,hostfwd=tcp:$(QEMU_REMOTE_CONSOLE_BIND):$(QEMU_REMOTE_CONSOLE_HOST_PORT)-:$(QEMU_REMOTE_CONSOLE_GUEST_PORT) -device e1000,netdev=net0,mac=52:54:00:12:34:56
 
 CFLAGS := --target=x86_64-elf
 CFLAGS += -std=c11 -ffreestanding -fno-stack-protector -fno-stack-check
@@ -68,6 +71,7 @@ SOURCES := \
 	kernel/power.c \
 	kernel/process.c \
 	kernel/scheduler.c \
+	kernel/service.c \
 	kernel/shell.c \
 	kernel/tcp.c \
 	kernel/user.c \

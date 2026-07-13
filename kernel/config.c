@@ -55,7 +55,9 @@ static void set_defaults(struct arwill_config *config) {
     config->version = 1;
     config->remote_enabled = 1;
     config->remote_port = 23232U;
-    config->remote_key[0] = '\0';
+    for (size_t index = 0; index < arwill_config_remote_key_capacity; index++) {
+        config->remote_key[index] = '\0';
+    }
     config->log_level = arwill_config_log_info;
     config->loaded_from_file = 0;
     config->valid = 1;
@@ -98,6 +100,9 @@ static int copy_remote_key(
 ) {
     if (length >= arwill_config_remote_key_capacity) {
         return 0;
+    }
+    for (size_t index = 0; index < arwill_config_remote_key_capacity; index++) {
+        destination[index] = '\0';
     }
     for (size_t index = 0; index < length; index++) {
         if ((uint8_t)source[index] < 0x21U || (uint8_t)source[index] > 0x7eU ||

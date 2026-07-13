@@ -1,6 +1,6 @@
 # ADR-0042: Bounded TCP Reliability
 
-Status: accepted
+Status: accepted; blocking-output portion superseded by ADR-0047
 
 ## Context
 
@@ -30,15 +30,17 @@ reliability:
 - expose checksum-drop, duplicate-ACK, retransmission, timeout, and pending
   diagnostics through `tcpinfo` and `tcplisten`.
 
-Remote output waits for acknowledgement of the previous retained segment
-before sending another. Pure ACK and FIN segments are not retained.
+The original decision made remote output wait for acknowledgement of the
+previous retained segment before sending another. ADR-0047 replaces that wait
+with a bounded byte queue while retaining only one retransmittable segment.
+Pure ACK and FIN segments are not retained.
 
 ## Consequences
 
 The console can recover from a lost SYN-ACK, output segment, or peer ACK and no
 longer accepts corrupted IPv4/TCP input. Retry exhaustion releases a stuck
-listener for a new connection. The stack grows by one fixed 1024-byte payload
-buffer and remote output can block for the bounded retry period.
+listener for a new connection. The retained-segment buffer remains fixed at
+1024 bytes. Remote output no longer blocks after ADR-0047.
 
 This is still not a general or standards-complete TCP implementation. It has no
 sliding window, congestion control, adaptive retransmission timeout,

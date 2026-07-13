@@ -17,6 +17,7 @@
 #include <arwill/kernel/power.h>
 #include <arwill/kernel/process.h>
 #include <arwill/kernel/scheduler.h>
+#include <arwill/kernel/service.h>
 #include <arwill/kernel/shell.h>
 #include <arwill/kernel/tcp.h>
 #include <arwill/kernel/user.h>
@@ -37,6 +38,8 @@ enum {
     ascii_arrow_down = 'B',
     utf8_cyrillic_lead_0 = 0xd0,
     utf8_cyrillic_lead_1 = 0xd1,
+    remote_authentication_max_attempts = 3,
+    remote_authentication_timeout_ms = 30000,
 };
 
 enum shell_completion_kind {
@@ -85,6 +88,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "ownerinfo", .completion = shell_completion_none },
     { .name = "config", .completion = shell_completion_none },
     { .name = "logs", .completion = shell_completion_none },
+    { .name = "service", .completion = shell_completion_none },
     { .name = "ps", .completion = shell_completion_none },
     { .name = "run", .completion = shell_completion_process },
     { .name = "exec", .completion = shell_completion_path },
@@ -135,6 +139,7 @@ struct shell_environment {
     const struct arwill_device_registry *devices;
     struct arwill_config *config;
     struct arwill_event_log *log;
+    struct arwill_service_manager *services;
 };
 
 struct shell_session {
@@ -154,6 +159,12 @@ struct shell_session {
     int config_key_pending;
     char config_key[arwill_config_remote_key_capacity];
     size_t config_key_length;
+    int authenticated;
+    unsigned authentication_attempts;
+    uint64_t authentication_started_milliseconds;
+    char authentication_key[arwill_config_remote_key_capacity];
+    size_t authentication_key_length;
+    uint32_t tcp_timeouts_at_connection;
 };
 
 struct shell_builtin_process {
@@ -879,6 +890,7 @@ static void print_help(const struct arwill_console *console, int remote_session)
     arwill_console_write_line(console, "  ownerinfo  show the OS ownership model");
     arwill_console_write_line(console, "  config     show or change system configuration");
     arwill_console_write_line(console, "  logs       show the complete event log");
+    arwill_console_write_line(console, "  service    inspect or control built-in services");
     arwill_console_write_line(console, "  ps         show kernel process table");
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
     arwill_console_write_line(console, "  exec [path] run a stored program image");
@@ -1829,6 +1841,79 @@ static void print_logs(
     arwill_console_write_line(console, "");
 }
 
+static void print_service_status(
+    const struct arwill_console *console,
+    const struct arwill_service_manager *services
+) {
+    arwill_console_write(console, "remote-console: ");
+    if (services == 0) {
+        arwill_console_write_line(console, "unavailable");
+        return;
+    }
+    arwill_console_write(
+        console, arwill_service_state_name(services->remote_console_state)
+    );
+    if (services->config != 0) {
+        arwill_console_write(console, ", port ");
+        write_uint64_decimal(console, services->config->remote_port);
+    }
+    arwill_console_write_line(console, "");
+}
+
+static void control_service(
+    const struct arwill_console *console,
+    struct arwill_service_manager *services,
+    const char *argument,
+    int remote_session
+) {
+    if (string_equals(argument, "status")) {
+        print_service_status(console, services);
+        return;
+    }
+    if (string_equals(argument, "start remote-console")) {
+        if (!arwill_service_remote_console_start(services)) {
+            arwill_console_write_line(console, "service: start failed");
+            return;
+        }
+        arwill_console_write_line(console, "service: remote-console running");
+        return;
+    }
+    if (string_equals(argument, "stop remote-console")) {
+        if (remote_session) {
+            arwill_console_write_line(console, "service: stopping remote-console");
+        }
+        if (!arwill_service_remote_console_stop(services)) {
+            if (!remote_session) {
+                arwill_console_write_line(console, "service: stop failed");
+            }
+            return;
+        }
+        if (!remote_session) {
+            arwill_console_write_line(console, "service: remote-console stopped");
+        }
+        return;
+    }
+    if (string_equals(argument, "restart remote-console")) {
+        if (remote_session) {
+            arwill_console_write_line(console, "service: restarting remote-console");
+        }
+        if (!arwill_service_remote_console_restart(services)) {
+            if (!remote_session) {
+                arwill_console_write_line(console, "service: restart failed");
+            }
+            return;
+        }
+        if (!remote_session) {
+            arwill_console_write_line(console, "service: remote-console restarted");
+        }
+        return;
+    }
+    arwill_console_write_line(
+        console,
+        "service: expected status or start/stop/restart remote-console"
+    );
+}
+
 static struct arwill_process_result shell_hello_process(
     const struct arwill_process_runtime *runtime
 ) {
@@ -2526,6 +2611,7 @@ static void run_command(
     const struct arwill_device_registry *devices,
     struct arwill_config *config,
     struct arwill_event_log *log,
+    struct arwill_service_manager *services,
     struct shell_process_context *process_context,
     char *current_directory,
     const char *line,
@@ -2669,10 +2755,12 @@ static void run_command(
         struct arwill_tcp_segment syn;
         struct arwill_tcp_segment reply;
         struct arwill_tcp_segment ack;
+        const uint16_t listener_port =
+            ipv4 == 0 ? 23232U : ipv4->tcp_listener.port;
 
-        arwill_tcp_listener_init(&listener, arwill_remote_console_port, 0x41520000U);
+        arwill_tcp_listener_init(&listener, listener_port, 0x41520000U);
         syn.source_port = 4242U;
-        syn.destination_port = arwill_remote_console_port;
+        syn.destination_port = listener_port;
         syn.sequence = 100U;
         syn.acknowledgement = 0U;
         syn.flags = arwill_tcp_flag_syn;
@@ -2684,7 +2772,7 @@ static void run_command(
             return;
         }
         ack.source_port = syn.source_port;
-        ack.destination_port = arwill_remote_console_port;
+        ack.destination_port = listener_port;
         ack.sequence = 101U;
         ack.acknowledgement = reply.sequence + 1U;
         ack.flags = arwill_tcp_flag_ack;
@@ -2799,6 +2887,13 @@ static void run_command(
 
     if (string_equals(line, "logs")) {
         print_logs(console, log);
+        return;
+    }
+
+    if (string_equals(line, "service") || starts_with(line, "service ")) {
+        control_service(
+            console, services, argument_after_command(line), remote_session
+        );
         return;
     }
 
@@ -2926,6 +3021,11 @@ static void initialize_shell_session(
     session->foreground_pid = 0;
     session->config_key_pending = 0;
     session->config_key_length = 0;
+    session->authenticated = remote ? 0 : 1;
+    session->authentication_attempts = 0;
+    session->authentication_started_milliseconds = 0;
+    session->authentication_key_length = 0;
+    session->tcp_timeouts_at_connection = 0;
     session->process_context.console = console;
     session->process_context.user_runtime = user_runtime;
     reset_shell_input(session);
@@ -3067,6 +3167,7 @@ static int handle_shell_byte(
             environment->devices,
             environment->config,
             environment->log,
+            environment->services,
             &session->process_context,
             session->current_directory,
             session->line,
@@ -3117,6 +3218,153 @@ static int handle_shell_byte(
     return 1;
 }
 
+static uint64_t remote_peer_address(const struct arwill_ipv4_stack *ipv4) {
+    if (ipv4 == 0) {
+        return 0;
+    }
+    return ((uint64_t)ipv4->tcp_peer_address[0] << 24U) |
+        ((uint64_t)ipv4->tcp_peer_address[1] << 16U) |
+        ((uint64_t)ipv4->tcp_peer_address[2] << 8U) |
+        (uint64_t)ipv4->tcp_peer_address[3];
+}
+
+static void record_remote_event(
+    const struct shell_environment *environment,
+    enum arwill_log_severity severity,
+    enum arwill_log_subsystem subsystem,
+    enum arwill_log_code code,
+    uint64_t detail
+) {
+    arwill_event_log_record(
+        environment->log,
+        severity,
+        subsystem,
+        code,
+        remote_peer_address(environment->ipv4),
+        detail
+    );
+}
+
+static int constant_time_key_matches(
+    const struct arwill_config *config,
+    const char *candidate,
+    size_t candidate_length
+) {
+    if (config == 0 || candidate == 0 || config->remote_key[0] == '\0') {
+        return 0;
+    }
+    volatile uint8_t difference = 0;
+    size_t configured_length = 0;
+    for (size_t index = 0; index < arwill_config_remote_key_capacity; index++) {
+        const uint8_t expected = (uint8_t)config->remote_key[index];
+        const uint8_t received = index < candidate_length
+            ? (uint8_t)candidate[index] : 0U;
+        difference = (uint8_t)(difference | (uint8_t)(expected ^ received));
+        if (expected != 0U) {
+            configured_length++;
+        }
+    }
+    size_t length_difference = configured_length ^ candidate_length;
+    for (size_t index = 0; index < sizeof(length_difference); index++) {
+        difference = (uint8_t)(difference | (uint8_t)length_difference);
+        length_difference >>= 8U;
+    }
+    return difference == 0U;
+}
+
+static int handle_authentication_byte(
+    struct shell_session *session,
+    const struct shell_environment *environment,
+    uint8_t byte
+) {
+    if (byte == ascii_line_feed && session->ignore_line_feed) {
+        session->ignore_line_feed = 0;
+        return 1;
+    }
+    session->ignore_line_feed = 0;
+    if (byte == ascii_carriage_return || byte == ascii_line_feed) {
+        if (byte == ascii_carriage_return) {
+            session->ignore_line_feed = 1;
+        }
+        session->authentication_key[session->authentication_key_length] = '\0';
+        if (constant_time_key_matches(
+                environment->config,
+                session->authentication_key,
+                session->authentication_key_length
+            )) {
+            session->authenticated = 1;
+            record_remote_event(
+                environment, arwill_log_info, arwill_log_auth,
+                arwill_log_auth_accepted,
+                (uint64_t)(session->authentication_attempts + 1U)
+            );
+            session->authentication_key_length = 0;
+            arwill_console_write_line(session->console, "");
+            arwill_console_write_line(session->console, "Arwill remote console");
+            arwill_console_write_line(
+                session->console,
+                "warning: plaintext trusted-LAN access"
+            );
+            write_prompt(session->console, session->current_directory);
+            return 1;
+        }
+        session->authentication_attempts++;
+        record_remote_event(
+            environment, arwill_log_warning, arwill_log_auth,
+            arwill_log_auth_rejected,
+            session->authentication_attempts
+        );
+        session->authentication_key_length = 0;
+        arwill_console_write_line(session->console, "");
+        if (session->authentication_attempts >= remote_authentication_max_attempts) {
+            arwill_console_write_line(session->console, "Access denied");
+            return 0;
+        }
+        arwill_console_write_line(session->console, "Access denied");
+        arwill_console_write(session->console, "Access key: ");
+        return 1;
+    }
+    if (byte == ascii_backspace || byte == ascii_delete) {
+        if (session->authentication_key_length != 0U) {
+            session->authentication_key_length--;
+        }
+        return 1;
+    }
+    if (is_printable_ascii(byte) &&
+        session->authentication_key_length + 1U <
+            sizeof(session->authentication_key)) {
+        session->authentication_key[session->authentication_key_length++] =
+            (char)byte;
+    }
+    return 1;
+}
+
+static void cancel_remote_program(
+    struct shell_session *session,
+    const struct shell_environment *environment
+) {
+    if (session->foreground_pid != 0U) {
+        (void)arwill_user_cancel(
+            environment->user_runtime, session->foreground_pid, 130U
+        );
+        session->foreground_pid = 0;
+    }
+}
+
+static void close_remote_session(
+    struct shell_session *session,
+    const struct shell_environment *environment
+) {
+    cancel_remote_program(session, environment);
+    record_remote_event(
+        environment, arwill_log_info, arwill_log_network,
+        arwill_log_tcp_disconnected,
+        environment->ipv4 == 0 ? 0U : environment->ipv4->tcp_listener.peer_port
+    );
+    arwill_ipv4_remote_console_close(environment->ipv4);
+    session->active = 0;
+}
+
 static void service_remote_shell(
     struct shell_session *session,
     const struct shell_environment *environment
@@ -3128,11 +3376,18 @@ static void service_remote_shell(
 
     (void)arwill_ipv4_poll_tcp(ipv4);
     if (!arwill_ipv4_remote_console_connected(ipv4)) {
-        if (session->active && session->foreground_pid != 0U) {
-            (void)arwill_user_cancel(
-                environment->user_runtime, session->foreground_pid, 130U
+        if (session->active) {
+            cancel_remote_program(session, environment);
+            if (ipv4->tcp_timeouts > session->tcp_timeouts_at_connection) {
+                record_remote_event(
+                    environment, arwill_log_warning, arwill_log_network,
+                    arwill_log_tcp_timeout, ipv4->tcp_timeouts
+                );
+            }
+            record_remote_event(
+                environment, arwill_log_info, arwill_log_network,
+                arwill_log_tcp_disconnected, ipv4->tcp_listener.peer_port
             );
-            session->foreground_pid = 0;
         }
         session->active = 0;
         return;
@@ -3145,29 +3400,42 @@ static void service_remote_shell(
             environment->user_runtime,
             1
         );
-        arwill_console_write_line(session->console, "Arwill remote console");
-        arwill_console_write_line(session->console, "warning: plaintext localhost access");
-        write_prompt(session->console, session->current_directory);
+        session->authentication_started_milliseconds =
+            arwill_clock_monotonic_milliseconds(environment->clock);
+        session->tcp_timeouts_at_connection = ipv4->tcp_timeouts;
+        record_remote_event(
+            environment, arwill_log_info, arwill_log_network,
+            arwill_log_tcp_connected, ipv4->tcp_listener.peer_port
+        );
+        arwill_console_write(session->console, "Access key: ");
+    }
+
+    if (!session->authenticated &&
+        arwill_clock_monotonic_milliseconds(environment->clock) -
+            session->authentication_started_milliseconds >=
+                remote_authentication_timeout_ms) {
+        record_remote_event(
+            environment, arwill_log_warning, arwill_log_network,
+            arwill_log_tcp_timeout, remote_authentication_timeout_ms
+        );
+        close_remote_session(session, environment);
+        return;
     }
 
     uint8_t byte = 0;
-    while (arwill_ipv4_remote_console_read_byte(ipv4, &byte)) {
-        if (!handle_shell_byte(session, environment, byte)) {
-            arwill_ipv4_remote_console_close(ipv4);
-            session->active = 0;
+    if (arwill_ipv4_remote_console_read_byte(ipv4, &byte)) {
+        const int keep_open = session->authenticated
+            ? handle_shell_byte(session, environment, byte)
+            : handle_authentication_byte(session, environment, byte);
+        if (!keep_open) {
+            close_remote_session(session, environment);
             return;
         }
     }
 
-    if (arwill_ipv4_remote_console_peer_closed(ipv4)) {
-        if (session->foreground_pid != 0U) {
-            (void)arwill_user_cancel(
-                environment->user_runtime, session->foreground_pid, 130U
-            );
-            session->foreground_pid = 0;
-        }
-        arwill_ipv4_remote_console_close(ipv4);
-        session->active = 0;
+    if (arwill_ipv4_remote_console_peer_closed(ipv4) &&
+        ipv4->remote_console_receive_count == 0U) {
+        close_remote_session(session, environment);
     }
 }
 
@@ -3224,7 +3492,8 @@ void arwill_shell_run(
     const struct arwill_user_runtime *user_runtime,
     const struct arwill_device_registry *devices,
     struct arwill_config *config,
-    struct arwill_event_log *log
+    struct arwill_event_log *log,
+    struct arwill_service_manager *services
 ) {
     struct shell_environment environment;
     struct shell_session serial_session;
@@ -3245,6 +3514,7 @@ void arwill_shell_run(
     environment.devices = devices;
     environment.config = config;
     environment.log = log;
+    environment.services = services;
 
     remote_console.context = ipv4;
     remote_console.write = remote_console_write;

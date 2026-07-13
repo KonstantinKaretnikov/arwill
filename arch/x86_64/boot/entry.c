@@ -17,6 +17,7 @@
 #include <arwill/kernel/ipv4.h>
 #include <arwill/kernel/log.h>
 #include <arwill/kernel/pci.h>
+#include <arwill/kernel/service.h>
 #include <arwill/platform/qemu/ata_pio.h>
 #include <arwill/platform/qemu/e1000.h>
 #include <arwill/platform/qemu/power.h>
@@ -35,6 +36,7 @@ static struct arwill_pci_bus arwill_limine_pci;
 static struct arwill_ipv4_stack arwill_limine_ipv4;
 static struct arwill_config arwill_limine_config;
 static struct arwill_event_log arwill_limine_log;
+static struct arwill_service_manager arwill_limine_services;
 
 static enum arwill_memory_region_type convert_limine_memory_region_type(uint64_t type) {
     switch (type) {
@@ -128,16 +130,27 @@ void arwill_limine_entry(void) {
         arwill_limine_config.remote_port
     );
     (void)arwill_kernel_heap_init(&arwill_limine_memory, hhdm_offset, 4);
+    const struct arwill_network_device *network =
+        arwill_qemu_e1000_init(&arwill_limine_pci, &arwill_limine_memory, hhdm_offset);
     const struct arwill_user_runtime *user_runtime =
         arwill_x86_64_user_mode_init(
             &arwill_limine_memory, hhdm_offset, input, clock, filesystem,
             &arwill_limine_log
         );
     const struct arwill_interrupts *interrupts = arwill_x86_64_interrupts_init();
-    const struct arwill_network_device *network =
-        arwill_qemu_e1000_init(&arwill_limine_pci, &arwill_limine_memory, hhdm_offset);
-    const int ipv4_ready = arwill_ipv4_init(&arwill_limine_ipv4, network, clock);
-    (void)ipv4_ready;
+    const int ipv4_ready = arwill_ipv4_init(
+        &arwill_limine_ipv4,
+        network,
+        clock,
+        arwill_limine_config.remote_port
+    );
+    arwill_service_manager_init(
+        &arwill_limine_services,
+        &arwill_limine_ipv4,
+        &arwill_limine_config,
+        &arwill_limine_log,
+        ipv4_ready
+    );
 
     (void)arwill_device_register(
         &arwill_limine_devices,
@@ -229,7 +242,8 @@ void arwill_limine_entry(void) {
         user_runtime,
         &arwill_limine_devices,
         &arwill_limine_config,
-        &arwill_limine_log
+        &arwill_limine_log,
+        &arwill_limine_services
     );
     arwill_cpu_idle_forever();
 }
