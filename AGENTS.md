@@ -64,9 +64,11 @@ Rules for future work:
   10 ms resolution. It is uptime since timer initialization, not RTC/CMOS
   calendar time, a date service, a timezone model, NTP, or process timers.
 - Treat Arwill Program v1 as the first tiny stored executable format. It uses
-  the `AWP1` magic, `.awp` extension, and `/apps` directory. It
-  is not ELF, POSIX process loading, dynamic linking, argument passing,
-  environment handling, or a dynamic virtual-memory ABI.
+  the `AWP1` magic, `.awp` extension, and `/apps` directory. `exec` may pass
+  exactly one optional whitespace-delimited argument of at most 63 bytes;
+  syscall `7` copies it to a bounded user buffer. This is not `argc`/`argv`,
+  quoting, environment handling, inherited working-directory state, ELF,
+  POSIX process loading, dynamic linking, or a dynamic virtual-memory ABI.
 - Keep the `0.16.0` owner command surface minimal: `config`, `logs`, and
   `service` are the only new top-level shell commands; `ps` remains the one
   process inspection command. Do not add service enable/disable, log filters,

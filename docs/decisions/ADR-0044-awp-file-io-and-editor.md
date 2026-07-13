@@ -1,6 +1,6 @@
 # ADR-0044: AWP File I/O and Editor
 
-Status: accepted
+Status: accepted; interactive-path portion superseded by ADR-0048
 
 ## Context
 
@@ -14,10 +14,11 @@ Add two AWP syscalls: whole-text-file read and whole-text-file write. Both copy
 paths and bytes across the ring 3 boundary with explicit bounds and use the
 existing filesystem contract. They do not expose block devices or ARFS internals.
 
-Add `/apps/edit.awp`, a single-file ASCII ANSI-terminal editor. It prompts for
-a path and supports arrows, Enter, Backspace, Delete, Home/End, Ctrl+S, Ctrl+Q,
-and Ctrl+C. It has a 2048-byte document limit, one viewport, a status line, and
-no undo, selection, clipboard, search, syntax highlighting, mouse, or Unicode.
+Add `/apps/edit.awp`, a single-file ASCII ANSI-terminal editor. Its original
+path prompt is superseded by ADR-0048. It supports arrows, Enter, Backspace,
+Delete, Home/End, Ctrl+S, Ctrl+Q, and Ctrl+C. It has a 2048-byte document limit,
+one viewport, a status line, and no undo, selection, clipboard, search, syntax
+highlighting, mouse, or Unicode.
 
 Increase the bounded ARFS entry table to 24 and file buffer to 8192 bytes only
 because the current config and editor images need storage beside the existing

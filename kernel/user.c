@@ -76,16 +76,17 @@ int arwill_user_spawn_image(
     const uint8_t *image,
     uint64_t image_size,
     const char *name,
+    const char *argument,
     const struct arwill_console *console,
     uint32_t *pid
 ) {
     if (runtime == 0 || runtime->spawn_image == 0 || image == 0 || name == 0 ||
-        console == 0 || pid == 0) {
+        argument == 0 || console == 0 || pid == 0) {
         return 0;
     }
 
     return runtime->spawn_image(
-        runtime->context, image, image_size, name, console, pid
+        runtime->context, image, image_size, name, argument, console, pid
     );
 }
 

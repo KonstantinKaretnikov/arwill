@@ -31,6 +31,7 @@ enum {
     syscall_clock = 4,
     syscall_read_file = 5,
     syscall_write_file = 6,
+    syscall_argument = 7,
     user_code_message_offset = 0x100,
     user_write_limit = 256,
     user_input_capacity = 128,
@@ -111,6 +112,8 @@ struct x86_64_user_task {
     enum arwill_user_task_state state;
     uint32_t pid;
     char name[arwill_user_task_name_capacity];
+    char argument[arwill_user_argument_capacity];
+    size_t argument_length;
     const struct arwill_console *console;
     uint32_t exit_code;
     uint8_t fault_vector;
@@ -394,6 +397,8 @@ static void reset_task_runtime(
     task->state = arwill_user_task_empty;
     task->pid = 0;
     task->name[0] = '\0';
+    task->argument[0] = '\0';
+    task->argument_length = 0;
     task->console = 0;
     task->exit_code = 0;
     task->fault_vector = 0;
@@ -599,11 +604,16 @@ static int prepare_task(
     struct x86_64_user_context *context,
     struct x86_64_user_task *task,
     const char *name,
+    const char *argument,
     const struct arwill_console *console
 ) {
     reset_task_runtime(context, task);
-    if (!copy_name(task->name, sizeof(task->name), name)) {
+    if (!copy_name(task->name, sizeof(task->name), name) ||
+        !copy_name(task->argument, sizeof(task->argument), argument)) {
         return 0;
+    }
+    while (task->argument[task->argument_length] != '\0') {
+        task->argument_length++;
     }
     task->pid = allocate_pid(context);
     task->console = console;
@@ -884,6 +894,22 @@ static int arwill_x86_64_user_handle_syscall(
         return 0;
     }
 
+    if (registers->rax == syscall_argument) {
+        if (registers->rsi < task->argument_length ||
+            !copy_to_task(
+                &user_context,
+                task,
+                registers->rdi,
+                (const uint8_t *)task->argument,
+                task->argument_length
+            )) {
+            registers->rax = UINT64_MAX;
+            return 0;
+        }
+        registers->rax = task->argument_length;
+        return 0;
+    }
+
     user_context.bad_syscalls++;
     copy_active_context(task, registers, frame);
     task->exit_code = bad_syscall_exit_code;
@@ -1120,7 +1146,9 @@ static int x86_64_user_run(
         return 0;
     }
     struct x86_64_user_task *task = find_reusable_task(context);
-    if (task == 0 || !prepare_task(context, task, arwill_user_program_name(program), console) ||
+    if (task == 0 || !prepare_task(
+            context, task, arwill_user_program_name(program), "", console
+        ) ||
         !build_builtin_program(context, task, program)) {
         return 0;
     }
@@ -1135,16 +1163,17 @@ static int x86_64_user_spawn_image(
     const uint8_t *image,
     uint64_t image_size,
     const char *name,
+    const char *argument,
     const struct arwill_console *console,
     uint32_t *pid
 ) {
     struct x86_64_user_context *context = (struct x86_64_user_context *)opaque;
     if (context == 0 || !context->available || image == 0 || name == 0 ||
-        console == 0 || pid == 0) {
+        argument == 0 || console == 0 || pid == 0) {
         return 0;
     }
     struct x86_64_user_task *task = find_reusable_task(context);
-    if (task == 0 || !prepare_task(context, task, name, console) ||
+    if (task == 0 || !prepare_task(context, task, name, argument, console) ||
         !copy_image_to_task(context, task, image, image_size)) {
         if (task != 0) {
             task->state = arwill_user_task_empty;
@@ -1165,7 +1194,7 @@ static int x86_64_user_run_image(
     struct x86_64_user_context *context = (struct x86_64_user_context *)opaque;
     uint32_t pid = 0;
     if (!x86_64_user_spawn_image(
-            opaque, image, image_size, "awp", console, &pid
+            opaque, image, image_size, "awp", "", console, &pid
         )) {
         return 0;
     }

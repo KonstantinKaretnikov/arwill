@@ -893,7 +893,7 @@ static void print_help(const struct arwill_console *console, int remote_session)
     arwill_console_write_line(console, "  service    inspect or control built-in services");
     arwill_console_write_line(console, "  ps         show kernel process table");
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
-    arwill_console_write_line(console, "  exec [path] run a stored program image");
+    arwill_console_write_line(console, "  exec [path] [argument] run a stored program image");
     arwill_console_write_line(console, "  step       run one cooperative process step");
     arwill_console_write_line(console, remote_session ?
         "  exit       close the remote session" :
@@ -1054,6 +1054,7 @@ static uint32_t exec_program_image(
     const char *path
 ) {
     char path_argument[shell_path_capacity];
+    char launch_argument[arwill_user_argument_capacity];
     char resolved_path[shell_path_capacity];
 
     if (!copy_first_argument(path_argument, sizeof(path_argument), path)) {
@@ -1063,6 +1064,18 @@ static uint32_t exec_program_image(
 
     if (path_argument[0] == '\0') {
         arwill_console_write_line(console, "exec: missing path");
+        return 0;
+    }
+
+    const char *argument = argument_after_command(path);
+    if (!copy_first_argument(
+            launch_argument, sizeof(launch_argument), argument
+        )) {
+        arwill_console_write_line(console, "exec: argument too long");
+        return 0;
+    }
+    if (argument_after_command(argument)[0] != '\0') {
+        arwill_console_write_line(console, "exec: too many arguments");
         return 0;
     }
 
@@ -1091,6 +1104,7 @@ static uint32_t exec_program_image(
             (const uint8_t *)file.contents,
             file.size_bytes,
             resolved_path,
+            launch_argument,
             console,
             &pid
         )) {

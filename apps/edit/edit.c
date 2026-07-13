@@ -62,6 +62,17 @@ static long syscall_write_file(
     return result;
 }
 
+static long syscall_argument(char *buffer, size_t capacity) {
+    long result;
+    __asm__ volatile(
+        "int $0x80"
+        : "=a"(result)
+        : "a"(7UL), "D"(buffer), "S"(capacity)
+        : "memory"
+    );
+    return result;
+}
+
 static size_t text_length(const char *text) {
     size_t length = 0;
     while (text[length] != '\0') {
@@ -263,43 +274,22 @@ static int insert_byte(
     return 1;
 }
 
-static int read_path(char *path, size_t *length) {
-    write_text("edit file: ");
-    *length = 0;
-    for (;;) {
-        char byte = 0;
-        if (!read_byte(&byte)) {
-            return 0;
-        }
-        if (byte == 0x03) {
-            write_text("^C\n");
-            return 0;
-        }
-        if (byte == '\r' || byte == '\n') {
-            write_text("\n");
-            return *length != 0U;
-        }
-        if (byte == 0x08 || byte == 0x7f) {
-            if (*length != 0U) {
-                *length = *length - 1U;
-                write_text("\b \b");
-            }
-            continue;
-        }
-        if (byte >= 0x20 && byte <= 0x7e && *length + 1U < path_capacity) {
-            path[*length] = byte;
-            *length = *length + 1U;
-            terminal_write(&byte, 1U);
-        }
-    }
-}
-
 int editor_main(void) {
     char document[document_capacity];
     char path[path_capacity];
-    size_t path_length = 0;
-    if (!read_path(path, &path_length)) {
-        return 130;
+    const long argument_length = syscall_argument(path, sizeof(path) - 1U);
+    if (argument_length < 0) {
+        write_text("edit: invalid file argument\n");
+        return 2;
+    }
+    if (argument_length == 0) {
+        write_text("edit: missing file\n");
+        return 2;
+    }
+    const size_t path_length = (size_t)argument_length;
+    if (path[0] != '/') {
+        write_text("edit: absolute path required\n");
+        return 2;
     }
     path[path_length] = '\0';
 

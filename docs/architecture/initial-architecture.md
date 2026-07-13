@@ -199,7 +199,8 @@ User runtime:
 - The syscall ABI uses `int 0x80`: syscall `1` writes to the originating
   session, syscall `2` exits, syscall `3` reads session input, syscall `4`
   returns monotonic milliseconds, and syscalls `5` and `6` perform bounded
-  whole-text-file reads and writes.
+  whole-text-file reads and writes. Syscall `7` copies the task's one bounded
+  launch argument to a user buffer.
 - `run userhello` executes a tiny generated user program that writes
   `user hello: hello from ring 3` through syscall `write` and exits with code
   `7`.
@@ -211,7 +212,7 @@ User runtime:
   blocks only the calling task for input, and contains user invalid-opcode,
   general-protection, and page faults.
 - This is not a general process model. There is no ELF loader, demand paging,
-  argument passing, userspace heap, signal model, fork, independent kernel
+  argument vector, userspace heap, signal model, fork, independent kernel
   stacks, kernel preemption, or SMP.
 - "User" here means CPU user mode, not an Arwill account model.
 
@@ -219,14 +220,15 @@ Program loader:
 
 - The first stored executable format is Arwill Program v1, identified by an
   `AWP1` binary header.
-- The shell command `exec [path]` reads a binary file from ARFS and asks the
-  user runtime to map and execute its code bytes in ring 3.
+- The shell command `exec [path] [argument]` reads a binary file from ARFS and
+  asks the user runtime to map and execute its code bytes in ring 3 with at
+  most one 63-byte launch argument.
 - The current image format contains a small header, entry offset, and at most
   two code pages.
 - The fixture packages `/apps/hello.awp`, `/apps/calc.awp`, and
   `/apps/edit.awp`.
 - This is deliberately not ELF: there is no linker, relocation, dynamic
-  loading, arguments, environment, or file descriptors.
+  loading, general `argc`/`argv`, quoting, environment, or file descriptors.
 
 Power contract:
 

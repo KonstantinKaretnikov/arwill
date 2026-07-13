@@ -289,7 +289,11 @@ run_qemu_to_log() {
     wait_for_primary_log "rm: removed /fault.awp"
     sleep 0.1
     printf 'exec /apps/edit.awp\r'
-    wait_for_primary_log "edit file: "
+    wait_for_primary_log "edit: missing file"
+    wait_for_primary_log "exec: exited 2"
+    sleep 0.1
+    printf 'exec /apps/edit.awp /owner/smoke-edit.txt\r'
+    wait_for_primary_log "/owner/smoke-edit.txt"
     (
         (
             printf 'arwill\r'
@@ -305,9 +309,6 @@ run_qemu_to_log() {
     ) &
     concurrent_remote_pid=$!
     sleep 0.2
-    printf '/owner/smoke-edit.txt\r'
-    wait_for_primary_log "/owner/smoke-edit.txt"
-    sleep 0.1
     printf 'parallel editor\023\021'
     wait_for_primary_log "parallel editor"
     wait "$concurrent_remote_pid" || true
@@ -532,7 +533,7 @@ check_line "logs       show the complete event log"
 check_line "service    inspect or control built-in services"
 check_line "ps         show kernel process table"
 check_line "run [name] launch a built-in kernel process"
-check_line "exec [path] run a stored program image"
+check_line "exec [path] [argument] run a stored program image"
 check_line "step       run one cooperative process step"
 check_line "Up/Down    browse command history"
 check_absent "  dir [path]  list the current filesystem"
@@ -628,7 +629,9 @@ check_line "writehex: wrote 18 bytes to /fault.awp"
 check_line "exec: fault 6"
 check_line "exec: exited 134"
 check_line "rm: removed /fault.awp"
-check_line "edit file: /owner/smoke-edit.txt"
+check_line "edit: missing file"
+check_absent "edit file:"
+check_line "/owner/smoke-edit.txt"
 check_line "parallel editor"
 check_line "rm: removed /owner/smoke-edit.txt"
 check_line "awp pid state runs exit name"

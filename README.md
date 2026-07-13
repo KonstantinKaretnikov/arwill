@@ -131,7 +131,7 @@ service stop remote-console
 service restart remote-console
 ps
 run [name]
-exec [path]
+exec [path] [argument]
 step
 exit
 halt
@@ -244,21 +244,26 @@ count, exit code, and name.
 
 `exec /apps/hello.awp` loads a tiny Arwill Program from ARFS and runs it through
 the ring 3 `int 0x80` syscall boundary. AWP is deliberately small and is not
-ELF, POSIX, dynamic linking, arguments, or environment support.
+ELF, POSIX, dynamic linking, a general argument vector, or environment support.
+`exec` accepts at most one optional argument of 63 bytes. It does not support
+quotes, spaces inside the argument, expansion, or inherited working-directory
+state.
 
 `exec /apps/calc.awp` runs the deliberately plain interactive calculator. Type
 one expression such as `12*7` and press Enter. It supports integer `+`, `-`,
 `*`, and `/`; division by zero and malformed expressions print `error`.
 
-`exec /apps/edit.awp` opens the bounded ASCII editor. Enter a path, edit with
-arrows, Enter, Backspace, Delete, Home/End, save with Ctrl+S, and leave with
-Ctrl+Q. Ctrl+C exits, and Ctrl+Q asks again when unsaved changes exist. There
-is no undo, selection, clipboard, search, Unicode, or syntax highlighting.
+`exec /apps/edit.awp /owner/arwill.conf` opens the bounded ASCII editor directly
+on the supplied absolute path. The file argument is mandatory; launching the
+editor without it exits with `edit: missing file`. Edit with arrows, Enter,
+Backspace, Delete, Home/End, save with Ctrl+S, and leave with Ctrl+Q. Ctrl+C
+exits, and Ctrl+Q asks again when unsaved changes exist. There is no undo,
+selection, clipboard, search, Unicode, or syntax highlighting.
 
 The test application build recipes live under `apps/`; their outputs are
 packaged into the ARFS test disk as `.awp` files. Arwill still has no ELF
-loader, dynamic linker, arguments, environment, userspace heap, fork, signals,
-independent kernel stacks, kernel preemption, or SMP.
+loader, dynamic linker, general argument vectors, environment, userspace heap,
+fork, signals, independent kernel stacks, kernel preemption, or SMP.
 
 The QEMU path mirrors serial output to a simple framebuffer text console when
 Limine provides a 32-bit framebuffer. `exit` powers off the current QEMU

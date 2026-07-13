@@ -36,7 +36,8 @@ struct arwill_user_stats {
 
 enum {
     arwill_user_task_capacity = 4,
-    arwill_user_task_name_capacity = 48
+    arwill_user_task_name_capacity = 48,
+    arwill_user_argument_capacity = 64
 };
 
 enum arwill_user_task_state {
@@ -78,6 +79,7 @@ struct arwill_user_runtime {
         const uint8_t *image,
         uint64_t image_size,
         const char *name,
+        const char *argument,
         const struct arwill_console *console,
         uint32_t *pid
     );
@@ -114,6 +116,7 @@ int arwill_user_spawn_image(
     const uint8_t *image,
     uint64_t image_size,
     const char *name,
+    const char *argument,
     const struct arwill_console *console,
     uint32_t *pid
 );
