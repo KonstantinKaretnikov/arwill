@@ -24,14 +24,14 @@ Limine bootloader
   -> CPU interrupt enable
   -> serial shell and authenticated TCP remote-console service
   -> storage-backed filesystem
-  -> persistent owner-note write when write /owner/note is requested
+  -> persistent whole-file writes through AWP syscalls and internal smoke commands
   -> device registry listing when devices is requested
-  -> kernel heap diagnostics and heap probe when meminfo or heaptest is requested
+  -> kernel heap diagnostics through meminfo and an internal heap smoke probe
   -> deterministic raw disk sector read when blkinfo is requested
-  -> interrupt/timer diagnostics when irqinfo or irqprobe is requested
+  -> interrupt/timer diagnostics through irqinfo and an internal exception probe
   -> scheduler tick diagnostics when schedinfo is requested
   -> cooperative built-in kernel process launch when run is requested
-  -> yielded cooperative process continuation when step is requested
+  -> yielded cooperative process continuation through an internal smoke command
   -> stored Arwill Program spawn into one of four AWP slots when exec is requested
   -> user page mapping and built-in ring 3 user program launch when userhello
      or userbad is run
@@ -75,8 +75,9 @@ Input contract:
 Shell:
 
 - Lives in `kernel/shell.c`.
-- Owns the canonical command table, including filesystem, diagnostic, process,
-  network, `config`, `logs`, and `service` operations.
+- Owns the canonical user command table, including filesystem, diagnostic,
+  process, network, `config`, `logs`, and `service` operations.
+- Retains exact-match internal smoke commands outside `help` and Tab completion.
 - Keeps one canonical command name per operation; alias commands are not
   accepted.
 - Holds the current working directory as local shell state.
@@ -133,8 +134,8 @@ Process manager:
   kernel process with `run [name]`, then the process manager runs ready entries
   synchronously.
 - Process entries can finish or yield. A yielded process returns to the ready
-  state and can be continued with `step`; the first saved progress value is the
-  process run count.
+  state and can be continued by the internal smoke path; the first saved
+  progress value is the process run count.
 - Built-in `userhello` and `userbad` process entries enter ring 3 through the
   user runtime and return user exit status to this same process table.
 - `ps` displays cooperative kernel entries and the separate AWP task table.
@@ -150,8 +151,8 @@ Interrupt controller contract:
 - It installs a minimal IDT, remaps the legacy PIC, unmasks IRQ0 only,
   configures the PIT at 100 Hz, handles breakpoint vector 3 for diagnostics,
   handles timer vector 32, and installs a DPL 3 `int 0x80` syscall gate.
-- `irqinfo` reports IDT/PIC/PIT state and timer ticks. `irqprobe` triggers a
-  safe breakpoint exception and verifies that vector 3 was handled.
+- `irqinfo` reports IDT/PIC/PIT state and timer ticks. An internal smoke probe
+  triggers a safe breakpoint exception and verifies that vector 3 was handled.
 - This is not a full interrupt subsystem: there is no APIC, IOAPIC, HPET,
   LAPIC timer, IRQ routing model, nested interrupt policy, or generic device
   interrupt registration yet.
@@ -294,8 +295,9 @@ ARFS mutable core:
   and contiguous allocation for files of at most 8192 bytes.
 - Free ranges are inferred from catalog entries; there is no bitmap, journal,
   cache, append, rename, or crash-consistency model.
-- The shell exposes these operations through `mkdir`, `write`, `writehex`, and
-  `rm`; AWP syscalls expose only bounded whole-text-file read/write.
+- The user shell exposes directory creation and removal through `mkdir` and
+  `rm`; `/apps/edit.awp` uses bounded whole-text-file AWP syscalls. Exact-match
+  internal smoke commands retain text and binary whole-file fixture writes.
 
 QEMU ATA PIO block device:
 

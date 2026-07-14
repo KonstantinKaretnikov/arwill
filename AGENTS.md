@@ -50,8 +50,13 @@ Rules for future work:
 - Treat ARFS v2 as a tiny mutable filesystem core with fixed entry, path, and
   file-size limits. It supports directory creation, whole-file byte writes,
   removal, and contiguous allocation, but has no append, rename, journal,
-  atomic metadata update, or crash consistency. The shell exposes these
-  operations through `mkdir`, `write`, `writehex`, and `rm`.
+  atomic metadata update, or crash consistency. The user shell exposes
+  `mkdir` and `rm`; `/apps/edit.awp` is the user-facing ASCII text editor.
+  `write` and `writehex` remain exact-match internal smoke commands.
+- Keep `netprobe`, `arping`, `tcpcheck`, `tcplisten`, `heaptest`, `irqprobe`,
+  `step`, `write`, and `writehex` available only as exact-match internal smoke
+  commands. Do not list them in `help`, include them in Tab completion, or
+  document them as user commands unless a later ADR changes this decision.
 - Treat the current kernel heap as a small HHDM-backed free-list allocator. It
   is useful for small kernel objects, but it is not a slab allocator, virtual
   memory subsystem, userspace heap, or physical page release mechanism.

@@ -188,7 +188,7 @@ run_qemu_to_log() {
     wait_for_primary_log "kernel heap:"
     wait_for_primary_log "  initialized: yes"
     sleep 0.1
-    printf 'heap\t\r'
+    printf 'heaptest\r'
     wait_for_primary_log "heaptest: allocated and freed 2 blocks"
     wait_for_primary_log "heaptest: allocations 2, frees 2"
     sleep 0.1
@@ -206,7 +206,7 @@ run_qemu_to_log() {
     printf 'irqi\t\r'
     wait_for_primary_log "timer observed: yes"
     sleep 0.1
-    printf 'irqp\t\r'
+    printf 'irqprobe\r'
     wait_for_primary_log "exception probe: handled vector 3"
     sleep 0.1
     printf 'sched\t\r'
@@ -221,7 +221,7 @@ run_qemu_to_log() {
     printf 'ps\r'
     wait_for_primary_log "2 ready 1 0 counter"
     sleep 0.1
-    printf 'ste\t\r'
+    printf 'step\r'
     wait_for_primary_log "process counter: pid 2 step 2/3"
     wait_for_primary_log "step: ran 1 process step(s)"
     sleep 0.1
@@ -476,12 +476,12 @@ check_line "pciinfo    list discovered PCI devices"
 check_line "pci: x86_64 configuration mechanism 1"
 check_line "vendor 0x0000000000008086 device 0x000000000000100e"
 check_line "netinfo    show network device diagnostics"
-check_line "netprobe   transmit a raw Ethernet diagnostic frame"
+check_absent "netprobe   transmit a raw Ethernet diagnostic frame"
 check_line "netcfg     show fixed IPv4 network configuration"
-check_line "arping     transmit an ARP request to the gateway"
+check_absent "arping     transmit an ARP request to the gateway"
 check_line "ping       send one ICMP echo to the gateway"
-check_line "tcpcheck   exercise the TCP listener handshake"
-check_line "tcplisten  poll the remote console TCP listener"
+check_absent "tcpcheck   exercise the TCP listener handshake"
+check_absent "tcplisten  poll the remote console TCP listener"
 check_line "tcpinfo    show remote console TCP state"
 check_line "network: qemu e1000"
 check_line "mac: 52:54:00:12:34:56"
@@ -509,15 +509,15 @@ check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
 check_line "mkdir [path] create a directory"
-check_line "write [path] [text] create or overwrite a text file"
-check_line "writehex [path] [hex] create or overwrite a binary file"
+check_absent "write [path] [text] create or overwrite a text file"
+check_absent "writehex [path] [hex] create or overwrite a binary file"
 check_line "rm [path] remove a file or empty directory"
 check_line "meminfo    show memory map and allocators"
-check_line "heaptest   exercise kernel heap allocation"
+check_absent "heaptest   exercise kernel heap allocation"
 check_line "devices    list detected devices"
 check_line "blkinfo    show block device read diagnostics"
 check_line "irqinfo    show interrupt and timer diagnostics"
-check_line "irqprobe   trigger a safe breakpoint exception"
+check_absent "irqprobe   trigger a safe breakpoint exception"
 check_line "schedinfo  show scheduler tick diagnostics"
 check_line "userinfo   show user-mode diagnostics"
 check_line "ownerinfo  show the OS ownership model"
@@ -527,7 +527,7 @@ check_line "service    inspect or control built-in services"
 check_line "ps         show kernel process table"
 check_line "run [name] launch a built-in kernel process"
 check_line "exec [image] [file] run a stored program image"
-check_line "step       run one cooperative process step"
+check_absent "step       run one cooperative process step"
 check_line "Up/Down    browse command history"
 check_absent "  dir [path]  list the current filesystem"
 check_absent "info [path]"

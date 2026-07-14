@@ -55,18 +55,15 @@ struct shell_command {
     enum shell_completion_kind completion;
 };
 
+/* User-visible help and completion table; internal smoke commands dispatch below. */
 static const struct shell_command shell_commands[] = {
     { .name = "help", .completion = shell_completion_none },
     { .name = "version", .completion = shell_completion_none },
     { .name = "uptime", .completion = shell_completion_none },
     { .name = "pciinfo", .completion = shell_completion_none },
     { .name = "netinfo", .completion = shell_completion_none },
-    { .name = "netprobe", .completion = shell_completion_none },
     { .name = "netcfg", .completion = shell_completion_none },
-    { .name = "arping", .completion = shell_completion_none },
     { .name = "ping", .completion = shell_completion_none },
-    { .name = "tcpcheck", .completion = shell_completion_none },
-    { .name = "tcplisten", .completion = shell_completion_none },
     { .name = "tcpinfo", .completion = shell_completion_none },
     { .name = "pwd", .completion = shell_completion_none },
     { .name = "cd", .completion = shell_completion_directory_path },
@@ -74,16 +71,12 @@ static const struct shell_command shell_commands[] = {
     { .name = "ls", .completion = shell_completion_path },
     { .name = "cat", .completion = shell_completion_path },
     { .name = "mkdir", .completion = shell_completion_directory_path },
-    { .name = "write", .completion = shell_completion_path },
-    { .name = "writehex", .completion = shell_completion_path },
     { .name = "rm", .completion = shell_completion_path },
     { .name = "stat", .completion = shell_completion_path },
     { .name = "meminfo", .completion = shell_completion_none },
-    { .name = "heaptest", .completion = shell_completion_none },
     { .name = "devices", .completion = shell_completion_none },
     { .name = "blkinfo", .completion = shell_completion_none },
     { .name = "irqinfo", .completion = shell_completion_none },
-    { .name = "irqprobe", .completion = shell_completion_none },
     { .name = "schedinfo", .completion = shell_completion_none },
     { .name = "userinfo", .completion = shell_completion_none },
     { .name = "ownerinfo", .completion = shell_completion_none },
@@ -93,7 +86,6 @@ static const struct shell_command shell_commands[] = {
     { .name = "ps", .completion = shell_completion_none },
     { .name = "run", .completion = shell_completion_process },
     { .name = "exec", .completion = shell_completion_two_paths },
-    { .name = "step", .completion = shell_completion_none },
     { .name = "exit", .completion = shell_completion_none },
     { .name = "halt", .completion = shell_completion_none },
 };
@@ -863,12 +855,8 @@ static void print_help(const struct arwill_console *console, int remote_session)
     arwill_console_write_line(console, "  uptime     show monotonic time since boot");
     arwill_console_write_line(console, "  pciinfo    list discovered PCI devices");
     arwill_console_write_line(console, "  netinfo    show network device diagnostics");
-    arwill_console_write_line(console, "  netprobe   transmit a raw Ethernet diagnostic frame");
     arwill_console_write_line(console, "  netcfg     show fixed IPv4 network configuration");
-    arwill_console_write_line(console, "  arping     transmit an ARP request to the gateway");
     arwill_console_write_line(console, "  ping       send one ICMP echo to the gateway");
-    arwill_console_write_line(console, "  tcpcheck   exercise the TCP listener handshake");
-    arwill_console_write_line(console, "  tcplisten  poll the remote console TCP listener");
     arwill_console_write_line(console, "  tcpinfo    show remote console TCP state");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
@@ -876,16 +864,12 @@ static void print_help(const struct arwill_console *console, int remote_session)
     arwill_console_write_line(console, "  ls [path]  list the current filesystem");
     arwill_console_write_line(console, "  cat [path] show text file contents");
     arwill_console_write_line(console, "  mkdir [path] create a directory");
-    arwill_console_write_line(console, "  write [path] [text] create or overwrite a text file");
-    arwill_console_write_line(console, "  writehex [path] [hex] create or overwrite a binary file");
     arwill_console_write_line(console, "  rm [path] remove a file or empty directory");
     arwill_console_write_line(console, "  stat [path] show file or directory metadata");
     arwill_console_write_line(console, "  meminfo    show memory map and allocators");
-    arwill_console_write_line(console, "  heaptest   exercise kernel heap allocation");
     arwill_console_write_line(console, "  devices    list detected devices");
     arwill_console_write_line(console, "  blkinfo    show block device read diagnostics");
     arwill_console_write_line(console, "  irqinfo    show interrupt and timer diagnostics");
-    arwill_console_write_line(console, "  irqprobe   trigger a safe breakpoint exception");
     arwill_console_write_line(console, "  schedinfo  show scheduler tick diagnostics");
     arwill_console_write_line(console, "  userinfo   show user-mode diagnostics");
     arwill_console_write_line(console, "  ownerinfo  show the OS ownership model");
@@ -895,7 +879,6 @@ static void print_help(const struct arwill_console *console, int remote_session)
     arwill_console_write_line(console, "  ps         show kernel process table");
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
     arwill_console_write_line(console, "  exec [image] [file] run a stored program image");
-    arwill_console_write_line(console, "  step       run one cooperative process step");
     arwill_console_write_line(console, remote_session ?
         "  exit       close the remote session" :
         "  exit       power off the machine");

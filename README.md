@@ -62,11 +62,11 @@ Detailed state is available through `ownerinfo`, `meminfo`, `devices`,
 | Area | Commands |
 | --- | --- |
 | Core | `help version uptime clear exit halt` |
-| Files | `pwd cd ls cat stat mkdir write writehex rm` |
-| Platform | `pciinfo meminfo heaptest devices blkinfo irqinfo irqprobe schedinfo userinfo ownerinfo` |
-| Network | `netinfo netprobe netcfg arping ping tcpcheck tcplisten tcpinfo` |
+| Files | `pwd cd ls cat stat mkdir rm` |
+| Platform | `pciinfo meminfo devices blkinfo irqinfo schedinfo userinfo ownerinfo` |
+| Network | `netinfo netcfg ping tcpinfo` |
 | Operations | `config logs service` |
-| Programs | `ps run step exec` |
+| Programs | `ps run exec` |
 
 `Tab` completes commands, paths, and process names. Up/Down browse in-memory
 history. `Ctrl+C` cancels the current line or foreground AWP. Russian-layout
@@ -77,17 +77,17 @@ session.
 
 ## Filesystem
 
-ARFS v2 supports directories, whole-file reads and writes, and removal:
+ARFS v2 supports directories, whole-file reads and writes, and removal. The
+user-facing mutation commands manage directories and removal:
 
 ```text
 mkdir [path]
-write [path] [text]
-writehex [path] [hex]
 rm [path]
 ```
 
 Paths may be absolute or relative to the session's current directory.
-Mutations persist in the QEMU raw test disk.
+Use `/apps/edit.awp` for interactive ASCII text creation and editing. Mutations
+persist in the QEMU raw test disk.
 
 Limits: 24 entries, short paths, 8192 bytes per file, and contiguous
 allocation. ARFS has no append, rename, journal, atomic metadata update, or
@@ -122,9 +122,9 @@ interactive applications**, one in each session. The other two slots do not
 provide extra user-visible concurrency because Arwill has no `jobs`, `bg`,
 `fg`, or additional TCP sessions.
 
-`run hello` and `run counter` start cooperative kernel-managed demos;
-`step` advances them. `run userhello` and `run userbad` exercise the
-narrow ring 3 syscall path. These are distinct from scheduled AWP tasks.
+`run hello` starts a cooperative kernel-managed demo. `run userhello` and
+`run userbad` exercise the narrow ring 3 syscall path. These are distinct from
+scheduled AWP tasks.
 
 AWP is not ELF. Arwill has no general executable loader, dynamic linker,
 per-process heap, `fork`, POSIX signals, or SMP.

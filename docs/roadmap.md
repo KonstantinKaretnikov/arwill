@@ -27,10 +27,11 @@ Arwill already has:
   a bounded QEMU serial/TCP smoke test;
 - [x] QEMU serial console output and blocking serial input;
 - [x] a serial shell with canonical commands only: `help`, `version`, `uptime`,
-  `pwd`, `cd`, `clear`, `ls`, `cat`, `mkdir`, `write`, `writehex`, `rm`,
-  `stat`, `meminfo`, `blkinfo`, `heaptest`, `irqinfo`, `irqprobe`,
+  `pwd`, `cd`, `clear`, `ls`, `cat`, `mkdir`, `rm`, `stat`, `meminfo`,
+  `blkinfo`, `irqinfo`,
   `schedinfo`, `userinfo`, `ownerinfo`, `config`, `logs`, `service`, `ps`,
-  `run`, `exec`, `step`, `exit`, and `halt`;
+  `run`, `exec`, `exit`, and `halt`; exact internal smoke commands are kept
+  outside `help` and Tab completion;
 - [x] shell current directory state, path resolution, Tab completion, command
   history, and Russian-layout command-entry normalization;
 - [x] a static read-only boot catalog used by `ls`, `cd`, `cat`, `stat`, and
@@ -73,8 +74,9 @@ Arwill already has:
 - [x] single-owner OS model: one owner, no accounts or multi-user permission
   system, with the kernel/user boundary kept as an engineering guardrail.
 
-Arwill has an ARFS v2 mutable core exposed through bounded shell creation,
-whole-file write, and removal commands. Arwill does not have append, rename,
+Arwill has an ARFS v2 mutable core exposed to users through directory creation,
+interactive ASCII editing, and removal. Internal smoke commands retain bounded
+whole-file text and binary writes. Arwill does not have append, rename,
 ELF program loading, dynamic linking, independent kernel stacks, kernel
 preemption, SMP, multi-user accounts, or a general-purpose writable storage
 subsystem.
