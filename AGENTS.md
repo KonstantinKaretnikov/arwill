@@ -78,6 +78,9 @@ Rules for future work:
   exactly one optional file path of at most 63 bytes. Both image and file paths
   support Tab completion; the shell resolves a relative file against its
   current directory before syscall `7` exposes the canonical path to the AWP.
+  A bare image name without `.awp` resolves only to `/apps/<name>.awp`; explicit
+  image paths retain normal filesystem resolution. This is not `PATH`, an alias
+  layer, or a general program search mechanism.
   This is not `argc`/`argv`, quoting, environment handling, inherited working-
   directory state inside the task, ELF, POSIX process loading, dynamic linking,
   or a dynamic virtual-memory ABI.

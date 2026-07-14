@@ -92,10 +92,10 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.17.1" 2
+    wait_for_primary_log_count "Arwill 0.17.2" 2
     sleep 0.1
     printf 'sys\t\r'
-    wait_for_primary_log "system: Arwill 0.17.1"
+    wait_for_primary_log "system: Arwill 0.17.2"
     wait_for_primary_log_count "uptime: " 1
     sleep 0.1
     printf 'devices p\t\r'
@@ -244,9 +244,12 @@ run_qemu_to_log() {
     printf 'run userb\t\r'
     wait_for_primary_log "run: spawned pid 4: userbad"
     sleep 0.1
-    printf 'exec /apps/hello.awp\r'
+    printf 'exec hello\r'
     wait_for_primary_log "awp hello from storage"
     wait_for_primary_log "exec: exited 9"
+    sleep 0.1
+    printf 'exec missing\r'
+    wait_for_primary_log "exec: no such file: /apps/missing.awp"
     sleep 0.1
     printf 'system r\t\r'
     wait_for_primary_log "runs: 3"
@@ -272,7 +275,7 @@ run_qemu_to_log() {
     wait_for_primary_log "system/"
     wait_for_primary_log "apps/"
     sleep 0.1
-    printf 'exec /apps/calc.awp\r'
+    printf 'exec ca\t\r'
     wait_for_primary_log "calc> "
     sleep 0.1
     printf '12*9\0107\r'
@@ -287,7 +290,7 @@ run_qemu_to_log() {
     printf 'writehex /spin.awp 41575031100000000200000000000000ebfe\r'
     wait_for_primary_log "writehex: wrote 18 bytes to /spin.awp"
     sleep 0.1
-    printf 'exec /spin.awp\r'
+    printf 'exec spin.awp\r'
     wait_for_primary_log "exec: spawned pid"
     sleep 0.3
     printf '\003'
@@ -306,23 +309,23 @@ run_qemu_to_log() {
     printf 'rm /fault.awp\r'
     wait_for_primary_log "rm: removed /fault.awp"
     sleep 0.1
-    printf 'exec /apps/e\towner/no\t\r'
+    printf 'exec ed\towner/no\t\r'
     wait_for_primary_log "/owner/note"
     sleep 0.1
     printf '\021'
     wait_for_primary_log_count "exec: exited 0" 2
     sleep 0.1
-    printf 'exec /apps/edit.awp\r'
+    printf 'exec edit\r'
     wait_for_primary_log "edit: missing file"
     wait_for_primary_log "exec: exited 2"
     sleep 0.1
-    printf 'exec /apps/edit.awp /owner/smoke-edit.txt\r'
+    printf 'exec edit /owner/smoke-edit.txt\r'
     wait_for_primary_log "/owner/smoke-edit.txt"
     (
         (
             printf 'arwill\r'
             sleep 0.5
-            printf 'exec /apps/calc.awp\r'
+            printf 'exec calc\r'
             sleep 0.5
             printf '9*9\r'
             sleep 1
@@ -402,7 +405,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.17.1"
+    wait_for_primary_log "version: 0.17.2"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -490,7 +493,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.17.1"
+check_line "Arwill 0.17.2"
 check_line "system     show system state and subsystem details"
 check_line "devices    list devices or inspect pci/disk0/net0"
 check_line "network    show network state, ping, or TCP details"
@@ -524,12 +527,12 @@ check_line "remote bytes: received 0, sent 0, dropped 0, send failures 0"
 check_line "tcp integrity: checksum drops 0, duplicate acks 0"
 check_line "tcp reliability: retransmissions 0, timeouts 0, pending no"
 check_line "   A    RRR   W   W  III  L     L"
-check_line "Arwill 0.17.1 ready"
+check_line "Arwill 0.17.2 ready"
 check_line "config: /owner/arwill.conf"
 check_line "help: type 'help' or press Tab"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.17.1"
+check_line "Arwill 0.17.2"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -550,13 +553,13 @@ check_line "logs       show the complete event log"
 check_line "service    inspect or control built-in services"
 check_line "ps         show kernel process table"
 check_line "run [name] launch a built-in kernel process"
-check_line "exec [image] [file] run a stored program image"
+check_line "exec [program] [file] run a stored program image"
 check_absent "step       run one cooperative process step"
 check_line "Up/Down    browse command history"
 check_absent "  dir [path]  list the current filesystem"
 check_absent "info [path]"
 check_absent "poweroff"
-check_line "system: Arwill 0.17.1"
+check_line "system: Arwill 0.17.2"
 check_line "processes: kernel 0, awp 0/4"
 check_line "PID KIND STATE RUNS EXIT NAME"
 check_line "1002 awp finished"
@@ -616,6 +619,7 @@ check_line "user hello: hello from ring 3"
 check_line "run: spawned pid 4: userbad"
 check_line "awp hello from storage"
 check_line "exec: exited 9"
+check_line "exec: no such file: /apps/missing.awp"
 check_line "user: x86_64 ring3 awp scheduler"
 check_line "available: yes"
 check_line "hhdm: yes"
@@ -659,7 +663,7 @@ check_line "writehex: wrote 18 bytes to /fault.awp"
 check_line "exec: fault 6"
 check_line "exec: exited 134"
 check_line "rm: removed /fault.awp"
-check_line "Arwill:/> exec /apps/edit.awp owner/note"
+check_line "Arwill:/> exec edit owner/note"
 check_line "/owner/note"
 check_line "edit: missing file"
 check_absent "edit file:"
@@ -684,7 +688,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.17.1"
+check_line "version: 0.17.2"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
@@ -699,7 +703,7 @@ for expected in \
     "Access denied" \
     "Arwill remote console" \
     "warning: plaintext trusted-LAN access" \
-    "Arwill 0.17.1" \
+    "Arwill 0.17.2" \
     "^C" \
     "remote console: disconnected" \
     "uptime: " \
@@ -727,7 +731,7 @@ if ! tr -d '\r' < "$remote_console_log" | grep -x -q '/'; then
     exit 1
 fi
 
-remote_version_count=$(grep -F -c "Arwill 0.17.1" "$remote_console_log")
+remote_version_count=$(grep -F -c "Arwill 0.17.2" "$remote_console_log")
 if [ "$remote_version_count" -lt 2 ]; then
     echo "remote console Up history did not repeat the command" >&2
     cat "$remote_console_log" >&2

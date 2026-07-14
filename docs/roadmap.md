@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.17.1`.
+Status: `0.17.2`.
 
 Arwill already has:
 
@@ -47,7 +47,8 @@ Arwill already has:
 - [x] a tiny fixed-size device registry and `devices` shell command;
 - [x] framebuffer text console mirroring serial output when Limine provides a
   32-bit framebuffer;
-- [x] simple Arwill Program loader through `exec [image] [file]`, with at most
+- [x] simple Arwill Program loader through `exec [program] [file]`, with short
+  `/apps` names, explicit image paths, and at most
   one bounded, shell-resolved launch file path;
 - [x] QEMU debug-exit poweroff through `exit`;
 - [x] cooperative kernel-managed processes with PID, state, run count, exit
@@ -588,3 +589,16 @@ driver work, not accidental default access for every ring 3 program.
    Verified by: QEMU smoke observes the initial 15/24 entry use, 18/24 after
    bounded mutations, persistence across reboot, and return to 15/24 after
    cleanup.
+
+28. [x] Short AWP program launch names
+
+   Status: implemented in `0.17.2` per ADR-0052.
+
+   Scope: resolve a bare `exec` program name without `.awp` exactly to
+   `/apps/<name>.awp`, complete first-position program names without their
+   extension, and preserve explicit image paths and the one launch-file path.
+   Do not add `PATH`, aliases, multiple search directories, or arguments.
+
+   Verified by: QEMU smoke launches `hello`, completes `ca` to `calc`, opens a
+   relative file through `edit`, exercises the same form over TCP, and retains
+   an explicit `/apps/hello.awp` launch after reboot.

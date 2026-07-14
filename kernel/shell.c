@@ -46,7 +46,7 @@ enum {
 enum shell_completion_kind {
     shell_completion_none,
     shell_completion_path,
-    shell_completion_two_paths,
+    shell_completion_exec,
     shell_completion_directory_path,
     shell_completion_process,
     shell_completion_system,
@@ -80,7 +80,7 @@ static const struct shell_command shell_commands[] = {
     { .name = "service", .completion = shell_completion_none },
     { .name = "ps", .completion = shell_completion_none },
     { .name = "run", .completion = shell_completion_process },
-    { .name = "exec", .completion = shell_completion_two_paths },
+    { .name = "exec", .completion = shell_completion_exec },
     { .name = "exit", .completion = shell_completion_none },
     { .name = "halt", .completion = shell_completion_none },
 };
@@ -858,6 +858,60 @@ static int resolve_path(
     return 1;
 }
 
+static int string_contains(const char *value, char character) {
+    for (size_t index = 0; value[index] != '\0'; index++) {
+        if (value[index] == character) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int string_ends_with(const char *value, const char *suffix) {
+    const size_t value_length = string_length(value);
+    const size_t suffix_length = string_length(suffix);
+
+    if (suffix_length > value_length) {
+        return 0;
+    }
+    return string_equals(&value[value_length - suffix_length], suffix);
+}
+
+static int resolve_program_image_path(
+    const char *current_directory,
+    const char *program,
+    char *resolved_path,
+    size_t capacity
+) {
+    static const char application_directory[] = "/apps/";
+    static const char program_suffix[] = ".awp";
+
+    if (string_contains(program, '/') || string_ends_with(program, program_suffix)) {
+        return resolve_path(current_directory, program, resolved_path, capacity);
+    }
+
+    const size_t directory_length = sizeof(application_directory) - 1U;
+    const size_t program_length = string_length(program);
+    const size_t suffix_length = sizeof(program_suffix) - 1U;
+
+    if (directory_length + program_length + suffix_length >= capacity) {
+        return 0;
+    }
+
+    size_t output = 0;
+    for (size_t index = 0; index < directory_length; index++) {
+        resolved_path[output++] = application_directory[index];
+    }
+    for (size_t index = 0; index < program_length; index++) {
+        resolved_path[output++] = program[index];
+    }
+    for (size_t index = 0; index < suffix_length; index++) {
+        resolved_path[output++] = program_suffix[index];
+    }
+    resolved_path[output] = '\0';
+    return 1;
+}
+
 static void write_prompt(const struct arwill_console *console, const char *current_directory) {
     arwill_console_write(console, "Arwill:");
     arwill_console_write(console, current_directory);
@@ -894,7 +948,7 @@ static void print_help(const struct arwill_console *console, int remote_session)
     arwill_console_write_line(console, "  service    inspect or control built-in services");
     arwill_console_write_line(console, "  ps         show kernel process table");
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
-    arwill_console_write_line(console, "  exec [image] [file] run a stored program image");
+    arwill_console_write_line(console, "  exec [program] [file] run a stored program image");
     arwill_console_write_line(console, remote_session ?
         "  exit       close the remote session" :
         "  exit       power off the machine");
@@ -1186,7 +1240,12 @@ static uint32_t exec_program_image(
         return 0;
     }
 
-    if (!resolve_path(current_directory, path_argument, resolved_path, sizeof(resolved_path))) {
+    if (!resolve_program_image_path(
+            current_directory,
+            path_argument,
+            resolved_path,
+            sizeof(resolved_path)
+        )) {
         arwill_console_write_line(console, "exec: path too long");
         return 0;
     }
@@ -2935,6 +2994,132 @@ static void complete_path(
     show_path_candidates(console, current_directory, line, &listing, prefix, directories_only);
 }
 
+static void show_program_candidates(
+    const struct arwill_console *console,
+    const char *current_directory,
+    const char *line,
+    const struct arwill_fs_listing *listing,
+    const char *prefix
+) {
+    static const char program_suffix[] = ".awp";
+    const size_t suffix_length = sizeof(program_suffix) - 1U;
+    const size_t prefix_length = string_length(prefix);
+    char program_name[shell_path_capacity];
+
+    arwill_console_write_line(console, "");
+    for (size_t index = 0; index < listing->count; index++) {
+        const struct arwill_fs_entry *entry = &listing->entries[index];
+        const size_t name_length = string_length(entry->name);
+
+        if (entry->type != arwill_fs_entry_file ||
+            !string_ends_with(entry->name, program_suffix) ||
+            name_length <= suffix_length ||
+            !starts_with_sized(entry->name, prefix, prefix_length)) {
+            continue;
+        }
+        if (copy_sized_string(
+                program_name,
+                sizeof(program_name),
+                entry->name,
+                name_length - suffix_length
+            )) {
+            arwill_console_write_line(console, program_name);
+        }
+    }
+    redraw_line(console, current_directory, line);
+}
+
+static void complete_program_name(
+    const struct arwill_console *console,
+    const struct arwill_filesystem *filesystem,
+    const char *current_directory,
+    char *line,
+    size_t *length,
+    size_t argument_start
+) {
+    static const char program_suffix[] = ".awp";
+    const size_t suffix_length = sizeof(program_suffix) - 1U;
+    const char *prefix = &line[argument_start];
+    const size_t prefix_length = string_length(prefix);
+    const struct arwill_fs_entry *single_match = 0;
+    size_t match_count = 0;
+    size_t shared_length = 0;
+    struct arwill_fs_listing listing;
+
+    if (string_contains(prefix, '/') || string_contains(prefix, '.')) {
+        complete_path(
+            console,
+            filesystem,
+            current_directory,
+            line,
+            length,
+            argument_start,
+            0
+        );
+        return;
+    }
+
+    if (!arwill_filesystem_list(filesystem, "/apps", &listing)) {
+        return;
+    }
+
+    for (size_t index = 0; index < listing.count; index++) {
+        const struct arwill_fs_entry *entry = &listing.entries[index];
+        const size_t name_length = string_length(entry->name);
+
+        if (entry->type != arwill_fs_entry_file ||
+            !string_ends_with(entry->name, program_suffix) ||
+            name_length <= suffix_length ||
+            !starts_with_sized(entry->name, prefix, prefix_length)) {
+            continue;
+        }
+
+        const size_t program_length = name_length - suffix_length;
+        if (match_count == 0U) {
+            single_match = entry;
+            shared_length = program_length;
+        } else if (single_match != 0) {
+            shared_length = common_prefix_length(
+                single_match->name,
+                entry->name,
+                shared_length < program_length ? shared_length : program_length
+            );
+        }
+        match_count++;
+    }
+
+    if (match_count == 0U) {
+        return;
+    }
+    if (match_count == 1U && single_match != 0) {
+        const size_t program_length = string_length(single_match->name) - suffix_length;
+        for (size_t index = prefix_length; index < program_length; index++) {
+            if (!append_char_to_line(console, line, length, single_match->name[index])) {
+                return;
+            }
+        }
+        (void)append_char_to_line(console, line, length, ' ');
+        return;
+    }
+    if (shared_length > prefix_length && single_match != 0) {
+        for (size_t index = prefix_length; index < shared_length; index++) {
+            if (!append_char_to_line(console, line, length, single_match->name[index])) {
+                return;
+            }
+        }
+        return;
+    }
+
+    line[*length] = '\0';
+    show_program_candidates(
+        console,
+        current_directory,
+        line,
+        &listing,
+        prefix
+    );
+}
+
 static void show_process_candidates(
     const struct arwill_console *console,
     const char *current_directory,
@@ -3178,9 +3363,23 @@ static void complete_line(
         return;
     }
 
-    if (completion == shell_completion_two_paths &&
-        !two_path_completion_start(line, argument_start, &argument_start)) {
-        return;
+    if (completion == shell_completion_exec) {
+        const size_t first_argument_start = argument_start;
+
+        if (!two_path_completion_start(line, argument_start, &argument_start)) {
+            return;
+        }
+        if (argument_start == first_argument_start) {
+            complete_program_name(
+                console,
+                filesystem,
+                current_directory,
+                line,
+                length,
+                argument_start
+            );
+            return;
+        }
     }
 
     complete_path(

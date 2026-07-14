@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.17.1 has one executable path:
+Arwill 0.17.2 has one executable path:
 
 ```text
 Limine bootloader
@@ -83,8 +83,9 @@ Shell:
 - Keeps one canonical public command name per operation; retired exact-match
   diagnostics are transitional internal inputs, not public aliases.
 - Holds the current working directory as local shell state.
-- Owns Tab completion for command names, filesystem paths, both `exec` path
-  positions, built-in process names, and fixed subsystem arguments.
+- Owns Tab completion for command names, filesystem paths, short `/apps`
+  program names, both `exec` positions, built-in process names, and fixed
+  subsystem arguments.
 - Keeps `top` as nonblocking per-session shell state. The main service loop
   refreshes it once per second while TCP polling and AWP dispatch continue.
 - Owns a small in-memory command history navigated by Up and Down escape
@@ -226,9 +227,12 @@ Program loader:
 
 - The first stored executable format is Arwill Program v1, identified by an
   `AWP1` binary header.
-- The shell command `exec [image] [file]` reads a binary file from ARFS and asks
+- The shell command `exec [program] [file]` reads a binary file from ARFS and asks
   the user runtime to map and execute its code bytes in ring 3 with at most one
   63-byte launch file path resolved against the shell current directory.
+- A bare program name without `.awp` resolves exactly to `/apps/<name>.awp`.
+  Image arguments containing `/`, or ending in `.awp`, retain ordinary explicit
+  filesystem-path resolution. There is no `PATH` or multi-directory search.
 - The current image format contains a small header, entry offset, and at most
   two code pages.
 - The fixture packages `/apps/hello.awp`, `/apps/calc.awp`, and

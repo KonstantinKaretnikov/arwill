@@ -1,6 +1,6 @@
 # Arwill
 
-Arwill `0.17.1` is a small experimental x86-64 operating system for QEMU.
+Arwill `0.17.2` is a small experimental x86-64 operating system for QEMU.
 It is built around explicit, replaceable components and documented decisions.
 See [MANIFESTO.md](MANIFESTO.md).
 
@@ -45,7 +45,7 @@ The boot screen is intentionally short:
  A   A  R R   WW WW   I   L     L
  A   A  R  R  W   W  III  LLLL  LLLL
 
-Arwill 0.17.1 ready
+Arwill 0.17.2 ready
 config: /owner/arwill.conf
 help: type 'help' or press Tab
 Arwill:/>
@@ -114,17 +114,22 @@ crash consistency.
 
 ## Programs and multitasking
 
-`exec` runs an AWP image stored in ARFS:
+`exec` runs an AWP image stored in ARFS. Programs in `/apps` have a short
+canonical launch form:
 
 ```text
-exec /apps/hello.awp
-exec /apps/calc.awp
-exec /apps/edit.awp /owner/arwill.conf
+exec hello
+exec calc
+exec edit /owner/arwill.conf
 ```
 
-It accepts one optional file path. Relative paths are resolved from the
-launching shell directory; both path positions support `Tab` completion.
-There are no quotes, expansion, general argument vectors, or environment.
+For a bare program name without `.awp`, `exec` resolves exactly
+`/apps/<name>.awp`. Explicit image paths such as `exec /apps/calc.awp` and
+`exec ./tool.awp` remain available. It accepts one optional file path, resolved
+from the launching shell directory. `Tab` completes short program names or an
+explicit image path in the first position, and a filesystem path in the second.
+There are no `PATH` searches, aliases, quotes, expansion, general argument
+vectors, or environment.
 
 Included applications:
 
