@@ -1,6 +1,6 @@
 # Arwill
 
-Arwill `0.16.0` is a small experimental x86-64 operating system for QEMU.
+Arwill `0.17.0` is a small experimental x86-64 operating system for QEMU.
 It is built around explicit, replaceable components and documented decisions.
 See [MANIFESTO.md](MANIFESTO.md).
 
@@ -45,15 +45,14 @@ The boot screen is intentionally short:
  A   A  R R   WW WW   I   L     L
  A   A  R  R  W   W  III  LLLL  LLLL
 
-Arwill 0.16.0 ready
+Arwill 0.17.0 ready
 config: /owner/arwill.conf
 help: type 'help' or press Tab
 Arwill:/>
 ```
 
-Detailed state is available through `ownerinfo`, `meminfo`, `devices`,
-`blkinfo`, `irqinfo`, `schedinfo`, `userinfo`, `netinfo`, and
-`tcpinfo`.
+Detailed state is grouped under `system`, `devices`, and `network`. `top`
+provides a live system and process dashboard.
 
 ## Shell
 
@@ -61,16 +60,31 @@ Detailed state is available through `ownerinfo`, `meminfo`, `devices`,
 
 | Area | Commands |
 | --- | --- |
-| Core | `help version uptime clear exit halt` |
+| Core | `help version system top clear exit halt` |
 | Files | `pwd cd ls cat stat mkdir rm` |
-| Platform | `pciinfo meminfo devices blkinfo irqinfo schedinfo userinfo ownerinfo` |
-| Network | `netinfo netcfg ping tcpinfo` |
+| Platform | `devices` |
+| Network | `network` |
 | Operations | `config logs service` |
 | Programs | `ps run exec` |
 
-`Tab` completes commands, paths, and process names. Up/Down browse in-memory
-history. `Ctrl+C` cancels the current line or foreground AWP. Russian-layout
-input is normalized to ASCII key positions for command entry only.
+`Tab` completes commands, subsystem arguments, paths, and process names.
+Up/Down browse in-memory history. `Ctrl+C` cancels the current line, `top`, or
+a foreground AWP. Russian-layout input is normalized to ASCII key positions
+for command entry only.
+
+Inspection commands use one canonical interface per subsystem:
+
+```text
+system [memory|interrupts|scheduler|runtime|owner]
+devices [pci|disk0|net0]
+network [ping|tcp]
+top
+```
+
+Without an argument, `system` and `network` print a summary and `devices` lists
+the registry. `top` refreshes once per second, keeps kernel built-ins and AWP
+tasks distinct through `KIND`, and exits with `q` or `Ctrl+C`. `ps` remains the
+stable one-shot process listing.
 
 On serial, `exit` powers off QEMU. In a TCP session it closes only that
 session.

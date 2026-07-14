@@ -40,6 +40,7 @@ enum {
     utf8_cyrillic_lead_1 = 0xd1,
     remote_authentication_max_attempts = 3,
     remote_authentication_timeout_ms = 30000,
+    top_refresh_interval_ms = 1000,
 };
 
 enum shell_completion_kind {
@@ -47,7 +48,10 @@ enum shell_completion_kind {
     shell_completion_path,
     shell_completion_two_paths,
     shell_completion_directory_path,
-    shell_completion_process
+    shell_completion_process,
+    shell_completion_system,
+    shell_completion_devices,
+    shell_completion_network
 };
 
 struct shell_command {
@@ -59,12 +63,10 @@ struct shell_command {
 static const struct shell_command shell_commands[] = {
     { .name = "help", .completion = shell_completion_none },
     { .name = "version", .completion = shell_completion_none },
-    { .name = "uptime", .completion = shell_completion_none },
-    { .name = "pciinfo", .completion = shell_completion_none },
-    { .name = "netinfo", .completion = shell_completion_none },
-    { .name = "netcfg", .completion = shell_completion_none },
-    { .name = "ping", .completion = shell_completion_none },
-    { .name = "tcpinfo", .completion = shell_completion_none },
+    { .name = "system", .completion = shell_completion_system },
+    { .name = "devices", .completion = shell_completion_devices },
+    { .name = "network", .completion = shell_completion_network },
+    { .name = "top", .completion = shell_completion_none },
     { .name = "pwd", .completion = shell_completion_none },
     { .name = "cd", .completion = shell_completion_directory_path },
     { .name = "clear", .completion = shell_completion_none },
@@ -73,13 +75,6 @@ static const struct shell_command shell_commands[] = {
     { .name = "mkdir", .completion = shell_completion_directory_path },
     { .name = "rm", .completion = shell_completion_path },
     { .name = "stat", .completion = shell_completion_path },
-    { .name = "meminfo", .completion = shell_completion_none },
-    { .name = "devices", .completion = shell_completion_none },
-    { .name = "blkinfo", .completion = shell_completion_none },
-    { .name = "irqinfo", .completion = shell_completion_none },
-    { .name = "schedinfo", .completion = shell_completion_none },
-    { .name = "userinfo", .completion = shell_completion_none },
-    { .name = "ownerinfo", .completion = shell_completion_none },
     { .name = "config", .completion = shell_completion_none },
     { .name = "logs", .completion = shell_completion_none },
     { .name = "service", .completion = shell_completion_none },
@@ -88,6 +83,18 @@ static const struct shell_command shell_commands[] = {
     { .name = "exec", .completion = shell_completion_two_paths },
     { .name = "exit", .completion = shell_completion_none },
     { .name = "halt", .completion = shell_completion_none },
+};
+
+static const char *const system_completions[] = {
+    "memory", "interrupts", "scheduler", "runtime", "owner"
+};
+
+static const char *const device_completions[] = {
+    "pci", "disk0", "net0"
+};
+
+static const char *const network_completions[] = {
+    "ping", "tcp"
 };
 
 struct shell_history {
@@ -158,6 +165,8 @@ struct shell_session {
     char authentication_key[arwill_config_remote_key_capacity];
     size_t authentication_key_length;
     uint32_t tcp_timeouts_at_connection;
+    int top_active;
+    uint64_t top_last_refresh_milliseconds;
 };
 
 struct shell_builtin_process {
@@ -585,6 +594,22 @@ static const char *argument_after_command(const char *line) {
     return &line[index];
 }
 
+static int argument_equals(const char *argument, const char *expected) {
+    size_t index = 0;
+
+    while (argument[index] != '\0' && expected[index] != '\0' &&
+        argument[index] == expected[index]) {
+        index++;
+    }
+    if (expected[index] != '\0') {
+        return 0;
+    }
+    while (argument[index] == ' ') {
+        index++;
+    }
+    return argument[index] == '\0';
+}
+
 static int copy_string(char *destination, size_t capacity, const char *source) {
     size_t index = 0;
 
@@ -852,12 +877,10 @@ static void print_help(const struct arwill_console *console, int remote_session)
     arwill_console_write_line(console, "commands:");
     arwill_console_write_line(console, "  help       show commands");
     arwill_console_write_line(console, "  version    show kernel version");
-    arwill_console_write_line(console, "  uptime     show monotonic time since boot");
-    arwill_console_write_line(console, "  pciinfo    list discovered PCI devices");
-    arwill_console_write_line(console, "  netinfo    show network device diagnostics");
-    arwill_console_write_line(console, "  netcfg     show fixed IPv4 network configuration");
-    arwill_console_write_line(console, "  ping       send one ICMP echo to the gateway");
-    arwill_console_write_line(console, "  tcpinfo    show remote console TCP state");
+    arwill_console_write_line(console, "  system     show system state and subsystem details");
+    arwill_console_write_line(console, "  devices    list devices or inspect pci/disk0/net0");
+    arwill_console_write_line(console, "  network    show network state, ping, or TCP details");
+    arwill_console_write_line(console, "  top        show a live system and process dashboard");
     arwill_console_write_line(console, "  pwd        show current directory");
     arwill_console_write_line(console, "  cd [path]  change current directory");
     arwill_console_write_line(console, "  clear      clear the terminal screen");
@@ -866,13 +889,6 @@ static void print_help(const struct arwill_console *console, int remote_session)
     arwill_console_write_line(console, "  mkdir [path] create a directory");
     arwill_console_write_line(console, "  rm [path] remove a file or empty directory");
     arwill_console_write_line(console, "  stat [path] show file or directory metadata");
-    arwill_console_write_line(console, "  meminfo    show memory map and allocators");
-    arwill_console_write_line(console, "  devices    list detected devices");
-    arwill_console_write_line(console, "  blkinfo    show block device read diagnostics");
-    arwill_console_write_line(console, "  irqinfo    show interrupt and timer diagnostics");
-    arwill_console_write_line(console, "  schedinfo  show scheduler tick diagnostics");
-    arwill_console_write_line(console, "  userinfo   show user-mode diagnostics");
-    arwill_console_write_line(console, "  ownerinfo  show the OS ownership model");
     arwill_console_write_line(console, "  config     show or change system configuration");
     arwill_console_write_line(console, "  logs       show the complete event log");
     arwill_console_write_line(console, "  service    inspect or control built-in services");
@@ -882,7 +898,9 @@ static void print_help(const struct arwill_console *console, int remote_session)
     arwill_console_write_line(console, remote_session ?
         "  exit       close the remote session" :
         "  exit       power off the machine");
-    arwill_console_write_line(console, "  Tab        complete commands, paths, and processes");
+    arwill_console_write_line(
+        console, "  Tab        complete commands, arguments, paths, and processes"
+    );
     arwill_console_write_line(console, "  Up/Down    browse command history");
     arwill_console_write_line(console, "  halt       enter the CPU idle loop");
 }
@@ -900,6 +918,98 @@ static void print_uptime(
     arwill_console_write(console, "uptime: ");
     write_uint64_decimal(console, arwill_clock_monotonic_milliseconds(clock));
     arwill_console_write_line(console, " ms");
+}
+
+static void print_pci_info(
+    const struct arwill_console *console,
+    const struct arwill_pci_bus *pci
+) {
+    arwill_console_write_line(console, "pci: x86_64 configuration mechanism 1");
+    arwill_console_write(console, "devices: ");
+    write_size_decimal(console, pci == 0 ? 0U : pci->count);
+    arwill_console_write_line(console, "");
+    if (pci == 0) {
+        return;
+    }
+    for (size_t index = 0; index < pci->count; index++) {
+        const struct arwill_pci_device *device = &pci->devices[index];
+        arwill_console_write(console, "  vendor ");
+        write_uint64_hex(console, device->vendor_id);
+        arwill_console_write(console, " device ");
+        write_uint64_hex(console, device->device_id);
+        arwill_console_write(console, " bar0 ");
+        write_uint64_hex(console, device->bars[0]);
+        arwill_console_write(console, " bar1 ");
+        write_uint64_hex(console, device->bars[1]);
+        arwill_console_write(console, " class ");
+        write_uint64_hex(console, device->class_code);
+        arwill_console_write(console, "/");
+        write_uint64_hex(console, device->subclass);
+        arwill_console_write_line(console, "");
+    }
+}
+
+static void print_network_device_info(
+    const struct arwill_console *console,
+    const struct arwill_network_device *network
+) {
+    uint8_t mac[arwill_network_mac_length];
+
+    arwill_console_write(console, "network: ");
+    if (network == 0 || network->name == 0) {
+        arwill_console_write_line(console, "unavailable");
+        return;
+    }
+    arwill_console_write_line(console, network->name);
+    arwill_console_write(console, "mac: ");
+    if (!arwill_network_read_mac(network, mac)) {
+        arwill_console_write_line(console, "unavailable");
+        return;
+    }
+    for (size_t index = 0; index < arwill_network_mac_length; index++) {
+        if (index != 0U) {
+            arwill_console_write(console, ":");
+        }
+        write_uint8_hex(console, mac[index]);
+    }
+    arwill_console_write_line(console, "");
+    arwill_console_write_line(console, "frame path: tx/rx bounded polling ready");
+}
+
+static void print_tcp_info(
+    const struct arwill_console *console,
+    const struct arwill_ipv4_stack *ipv4
+) {
+    if (ipv4 == 0) {
+        arwill_console_write_line(console, "tcp: unavailable");
+        return;
+    }
+    arwill_console_write(console, "tcp: port ");
+    write_uint64_decimal(console, ipv4->tcp_listener.port);
+    arwill_console_write(console, ", state ");
+    arwill_console_write_line(console, arwill_tcp_state_name(ipv4->tcp_listener.state));
+    arwill_console_write(console, "tcp frames: ");
+    write_uint64_decimal(console, ipv4->tcp_frames_received);
+    arwill_console_write(console, ", syn-ack: ");
+    write_uint64_decimal(console, ipv4->tcp_syn_ack_sent);
+    arwill_console_write_line(console, "");
+    print_remote_console_info(console, ipv4);
+}
+
+static void ping_network(
+    const struct arwill_console *console,
+    struct arwill_ipv4_stack *ipv4
+) {
+    arwill_console_write_line(console, "ping 10.0.2.2");
+    if (ipv4 == 0 || !arwill_ipv4_ping_gateway(ipv4)) {
+        if (ipv4 != 0 && ipv4->gateway_resolved) {
+            arwill_console_write_line(console, "ping: ICMP no reply");
+        } else {
+            arwill_console_write_line(console, "ping: ARP no reply");
+        }
+        return;
+    }
+    arwill_console_write_line(console, "ping: reply received");
 }
 
 static void print_listing(
@@ -1747,6 +1857,165 @@ static void print_owner_info(const struct arwill_console *console) {
     arwill_console_write_line(console, "privileged code: explicit kernel or driver work");
 }
 
+static size_t kernel_process_count(const struct arwill_process_manager *processes) {
+    const struct arwill_process *table = arwill_process_table(processes);
+    size_t count = 0;
+
+    if (table == 0) {
+        return 0;
+    }
+    for (size_t index = 0; index < arwill_process_table_capacity; index++) {
+        if (table[index].state != arwill_process_state_empty) {
+            count++;
+        }
+    }
+    return count;
+}
+
+static void print_system_summary(
+    const struct arwill_console *console,
+    const struct arwill_clock *clock,
+    const struct arwill_memory *memory,
+    const struct arwill_process_manager *processes,
+    const struct arwill_user_runtime *user_runtime,
+    const struct arwill_service_manager *services
+) {
+    struct arwill_physical_allocator_stats physical;
+    struct arwill_kernel_heap_stats heap;
+    struct arwill_scheduler_stats scheduler;
+    struct arwill_user_task_info tasks[arwill_user_task_capacity];
+    const size_t task_count = arwill_user_tasks(
+        user_runtime, tasks, arwill_user_task_capacity
+    );
+
+    arwill_physical_allocator_stats(memory, &physical);
+    arwill_kernel_heap_stats(memory, &heap);
+    arwill_scheduler_stats(&scheduler);
+
+    arwill_console_write_line(
+        console, "system: " ARWILL_PROJECT_NAME " " ARWILL_PROJECT_VERSION
+    );
+    print_uptime(console, clock);
+    arwill_console_write_line(console, "owner model: " ARWILL_OWNER_MODEL);
+    arwill_console_write(console, "memory: pages ");
+    write_uint64_decimal(console, physical.free_pages);
+    arwill_console_write(console, "/");
+    write_uint64_decimal(console, physical.total_pages);
+    arwill_console_write(console, " free, heap ");
+    write_size_decimal(console, heap.used_bytes);
+    arwill_console_write(console, "/");
+    write_size_decimal(console, heap.size_bytes);
+    arwill_console_write_line(console, " bytes used");
+    arwill_console_write(console, "scheduler: ticks ");
+    write_uint64_decimal(console, scheduler.ticks);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "processes: kernel ");
+    write_size_decimal(console, kernel_process_count(processes));
+    arwill_console_write(console, ", awp ");
+    write_size_decimal(console, task_count);
+    arwill_console_write(console, "/");
+    write_size_decimal(console, arwill_user_task_capacity);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "remote-console: ");
+    arwill_console_write_line(
+        console,
+        services == 0 ? "unavailable" :
+            arwill_service_state_name(services->remote_console_state)
+    );
+}
+
+static void run_system_command(
+    const struct arwill_console *console,
+    const char *argument,
+    const struct arwill_clock *clock,
+    const struct arwill_memory *memory,
+    const struct arwill_interrupts *interrupts,
+    const struct arwill_process_manager *processes,
+    const struct arwill_user_runtime *user_runtime,
+    const struct arwill_service_manager *services
+) {
+    if (argument[0] == '\0') {
+        print_system_summary(
+            console, clock, memory, processes, user_runtime, services
+        );
+        return;
+    }
+    if (argument_equals(argument, "memory")) {
+        print_meminfo(console, memory);
+        return;
+    }
+    if (argument_equals(argument, "interrupts")) {
+        print_irqinfo(console, interrupts);
+        return;
+    }
+    if (argument_equals(argument, "scheduler")) {
+        print_scheduler_info(console, interrupts);
+        return;
+    }
+    if (argument_equals(argument, "runtime")) {
+        print_user_info(console, user_runtime);
+        return;
+    }
+    if (argument_equals(argument, "owner")) {
+        print_owner_info(console);
+        return;
+    }
+    arwill_console_write_line(
+        console,
+        "system: expected memory, interrupts, scheduler, runtime, or owner"
+    );
+}
+
+static void run_devices_command(
+    const struct arwill_console *console,
+    const char *argument,
+    const struct arwill_device_registry *devices,
+    const struct arwill_pci_bus *pci,
+    const struct arwill_block_device *block_device,
+    const struct arwill_network_device *network
+) {
+    if (argument[0] == '\0') {
+        print_devices(console, devices);
+        return;
+    }
+    if (argument_equals(argument, "pci")) {
+        print_pci_info(console, pci);
+        return;
+    }
+    if (argument_equals(argument, "disk0")) {
+        print_block_info(console, block_device);
+        return;
+    }
+    if (argument_equals(argument, "net0")) {
+        print_network_device_info(console, network);
+        return;
+    }
+    arwill_console_write_line(console, "devices: expected pci, disk0, or net0");
+}
+
+static void run_network_command(
+    const struct arwill_console *console,
+    const char *argument,
+    const struct arwill_network_device *network,
+    struct arwill_ipv4_stack *ipv4
+) {
+    if (argument[0] == '\0') {
+        print_network_device_info(console, network);
+        arwill_ipv4_print_config(ipv4, console);
+        print_tcp_info(console, ipv4);
+        return;
+    }
+    if (argument_equals(argument, "ping")) {
+        ping_network(console, ipv4);
+        return;
+    }
+    if (argument_equals(argument, "tcp")) {
+        print_tcp_info(console, ipv4);
+        return;
+    }
+    arwill_console_write_line(console, "network: expected ping or tcp");
+}
+
 static void print_config(
     const struct arwill_console *console,
     const struct arwill_config *config
@@ -2119,6 +2388,123 @@ static void print_process_table(
         arwill_console_write(console, " ");
         arwill_console_write_line(console, tasks[index].name);
     }
+}
+
+static void print_top_processes(
+    const struct arwill_console *console,
+    const struct arwill_process_manager *processes,
+    const struct arwill_user_runtime *user_runtime
+) {
+    const struct arwill_process *table = arwill_process_table(processes);
+
+    arwill_console_write_line(console, "PID KIND STATE RUNS EXIT NAME");
+    if (table != 0) {
+        for (size_t index = 0; index < arwill_process_table_capacity; index++) {
+            const struct arwill_process *process = &table[index];
+            if (process->state == arwill_process_state_empty) {
+                continue;
+            }
+            write_uint64_decimal(console, process->pid);
+            arwill_console_write(console, " kernel ");
+            arwill_console_write(console, arwill_process_state_name(process->state));
+            arwill_console_write(console, " ");
+            write_uint64_decimal(console, process->run_count);
+            arwill_console_write(console, " ");
+            write_uint64_decimal(console, process->exit_code);
+            arwill_console_write(console, " ");
+            arwill_console_write_line(console, process->name);
+        }
+    }
+
+    struct arwill_user_task_info tasks[arwill_user_task_capacity];
+    const size_t task_count = arwill_user_tasks(
+        user_runtime, tasks, arwill_user_task_capacity
+    );
+    for (size_t index = 0; index < task_count; index++) {
+        write_uint64_decimal(console, tasks[index].pid);
+        arwill_console_write(console, " awp ");
+        arwill_console_write(console, arwill_user_task_state_name(tasks[index].state));
+        arwill_console_write(console, " ");
+        write_uint64_decimal(console, tasks[index].run_count);
+        arwill_console_write(console, " ");
+        write_uint64_decimal(console, tasks[index].exit_code);
+        arwill_console_write(console, " ");
+        arwill_console_write_line(console, tasks[index].name);
+    }
+    if (kernel_process_count(processes) == 0U && task_count == 0U) {
+        arwill_console_write_line(console, "no processes");
+    }
+}
+
+static void render_top(
+    const struct shell_session *session,
+    const struct shell_environment *environment
+) {
+    struct arwill_kernel_heap_stats heap;
+    struct arwill_scheduler_stats scheduler;
+    struct arwill_user_stats user;
+
+    arwill_kernel_heap_stats(environment->memory, &heap);
+    arwill_scheduler_stats(&scheduler);
+    arwill_user_runtime_stats(environment->user_runtime, &user);
+
+    arwill_console_write(session->console, "\033[2J\033[H");
+    arwill_console_write(
+        session->console, ARWILL_PROJECT_NAME " " ARWILL_PROJECT_VERSION "  uptime "
+    );
+    write_uint64_decimal(
+        session->console,
+        arwill_clock_monotonic_milliseconds(environment->clock)
+    );
+    arwill_console_write(session->console, " ms  heap ");
+    write_size_decimal(session->console, heap.used_bytes);
+    arwill_console_write(session->console, "/");
+    write_size_decimal(session->console, heap.size_bytes);
+    arwill_console_write_line(session->console, " bytes");
+
+    arwill_console_write(session->console, "remote-console ");
+    arwill_console_write(
+        session->console,
+        environment->services == 0 ? "unavailable" :
+            arwill_service_state_name(
+                environment->services->remote_console_state
+            )
+    );
+    arwill_console_write(session->console, "  tcp ");
+    arwill_console_write(
+        session->console,
+        environment->ipv4 == 0 ? "unavailable" :
+            arwill_tcp_state_name(environment->ipv4->tcp_listener.state)
+    );
+    arwill_console_write(session->console, "  scheduler ticks ");
+    write_uint64_decimal(session->console, scheduler.ticks);
+    arwill_console_write_line(session->console, "");
+    arwill_console_write_line(session->console, "");
+
+    print_top_processes(
+        session->console, environment->processes, environment->user_runtime
+    );
+    arwill_console_write_line(session->console, "");
+    arwill_console_write(session->console, "KERNEL ");
+    write_size_decimal(
+        session->console, kernel_process_count(environment->processes)
+    );
+    arwill_console_write(session->console, " tasks  AWP ");
+    struct arwill_user_task_info tasks[arwill_user_task_capacity];
+    write_size_decimal(
+        session->console,
+        arwill_user_tasks(
+            environment->user_runtime, tasks, arwill_user_task_capacity
+        )
+    );
+    arwill_console_write(session->console, "/");
+    write_size_decimal(session->console, arwill_user_task_capacity);
+    arwill_console_write(session->console, " slots  faults ");
+    write_uint64_decimal(session->console, user.faults);
+    arwill_console_write(session->console, "  preemptions ");
+    write_uint64_decimal(session->console, user.preemptions);
+    arwill_console_write_line(session->console, "");
+    arwill_console_write_line(session->console, "q/Ctrl+C exit");
 }
 
 static void run_process(
@@ -2593,6 +2979,89 @@ static void complete_process_name(
     show_process_candidates(console, current_directory, line, process_prefix);
 }
 
+static void show_fixed_candidates(
+    const struct arwill_console *console,
+    const char *current_directory,
+    const char *line,
+    const char *prefix,
+    const char *const *candidates,
+    size_t candidate_count
+) {
+    const size_t prefix_length = string_length(prefix);
+
+    arwill_console_write_line(console, "");
+    for (size_t index = 0; index < candidate_count; index++) {
+        if (starts_with_sized(candidates[index], prefix, prefix_length)) {
+            arwill_console_write_line(console, candidates[index]);
+        }
+    }
+    redraw_line(console, current_directory, line);
+}
+
+static void complete_fixed_argument(
+    const struct arwill_console *console,
+    const char *current_directory,
+    char *line,
+    size_t *length,
+    size_t argument_start,
+    const char *const *candidates,
+    size_t candidate_count
+) {
+    char prefix[shell_line_capacity];
+    const char *single_match = 0;
+    size_t match_count = 0;
+    size_t shared_length = 0;
+
+    if (!copy_string(prefix, sizeof(prefix), &line[argument_start])) {
+        return;
+    }
+    const size_t prefix_length = string_length(prefix);
+    for (size_t index = 0; index < candidate_count; index++) {
+        if (!starts_with_sized(candidates[index], prefix, prefix_length)) {
+            continue;
+        }
+        if (match_count == 0U) {
+            single_match = candidates[index];
+            shared_length = string_length(single_match);
+        } else {
+            shared_length = common_prefix_length(
+                single_match, candidates[index], shared_length
+            );
+        }
+        match_count++;
+    }
+    if (match_count == 0U) {
+        return;
+    }
+    if (match_count == 1U && single_match != 0) {
+        const size_t candidate_length = string_length(single_match);
+        for (size_t index = prefix_length; index < candidate_length; index++) {
+            if (!append_char_to_line(console, line, length, single_match[index])) {
+                return;
+            }
+        }
+        (void)append_char_to_line(console, line, length, ' ');
+        return;
+    }
+    if (shared_length > prefix_length && single_match != 0) {
+        for (size_t index = prefix_length; index < shared_length; index++) {
+            if (!append_char_to_line(console, line, length, single_match[index])) {
+                return;
+            }
+        }
+        return;
+    }
+    line[*length] = '\0';
+    show_fixed_candidates(
+        console,
+        current_directory,
+        line,
+        prefix,
+        candidates,
+        candidate_count
+    );
+}
+
 static void complete_line(
     const struct arwill_console *console,
     const struct arwill_filesystem *filesystem,
@@ -2609,7 +3078,7 @@ static void complete_line(
         return;
     }
 
-    if (line[argument_start] == '\0' && argument_start >= *length) {
+    if (string_length(command) == *length) {
         complete_command(console, current_directory, line, length);
         return;
     }
@@ -2622,6 +3091,45 @@ static void complete_line(
 
     if (completion == shell_completion_process) {
         complete_process_name(console, current_directory, line, length, argument_start);
+        return;
+    }
+
+    if (completion == shell_completion_system) {
+        complete_fixed_argument(
+            console,
+            current_directory,
+            line,
+            length,
+            argument_start,
+            system_completions,
+            sizeof(system_completions) / sizeof(system_completions[0])
+        );
+        return;
+    }
+
+    if (completion == shell_completion_devices) {
+        complete_fixed_argument(
+            console,
+            current_directory,
+            line,
+            length,
+            argument_start,
+            device_completions,
+            sizeof(device_completions) / sizeof(device_completions[0])
+        );
+        return;
+    }
+
+    if (completion == shell_completion_network) {
+        complete_fixed_argument(
+            console,
+            current_directory,
+            line,
+            length,
+            argument_start,
+            network_completions,
+            sizeof(network_completions) / sizeof(network_completions[0])
+        );
         return;
     }
 
@@ -2664,6 +3172,7 @@ static void run_command(
     int remote_session,
     uint32_t *foreground_pid,
     int *config_key_requested,
+    int *top_requested,
     int *close_requested
 ) {
     if (string_equals(line, "")) {
@@ -2680,59 +3189,56 @@ static void run_command(
         return;
     }
 
+    if (string_equals(line, "system") || starts_with(line, "system ")) {
+        run_system_command(
+            console,
+            argument_after_command(line),
+            clock,
+            memory,
+            interrupts,
+            processes,
+            user_runtime,
+            services
+        );
+        return;
+    }
+
+    if (string_equals(line, "devices") || starts_with(line, "devices ")) {
+        run_devices_command(
+            console,
+            argument_after_command(line),
+            devices,
+            pci,
+            block_device,
+            network
+        );
+        return;
+    }
+
+    if (string_equals(line, "network") || starts_with(line, "network ")) {
+        run_network_command(
+            console, argument_after_command(line), network, ipv4
+        );
+        return;
+    }
+
+    if (string_equals(line, "top")) {
+        *top_requested = 1;
+        return;
+    }
+
     if (string_equals(line, "uptime")) {
         print_uptime(console, clock);
         return;
     }
 
     if (string_equals(line, "pciinfo")) {
-        arwill_console_write_line(console, "pci: x86_64 configuration mechanism 1");
-        arwill_console_write(console, "devices: ");
-        write_size_decimal(console, pci == 0 ? 0U : pci->count);
-        arwill_console_write_line(console, "");
-        if (pci != 0) {
-            for (size_t index = 0; index < pci->count; index++) {
-                const struct arwill_pci_device *device = &pci->devices[index];
-                arwill_console_write(console, "  vendor ");
-                write_uint64_hex(console, device->vendor_id);
-                arwill_console_write(console, " device ");
-                write_uint64_hex(console, device->device_id);
-                arwill_console_write(console, " bar0 ");
-                write_uint64_hex(console, device->bars[0]);
-                arwill_console_write(console, " bar1 ");
-                write_uint64_hex(console, device->bars[1]);
-                arwill_console_write(console, " class ");
-                write_uint64_hex(console, device->class_code);
-                arwill_console_write(console, "/");
-                write_uint64_hex(console, device->subclass);
-                arwill_console_write_line(console, "");
-            }
-        }
+        print_pci_info(console, pci);
         return;
     }
 
     if (string_equals(line, "netinfo")) {
-        uint8_t mac[arwill_network_mac_length];
-
-        arwill_console_write(console, "network: ");
-        if (network == 0 || network->name == 0) {
-            arwill_console_write_line(console, "unavailable");
-            return;
-        }
-        arwill_console_write_line(console, network->name);
-        arwill_console_write(console, "mac: ");
-        if (!arwill_network_read_mac(network, mac)) {
-            arwill_console_write_line(console, "unavailable");
-            return;
-        }
-        for (size_t index = 0; index < arwill_network_mac_length; index++) {
-            if (index != 0U) {
-                arwill_console_write(console, ":");
-            }
-            write_uint8_hex(console, mac[index]);
-        }
-        arwill_console_write_line(console, "");
-        arwill_console_write_line(console, "frame path: tx/rx bounded polling ready");
+        print_network_device_info(console, network);
         return;
     }
 
@@ -2783,16 +3289,7 @@ static void run_command(
     }
 
     if (string_equals(line, "ping")) {
-        arwill_console_write_line(console, "ping 10.0.2.2");
-        if (ipv4 == 0 || !arwill_ipv4_ping_gateway(ipv4)) {
-            if (ipv4 != 0 && ipv4->gateway_resolved) {
-                arwill_console_write_line(console, "ping: ICMP no reply");
-            } else {
-                arwill_console_write_line(console, "ping: ARP no reply");
-            }
-            return;
-        }
-        arwill_console_write_line(console, "ping: reply received");
+        ping_network(console, ipv4);
         return;
     }
 
@@ -2852,20 +3349,7 @@ static void run_command(
     }
 
     if (string_equals(line, "tcpinfo")) {
-        if (ipv4 == 0) {
-            arwill_console_write_line(console, "tcp: unavailable");
-            return;
-        }
-        arwill_console_write(console, "tcp: port ");
-        write_uint64_decimal(console, ipv4->tcp_listener.port);
-        arwill_console_write(console, ", state ");
-        arwill_console_write_line(console, arwill_tcp_state_name(ipv4->tcp_listener.state));
-        arwill_console_write(console, "tcp frames: ");
-        write_uint64_decimal(console, ipv4->tcp_frames_received);
-        arwill_console_write(console, ", syn-ack: ");
-        write_uint64_decimal(console, ipv4->tcp_syn_ack_sent);
-        arwill_console_write_line(console, "");
-        print_remote_console_info(console, ipv4);
+        print_tcp_info(console, ipv4);
         return;
     }
 
@@ -2886,11 +3370,6 @@ static void run_command(
 
     if (string_equals(line, "heaptest")) {
         run_heap_test(console, memory);
-        return;
-    }
-
-    if (string_equals(line, "devices")) {
-        print_devices(console, devices);
         return;
     }
 
@@ -3072,6 +3551,8 @@ static void initialize_shell_session(
     session->authentication_started_milliseconds = 0;
     session->authentication_key_length = 0;
     session->tcp_timeouts_at_connection = 0;
+    session->top_active = 0;
+    session->top_last_refresh_milliseconds = 0;
     session->process_context.console = console;
     session->process_context.user_runtime = user_runtime;
     reset_shell_input(session);
@@ -3120,6 +3601,16 @@ static int handle_shell_byte(
         if (is_printable_ascii(byte) && byte != '=' &&
             session->config_key_length + 1U < sizeof(session->config_key)) {
             session->config_key[session->config_key_length++] = (char)byte;
+        }
+        return 1;
+    }
+
+    if (session->top_active) {
+        if (byte == ascii_interrupt || byte == (uint8_t)'q') {
+            session->top_active = 0;
+            arwill_console_write(console, "\033[2J\033[H");
+            reset_shell_input(session);
+            write_prompt(console, session->current_directory);
         }
         return 1;
     }
@@ -3197,6 +3688,7 @@ static int handle_shell_byte(
         history_add(&session->history, session->line);
         session->history_position = session->history.count;
         int close_requested = 0;
+        int top_requested = 0;
         run_command(
             console,
             environment->filesystem,
@@ -3220,13 +3712,21 @@ static int handle_shell_byte(
             session->remote,
             &session->foreground_pid,
             &session->config_key_pending,
+            &top_requested,
             &close_requested
         );
         reset_shell_input(session);
         if (close_requested) {
             return 0;
         }
-        if (session->foreground_pid == 0U && !session->config_key_pending) {
+        if (top_requested) {
+            session->top_active = 1;
+            session->top_last_refresh_milliseconds =
+                arwill_clock_monotonic_milliseconds(environment->clock);
+            render_top(session, environment);
+        }
+        if (session->foreground_pid == 0U && !session->config_key_pending &&
+            !session->top_active) {
             write_prompt(console, session->current_directory);
         }
         return 1;
@@ -3402,6 +3902,7 @@ static void close_remote_session(
     const struct shell_environment *environment
 ) {
     cancel_remote_program(session, environment);
+    session->top_active = 0;
     record_remote_event(
         environment, arwill_log_info, arwill_log_network,
         arwill_log_tcp_disconnected,
@@ -3409,6 +3910,21 @@ static void close_remote_session(
     );
     arwill_ipv4_remote_console_close(environment->ipv4);
     session->active = 0;
+}
+
+static void service_top(
+    struct shell_session *session,
+    const struct shell_environment *environment
+) {
+    if (session == 0 || !session->active || !session->top_active) {
+        return;
+    }
+    const uint64_t now = arwill_clock_monotonic_milliseconds(environment->clock);
+    if (now - session->top_last_refresh_milliseconds < top_refresh_interval_ms) {
+        return;
+    }
+    session->top_last_refresh_milliseconds = now;
+    render_top(session, environment);
 }
 
 static void service_remote_shell(
@@ -3579,5 +4095,7 @@ void arwill_shell_run(
         arwill_user_poll(user_runtime);
         finish_foreground_program(&serial_session, user_runtime, log);
         finish_foreground_program(&remote_session, user_runtime, log);
+        service_top(&serial_session, &environment);
+        service_top(&remote_session, &environment);
     }
 }

@@ -92,16 +92,17 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.16.0" 2
+    wait_for_primary_log_count "Arwill 0.17.0" 2
     sleep 0.1
-    printf 'uptime\r'
+    printf 'sys\t\r'
+    wait_for_primary_log "system: Arwill 0.17.0"
     wait_for_primary_log_count "uptime: " 1
     sleep 0.1
-    printf 'pciinfo\r'
+    printf 'devices p\t\r'
     wait_for_primary_log "pci: x86_64 configuration mechanism 1"
     wait_for_primary_log "vendor 0x0000000000008086 device 0x000000000000100e"
     sleep 0.1
-    printf 'netinfo\r'
+    printf 'devices n\t\r'
     wait_for_primary_log "network: qemu e1000"
     wait_for_primary_log "mac: 52:54:00:12:34:56"
     wait_for_primary_log "frame path: tx/rx bounded polling ready"
@@ -109,14 +110,14 @@ run_qemu_to_log() {
     printf 'netprobe\r'
     wait_for_primary_log "netprobe: transmitted 60 bytes"
     sleep 0.1
-    printf 'netcfg\r'
+    printf 'network\r'
     wait_for_primary_log "ipv4: 10.0.2.15/24"
     wait_for_primary_log "gateway: 10.0.2.2"
     sleep 0.1
     printf 'arping\r'
     wait_for_primary_log "arping: request transmitted to 10.0.2.2"
     sleep 0.1
-    printf 'ping\r'
+    printf 'network p\t\r'
     wait_for_primary_log "ping: reply received"
     sleep 0.1
     printf 'tcpcheck\r'
@@ -125,7 +126,7 @@ run_qemu_to_log() {
     printf 'tcplisten\r'
     wait_for_primary_log "tcplisten: frames 0, state listen"
     sleep 0.1
-    printf 'tcpinfo\r'
+    printf 'network t\t\r'
     wait_for_primary_log "tcp: port 23232, state listen"
     sleep 0.1
     (
@@ -145,7 +146,10 @@ run_qemu_to_log() {
     sleep 0.1
     (
         printf 'arwill\r'
-        printf 'uptime\n'
+        printf 'system\n'
+        printf 'top\n'
+        sleep 1.1
+        printf 'q'
         printf 'exit\n'
     ) | nc -w 5 127.0.0.1 "$remote_console_port" >> "$remote_console_log"
     wait_for_log_count_file "$remote_console_log" "Arwill remote console" 2
@@ -183,7 +187,7 @@ run_qemu_to_log() {
     printf 'cl\t\r'
     wait_for_primary_log_count "Arwill:/> " 6
     sleep 0.1
-    printf 'mem\t\r'
+    printf 'system m\t\r'
     wait_for_primary_log "physical allocator:"
     wait_for_primary_log "kernel heap:"
     wait_for_primary_log "  initialized: yes"
@@ -200,16 +204,16 @@ run_qemu_to_log() {
     wait_for_primary_log "heap0 memory hhdm free-list ready"
     wait_for_primary_log "user0 user x86_64 ring3 awp scheduler ready"
     sleep 0.1
-    printf 'blk\t\r'
+    printf 'devices d\t\r'
     wait_for_primary_log "sample: ARWILL-BLOCK-DEVICE-TEST"
     sleep 0.1
-    printf 'irqi\t\r'
+    printf 'system i\t\r'
     wait_for_primary_log "timer observed: yes"
     sleep 0.1
     printf 'irqprobe\r'
     wait_for_primary_log "exception probe: handled vector 3"
     sleep 0.1
-    printf 'sched\t\r'
+    printf 'system s\t\r'
     wait_for_primary_log "scheduler: kernel/user tick accounting + AWP round-robin"
     sleep 0.1
     printf 'run he\t\r'
@@ -238,17 +242,25 @@ run_qemu_to_log() {
     wait_for_primary_log "awp hello from storage"
     wait_for_primary_log "exec: exited 9"
     sleep 0.1
-    printf 'useri\t\r'
+    printf 'system r\t\r'
     wait_for_primary_log "runs: 3"
     wait_for_primary_log "bytes written: 53"
     wait_for_primary_log "bad syscalls: 1"
     sleep 0.1
-    printf 'owneri\t\r'
+    printf 'system o\t\r'
     wait_for_primary_log "owner model: single-owner"
     sleep 0.1
     printf 'ps\r'
     wait_for_primary_log "pid state runs exit name"
     wait_for_primary_log "finished"
+    sleep 0.1
+    printf 'top\r'
+    wait_for_primary_log "PID KIND STATE RUNS EXIT NAME"
+    wait_for_primary_log "q/Ctrl+C exit"
+    sleep 1.1
+    wait_for_primary_log_count "PID KIND STATE RUNS EXIT NAME" 2
+    printf '\003'
+    wait_for_primary_log "KERNEL 4 tasks"
     sleep 0.1
     printf 'ls\r'
     wait_for_primary_log "system/"
@@ -329,10 +341,10 @@ run_qemu_to_log() {
     printf 'ps\r'
     wait_for_primary_log "awp pid state runs exit name"
     sleep 0.1
-    printf 'irqinfo\r'
+    printf 'system interrupts\r'
     wait_for_primary_log_count "timer observed: yes" 2
     sleep 0.1
-    printf 'uptime\r'
+    printf 'system\r'
     wait_for_primary_log_count "uptime: " 2
     sleep 0.1
     printf 'cat /apps/hello.awp\r'
@@ -381,7 +393,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.16.0"
+    wait_for_primary_log "version: 0.17.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -469,20 +481,24 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.16.0"
-check_line "uptime     show monotonic time since boot"
+check_line "Arwill 0.17.0"
+check_line "system     show system state and subsystem details"
+check_line "devices    list devices or inspect pci/disk0/net0"
+check_line "network    show network state, ping, or TCP details"
+check_line "top        show a live system and process dashboard"
+check_absent "uptime     show monotonic time since boot"
 check_line "uptime: "
-check_line "pciinfo    list discovered PCI devices"
+check_absent "pciinfo    list discovered PCI devices"
 check_line "pci: x86_64 configuration mechanism 1"
 check_line "vendor 0x0000000000008086 device 0x000000000000100e"
-check_line "netinfo    show network device diagnostics"
+check_absent "netinfo    show network device diagnostics"
 check_absent "netprobe   transmit a raw Ethernet diagnostic frame"
-check_line "netcfg     show fixed IPv4 network configuration"
+check_absent "netcfg     show fixed IPv4 network configuration"
 check_absent "arping     transmit an ARP request to the gateway"
-check_line "ping       send one ICMP echo to the gateway"
+check_absent "ping       send one ICMP echo to the gateway"
 check_absent "tcpcheck   exercise the TCP listener handshake"
 check_absent "tcplisten  poll the remote console TCP listener"
-check_line "tcpinfo    show remote console TCP state"
+check_absent "tcpinfo    show remote console TCP state"
 check_line "network: qemu e1000"
 check_line "mac: 52:54:00:12:34:56"
 check_line "frame path: tx/rx bounded polling ready"
@@ -499,12 +515,12 @@ check_line "remote bytes: received 0, sent 0, dropped 0, send failures 0"
 check_line "tcp integrity: checksum drops 0, duplicate acks 0"
 check_line "tcp reliability: retransmissions 0, timeouts 0, pending no"
 check_line "   A    RRR   W   W  III  L     L"
-check_line "Arwill 0.16.0 ready"
+check_line "Arwill 0.17.0 ready"
 check_line "config: /owner/arwill.conf"
 check_line "help: type 'help' or press Tab"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.16.0"
+check_line "Arwill 0.17.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -512,15 +528,14 @@ check_line "mkdir [path] create a directory"
 check_absent "write [path] [text] create or overwrite a text file"
 check_absent "writehex [path] [hex] create or overwrite a binary file"
 check_line "rm [path] remove a file or empty directory"
-check_line "meminfo    show memory map and allocators"
+check_absent "meminfo    show memory map and allocators"
 check_absent "heaptest   exercise kernel heap allocation"
-check_line "devices    list detected devices"
-check_line "blkinfo    show block device read diagnostics"
-check_line "irqinfo    show interrupt and timer diagnostics"
+check_absent "blkinfo    show block device read diagnostics"
+check_absent "irqinfo    show interrupt and timer diagnostics"
 check_absent "irqprobe   trigger a safe breakpoint exception"
-check_line "schedinfo  show scheduler tick diagnostics"
-check_line "userinfo   show user-mode diagnostics"
-check_line "ownerinfo  show the OS ownership model"
+check_absent "schedinfo  show scheduler tick diagnostics"
+check_absent "userinfo   show user-mode diagnostics"
+check_absent "ownerinfo  show the OS ownership model"
 check_line "config     show or change system configuration"
 check_line "logs       show the complete event log"
 check_line "service    inspect or control built-in services"
@@ -532,6 +547,12 @@ check_line "Up/Down    browse command history"
 check_absent "  dir [path]  list the current filesystem"
 check_absent "info [path]"
 check_absent "poweroff"
+check_line "system: Arwill 0.17.0"
+check_line "processes: kernel 0, awp 0/4"
+check_line "PID KIND STATE RUNS EXIT NAME"
+check_line "1002 awp finished"
+check_line "KERNEL 4 tasks"
+check_line "q/Ctrl+C exit"
 check_line "memory map:"
 check_line "usable"
 check_line "physical allocator:"
@@ -647,7 +668,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.16.0"
+check_line "version: 0.17.0"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
@@ -662,10 +683,12 @@ for expected in \
     "Access denied" \
     "Arwill remote console" \
     "warning: plaintext trusted-LAN access" \
-    "Arwill 0.16.0" \
+    "Arwill 0.17.0" \
     "^C" \
     "remote console: disconnected" \
     "uptime: " \
+    "PID KIND STATE RUNS EXIT NAME" \
+    "q/Ctrl+C exit" \
     "9*9=81"
 do
     if ! grep -F -q "$expected" "$remote_console_log"; then
@@ -688,7 +711,7 @@ if ! tr -d '\r' < "$remote_console_log" | grep -x -q '/'; then
     exit 1
 fi
 
-remote_version_count=$(grep -F -c "Arwill 0.16.0" "$remote_console_log")
+remote_version_count=$(grep -F -c "Arwill 0.17.0" "$remote_console_log")
 if [ "$remote_version_count" -lt 2 ]; then
     echo "remote console Up history did not repeat the command" >&2
     cat "$remote_console_log" >&2

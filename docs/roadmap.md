@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.16.0`.
+Status: `0.17.0`.
 
 Arwill already has:
 
@@ -26,11 +26,10 @@ Arwill already has:
 - [x] a buildable bootable ISO and `make check` with native IPv4/TCP checks plus
   a bounded QEMU serial/TCP smoke test;
 - [x] QEMU serial console output and blocking serial input;
-- [x] a serial shell with canonical commands only: `help`, `version`, `uptime`,
-  `pwd`, `cd`, `clear`, `ls`, `cat`, `mkdir`, `rm`, `stat`, `meminfo`,
-  `blkinfo`, `irqinfo`,
-  `schedinfo`, `userinfo`, `ownerinfo`, `config`, `logs`, `service`, `ps`,
-  `run`, `exec`, `exit`, and `halt`; exact internal smoke commands are kept
+- [x] a serial shell with canonical commands only: `help`, `version`, `system`,
+  `devices`, `network`, `top`, `pwd`, `cd`, `clear`, `ls`, `cat`, `mkdir`,
+  `rm`, `stat`, `config`, `logs`, `service`, `ps`, `run`, `exec`, `exit`, and
+  `halt`; exact internal smoke and transitional diagnostic commands are kept
   outside `help` and Tab completion;
 - [x] shell current directory state, path resolution, Tab completion, command
   history, and Russian-layout command-entry normalization;
@@ -55,12 +54,12 @@ Arwill already has:
   code, `run [name]`, cooperative `step`, and `ps`;
 - [x] x86-64 IDT setup, legacy PIC remap, PIT timer interrupts, and a safe
   breakpoint exception diagnostic;
-- [x] scheduler tick accounting exposed through `schedinfo`;
+- [x] scheduler tick accounting exposed through `system scheduler`;
 - [x] minimal x86-64 ring 3 user-mode entry with GDT, TSS, HHDM-backed user
   mappings, `int 0x80` syscalls for `write`, `exit`, `read`, and `clock`, and
   process-table exit status for built-in user programs;
-- [x] a PIT-backed monotonic clock exposed through `uptime` and syscall `4`;
-- [x] bounded PCI discovery and `pciinfo`, with a QEMU e1000 device attached
+- [x] a PIT-backed monotonic clock exposed through `system` and syscall `4`;
+- [x] bounded PCI discovery and `devices pci`, with a QEMU e1000 device attached
   to the bounded network path;
 - [x] a plaintext single-connection TCP remote console for `nc`, forwarded
   only through host localhost by default;
@@ -71,6 +70,10 @@ Arwill already has:
   `config`, `logs`, and `service` command surface;
 - [x] a three-attempt remote access-key gate plus explicit trusted-LAN QEMU
   bind override;
+- [x] grouped `system`, `devices`, and `network` inspection interfaces with
+  fixed Tab-completed subsystem arguments;
+- [x] a per-session live `top` dashboard with one-second refresh, explicit
+  kernel/AWP process kinds, and `q`/Ctrl+C exit;
 - [x] single-owner OS model: one owner, no accounts or multi-user permission
   system, with the kernel/user boundary kept as an engineering guardrail.
 
@@ -558,3 +561,16 @@ driver work, not accidental default access for every ring 3 program.
    positions, shell-current-directory resolution, bounded syscall `7`
    retrieval, and mandatory file-path launch for `/apps/edit.awp`. No
    `argc`/`argv`, quoting, environment, or task working directory.
+
+26. [x] Grouped inspection and live top
+
+   Status: implemented in `0.17.0` per ADR-0050.
+
+   Scope: group current inspection behavior under `system`, `devices`, and
+   `network`; complete their fixed subsystem arguments; and add a nonblocking
+   per-session `top` dashboard with one-second refresh and explicit kernel/AWP
+   process kinds. Keep `ps` as the stable one-shot process listing.
+
+   Verified by: QEMU smoke exercises each grouped interface, observes two live
+   dashboard renders, exits with `q`, and confirms retired names are absent
+   from `help`.

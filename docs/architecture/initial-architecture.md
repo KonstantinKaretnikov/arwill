@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.16.0 has one executable path:
+Arwill 0.17.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -25,11 +25,12 @@ Limine bootloader
   -> serial shell and authenticated TCP remote-console service
   -> storage-backed filesystem
   -> persistent whole-file writes through AWP syscalls and internal smoke commands
-  -> device registry listing when devices is requested
-  -> kernel heap diagnostics through meminfo and an internal heap smoke probe
-  -> deterministic raw disk sector read when blkinfo is requested
-  -> interrupt/timer diagnostics through irqinfo and an internal exception probe
-  -> scheduler tick diagnostics when schedinfo is requested
+  -> grouped system, device, and network inspection commands
+  -> live per-session system and process dashboard when top is requested
+  -> kernel heap diagnostics through system memory and an internal heap smoke probe
+  -> deterministic raw disk sector read through devices disk0
+  -> interrupt/timer diagnostics through system interrupts
+  -> scheduler tick diagnostics through system scheduler
   -> cooperative built-in kernel process launch when run is requested
   -> yielded cooperative process continuation through an internal smoke command
   -> stored Arwill Program spawn into one of four AWP slots when exec is requested
@@ -78,11 +79,13 @@ Shell:
 - Owns the canonical user command table, including filesystem, diagnostic,
   process, network, `config`, `logs`, and `service` operations.
 - Retains exact-match internal smoke commands outside `help` and Tab completion.
-- Keeps one canonical command name per operation; alias commands are not
-  accepted.
+- Keeps one canonical public command name per operation; retired exact-match
+  diagnostics are transitional internal inputs, not public aliases.
 - Holds the current working directory as local shell state.
 - Owns Tab completion for command names, filesystem paths, both `exec` path
-  positions, and built-in process names.
+  positions, built-in process names, and fixed subsystem arguments.
+- Keeps `top` as nonblocking per-session shell state. The main service loop
+  refreshes it once per second while TCP polling and AWP dispatch continue.
 - Owns a small in-memory command history navigated by Up and Down escape
   sequences.
 - Normalizes standard Russian-layout UTF-8 input back to ASCII key positions;
@@ -99,7 +102,7 @@ Ownership model:
 - The kernel/user CPU boundary is retained as an engineering boundary: ordinary
   ring 3 programs use syscalls, while privileged access is added deliberately as
   kernel or driver work.
-- `ownerinfo` exposes this model in the shell.
+- `system owner` exposes this model in the shell.
 
 Device registry:
 
@@ -121,8 +124,8 @@ Block device contract:
 - The first block-device implementation has no block cache, partition table
   handling, request queue, DMA, or flush policy beyond the narrow ATA cache
   flush used after single-sector writes.
-- The `blkinfo` shell command reads LBA 1 from the deterministic QEMU test disk
-  image and prints a sample string.
+- `devices disk0` reads LBA 1 from the deterministic QEMU test disk image and
+  prints a sample string.
 
 Process manager:
 
@@ -138,7 +141,8 @@ Process manager:
   progress value is the process run count.
 - Built-in `userhello` and `userbad` process entries enter ring 3 through the
   user runtime and return user exit status to this same process table.
-- `ps` displays cooperative kernel entries and the separate AWP task table.
+- `ps` displays cooperative kernel entries and the separate AWP task table;
+  `top` renders both in one live table with an explicit process-kind column.
 - The cooperative process manager is not a hardware-context scheduler. AWP
   saved contexts, address spaces, and PIT preemption belong to the user
   runtime. There are no independent kernel stacks or kernel preemption.
@@ -151,8 +155,8 @@ Interrupt controller contract:
 - It installs a minimal IDT, remaps the legacy PIC, unmasks IRQ0 only,
   configures the PIT at 100 Hz, handles breakpoint vector 3 for diagnostics,
   handles timer vector 32, and installs a DPL 3 `int 0x80` syscall gate.
-- `irqinfo` reports IDT/PIC/PIT state and timer ticks. An internal smoke probe
-  triggers a safe breakpoint exception and verifies that vector 3 was handled.
+- `system interrupts` reports IDT/PIC/PIT state and timer ticks. An internal
+  smoke probe triggers a safe breakpoint exception and verifies vector 3.
 - This is not a full interrupt subsystem: there is no APIC, IOAPIC, HPET,
   LAPIC timer, IRQ routing model, nested interrupt policy, or generic device
   interrupt registration yet.
@@ -162,7 +166,7 @@ Clock contract:
 - Public contract lives in `include/arwill/kernel/clock.h`.
 - The x86-64 implementation converts the 100 Hz PIT counter to monotonic
   milliseconds with 10 ms resolution.
-- `uptime` and user syscall `4` expose the same value.
+- `system` and user syscall `4` expose the same uptime value.
 - RTC/CMOS calendar time, dates, timezones, NTP, and process timers remain
   absent.
 
@@ -171,7 +175,7 @@ PCI discovery:
 - The architecture-independent fixed PCI table lives in
   `include/arwill/kernel/pci.h`; x86-64 configuration access lives in
   `arch/x86_64/cpu/pci.c`.
-- `pciinfo` scans bus 0 with configuration mechanism #1 and exposes vendor,
+- `devices pci` scans bus 0 with configuration mechanism #1 and exposes vendor,
   device, class, and raw BAR values.
 - The QEMU e1000 driver consumes its known BAR and maps MMIO in a dedicated
   supervisor-only high-half range. There is still no general PCI resource
@@ -207,8 +211,8 @@ User runtime:
   `7`.
 - `run userbad` executes a tiny generated user program with an unknown syscall;
   the kernel converts it to exit code `127` and records a bad-syscall count.
-- `userinfo` reports HHDM, GDT, TSS, syscall gate, run, syscall, byte, and
-  bad-syscall counters.
+- `system runtime` reports HHDM, GDT, TSS, syscall gate, run, syscall, byte,
+  and bad-syscall counters.
 - AWP execution saves the complete ring 3 context, round-robins ready tasks,
   blocks only the calling task for input, and contains user invalid-opcode,
   general-protection, and page faults.
@@ -252,7 +256,7 @@ Memory contract:
 - The first kernel heap reserves a small contiguous run of physical pages,
   accesses them through Limine HHDM, and manages them with a simple free list.
 - The kernel heap can allocate and free small kernel objects, split free blocks,
-  coalesce adjacent free blocks, and report counters through `meminfo`.
+  coalesce adjacent free blocks, and report counters through `system memory`.
 - This is not a general virtual memory subsystem: there is no paging policy,
   demand mapping, slab cache, userspace heap, or physical page release path yet.
 

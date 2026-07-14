@@ -57,6 +57,11 @@ Rules for future work:
   `step`, `write`, and `writehex` available only as exact-match internal smoke
   commands. Do not list them in `help`, include them in Tab completion, or
   document them as user commands unless a later ADR changes this decision.
+- Keep the retired `uptime`, `pciinfo`, `netinfo`, `netcfg`, `ping`, `tcpinfo`,
+  `meminfo`, `blkinfo`, `irqinfo`, `schedinfo`, `userinfo`, and `ownerinfo`
+  entry points hidden from `help`, Tab completion, and user documentation.
+  They are temporary exact-match diagnostic inputs during the `0.17.0`
+  transition; do not build new consumers on them.
 - Treat the current kernel heap as a small HHDM-backed free-list allocator. It
   is useful for small kernel objects, but it is not a slab allocator, virtual
   memory subsystem, userspace heap, or physical page release mechanism.
@@ -76,10 +81,11 @@ Rules for future work:
   This is not `argc`/`argv`, quoting, environment handling, inherited working-
   directory state inside the task, ELF, POSIX process loading, dynamic linking,
   or a dynamic virtual-memory ABI.
-- Keep the `0.16.0` owner command surface minimal: `config`, `logs`, and
-  `service` are the only new top-level shell commands; `ps` remains the one
-  process inspection command. Do not add service enable/disable, log filters,
-  or config show/get/set/reload aliases.
+- Keep the `0.17.0` inspection surface grouped under `system`, `devices`, and
+  `network`. `top` is the live per-session dashboard; `ps` remains the stable
+  one-shot process listing. Preserve the `KIND` distinction between cooperative
+  kernel built-ins and scheduled AWP tasks. Do not add service enable/disable,
+  log filters, or config show/get/set/reload aliases.
 - Treat the TCP remote console as a plaintext, access-key-gated QEMU
   development service bound to host localhost by default. It reuses the
   canonical shell dispatcher, supports one connection at a time, validates
