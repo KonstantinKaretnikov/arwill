@@ -89,3 +89,28 @@ int arwill_filesystem_remove(
 
     return filesystem->remove(filesystem->context, path);
 }
+
+int arwill_filesystem_storage_stats(
+    const struct arwill_filesystem *filesystem,
+    struct arwill_fs_storage_stats *stats
+) {
+    if (stats == 0) {
+        return 0;
+    }
+
+    stats->entries_used = 0;
+    stats->entries_capacity = 0;
+    stats->manifest_sectors = 0;
+    stats->data_sectors = 0;
+    stats->used_data_sectors = 0;
+    stats->free_data_sectors = 0;
+    stats->largest_free_run_sectors = 0;
+    stats->max_path_bytes = 0;
+    stats->max_file_bytes = 0;
+
+    if (filesystem == 0 || filesystem->storage_stats == 0) {
+        return 0;
+    }
+
+    return filesystem->storage_stats(filesystem->context, stats);
+}

@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.17.0`.
+Status: `0.17.1`.
 
 Arwill already has:
 
@@ -74,6 +74,7 @@ Arwill already has:
   fixed Tab-completed subsystem arguments;
 - [x] a per-session live `top` dashboard with one-second refresh, explicit
   kernel/AWP process kinds, and `q`/Ctrl+C exit;
+- [x] bounded live filesystem allocation statistics through `system storage`;
 - [x] single-owner OS model: one owner, no accounts or multi-user permission
   system, with the kernel/user boundary kept as an engineering guardrail.
 
@@ -574,3 +575,16 @@ driver work, not accidental default access for every ring 3 program.
    Verified by: QEMU smoke exercises each grouped interface, observes two live
    dashboard renders, exits with `q`, and confirms retired names are absent
    from `help`.
+
+27. [x] Filesystem storage statistics
+
+   Status: implemented in `0.17.1` per ADR-0051.
+
+   Scope: add one optional architecture-independent filesystem statistics
+   snapshot and expose ARFS entry use, data-sector use, largest contiguous free
+   run, manifest size, and current path/file limits through `system storage`.
+   Do not generalize this into quotas, partitions, or a disk-capacity model.
+
+   Verified by: QEMU smoke observes the initial 15/24 entry use, 18/24 after
+   bounded mutations, persistence across reboot, and return to 15/24 after
+   cleanup.

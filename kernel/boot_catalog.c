@@ -170,6 +170,7 @@ static const struct arwill_filesystem boot_catalog = {
     .list = boot_catalog_list,
     .read_file = boot_catalog_read_file,
     .write_file = 0,
+    .storage_stats = 0,
 };
 
 const struct arwill_filesystem *arwill_boot_catalog_filesystem(void) {

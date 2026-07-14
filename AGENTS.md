@@ -81,11 +81,16 @@ Rules for future work:
   This is not `argc`/`argv`, quoting, environment handling, inherited working-
   directory state inside the task, ELF, POSIX process loading, dynamic linking,
   or a dynamic virtual-memory ABI.
-- Keep the `0.17.0` inspection surface grouped under `system`, `devices`, and
+- Keep the `0.17.x` inspection surface grouped under `system`, `devices`, and
   `network`. `top` is the live per-session dashboard; `ps` remains the stable
   one-shot process listing. Preserve the `KIND` distinction between cooperative
   kernel built-ins and scheduled AWP tasks. Do not add service enable/disable,
   log filters, or config show/get/set/reload aliases.
+- Treat `system storage` as bounded filesystem-reported allocation statistics.
+  For ARFS it reports fixed entry usage, data-sector usage, the largest free
+  contiguous run, manifest sectors, and current path/file limits. It is not a
+  quota system, partition inspector, generic disk-capacity API, or promise of
+  crash-consistent free-space accounting.
 - Treat the TCP remote console as a plaintext, access-key-gated QEMU
   development service bound to host localhost by default. It reuses the
   canonical shell dispatcher, supports one connection at a time, validates

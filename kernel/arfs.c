@@ -653,6 +653,46 @@ static int allocate_sectors(uint64_t count, uint64_t *first) {
     return 0;
 }
 
+static int arfs_storage_stats(
+    void *context,
+    struct arwill_fs_storage_stats *stats
+) {
+    (void)context;
+
+    if (stats == 0 || arfs.block_device == 0 ||
+        arfs.data_lba > arfs.block_device->sector_count) {
+        return 0;
+    }
+
+    uint64_t used = 0;
+    uint64_t current_free_run = 0;
+    uint64_t largest_free_run = 0;
+    for (uint64_t sector = arfs.data_lba;
+         sector < arfs.block_device->sector_count;
+         sector++) {
+        if (sector_range_is_free(sector, 1U)) {
+            current_free_run++;
+            if (current_free_run > largest_free_run) {
+                largest_free_run = current_free_run;
+            }
+        } else {
+            used++;
+            current_free_run = 0;
+        }
+    }
+
+    stats->entries_used = arfs.entry_count;
+    stats->entries_capacity = arfs_max_entries;
+    stats->manifest_sectors = arfs.manifest_sectors;
+    stats->data_sectors = arfs.block_device->sector_count - arfs.data_lba;
+    stats->used_data_sectors = used;
+    stats->free_data_sectors = stats->data_sectors - used;
+    stats->largest_free_run_sectors = largest_free_run;
+    stats->max_path_bytes = arfs_max_path_length - 1U;
+    stats->max_file_bytes = arfs_write_buffer_capacity;
+    return 1;
+}
+
 static int arfs_write_bytes(
     void *context,
     const char *path,
@@ -818,6 +858,7 @@ static const struct arwill_filesystem arfs_filesystem = {
     .create_directory = arfs_create_directory,
     .write_bytes = arfs_write_bytes,
     .remove = arfs_remove,
+    .storage_stats = arfs_storage_stats,
 };
 
 const struct arwill_filesystem *arwill_arfs_mount(

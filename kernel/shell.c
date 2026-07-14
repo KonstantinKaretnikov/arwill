@@ -86,7 +86,7 @@ static const struct shell_command shell_commands[] = {
 };
 
 static const char *const system_completions[] = {
-    "memory", "interrupts", "scheduler", "runtime", "owner"
+    "memory", "storage", "interrupts", "scheduler", "runtime", "owner"
 };
 
 static const char *const device_completions[] = {
@@ -1924,10 +1924,51 @@ static void print_system_summary(
     );
 }
 
+static void print_storage_info(
+    const struct arwill_console *console,
+    const struct arwill_filesystem *filesystem
+) {
+    struct arwill_fs_storage_stats stats;
+
+    arwill_console_write(console, "storage: ");
+    if (!arwill_filesystem_storage_stats(filesystem, &stats)) {
+        arwill_console_write_line(console, "unavailable");
+        return;
+    }
+    arwill_console_write_line(
+        console,
+        filesystem == 0 || filesystem->name == 0 ? "unknown" : filesystem->name
+    );
+    arwill_console_write(console, "entries: ");
+    write_size_decimal(console, stats.entries_used);
+    arwill_console_write(console, "/");
+    write_size_decimal(console, stats.entries_capacity);
+    arwill_console_write_line(console, " used");
+    arwill_console_write(console, "data sectors: ");
+    write_uint64_decimal(console, stats.used_data_sectors);
+    arwill_console_write(console, " used, ");
+    write_uint64_decimal(console, stats.free_data_sectors);
+    arwill_console_write(console, " free, ");
+    write_uint64_decimal(console, stats.data_sectors);
+    arwill_console_write_line(console, " total");
+    arwill_console_write(console, "largest free run: ");
+    write_uint64_decimal(console, stats.largest_free_run_sectors);
+    arwill_console_write_line(console, " sectors");
+    arwill_console_write(console, "manifest: ");
+    write_uint64_decimal(console, stats.manifest_sectors);
+    arwill_console_write_line(console, " sectors");
+    arwill_console_write(console, "limits: path ");
+    write_size_decimal(console, stats.max_path_bytes);
+    arwill_console_write(console, " bytes, file ");
+    write_size_decimal(console, stats.max_file_bytes);
+    arwill_console_write_line(console, " bytes");
+}
+
 static void run_system_command(
     const struct arwill_console *console,
     const char *argument,
     const struct arwill_clock *clock,
+    const struct arwill_filesystem *filesystem,
     const struct arwill_memory *memory,
     const struct arwill_interrupts *interrupts,
     const struct arwill_process_manager *processes,
@@ -1942,6 +1983,10 @@ static void run_system_command(
     }
     if (argument_equals(argument, "memory")) {
         print_meminfo(console, memory);
+        return;
+    }
+    if (argument_equals(argument, "storage")) {
+        print_storage_info(console, filesystem);
         return;
     }
     if (argument_equals(argument, "interrupts")) {
@@ -1962,7 +2007,7 @@ static void run_system_command(
     }
     arwill_console_write_line(
         console,
-        "system: expected memory, interrupts, scheduler, runtime, or owner"
+        "system: expected memory, storage, interrupts, scheduler, runtime, or owner"
     );
 }
 
@@ -3194,6 +3239,7 @@ static void run_command(
             console,
             argument_after_command(line),
             clock,
+            filesystem,
             memory,
             interrupts,
             processes,

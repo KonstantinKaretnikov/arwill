@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.17.0 has one executable path:
+Arwill 0.17.1 has one executable path:
 
 ```text
 Limine bootloader
@@ -26,6 +26,7 @@ Limine bootloader
   -> storage-backed filesystem
   -> persistent whole-file writes through AWP syscalls and internal smoke commands
   -> grouped system, device, and network inspection commands
+  -> bounded filesystem allocation statistics through system storage
   -> live per-session system and process dashboard when top is requested
   -> kernel heap diagnostics through system memory and an internal heap smoke probe
   -> deterministic raw disk sector read through devices disk0
@@ -265,6 +266,9 @@ Filesystem contract:
 - Lives in `include/arwill/kernel/filesystem.h`.
 - Provides directory listing, whole-file reads and writes by path, directory
   creation, and removal.
+- Optionally reports bounded storage allocation statistics through a single
+  snapshot operation. Unsupported filesystems report the statistics as
+  unavailable.
 - It does not provide open handles, streaming, append, seek, rename, or atomic
   metadata updates.
 
@@ -278,6 +282,8 @@ ARFS filesystem:
   `stat` in the normal QEMU test path.
 - Persists bounded catalog mutations and contiguous data allocation across a
   rebooted QEMU session.
+- Reports its fixed entry capacity, data-sector use, largest free contiguous
+  run, manifest size, and path/file limits through `system storage`.
 - It is intentionally simple: a fixed 24-entry table, short paths, 8192-byte
   file limit, no append, rename, journal, atomic metadata update, open handles,
   block cache, or partition table.

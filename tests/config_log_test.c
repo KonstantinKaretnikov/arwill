@@ -109,6 +109,7 @@ int main(void) {
         .create_directory = 0,
         .write_bytes = fake_write_bytes,
         .remove = 0,
+        .storage_stats = 0,
     };
     struct arwill_config config;
 

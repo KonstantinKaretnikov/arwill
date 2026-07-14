@@ -92,10 +92,10 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.17.0" 2
+    wait_for_primary_log_count "Arwill 0.17.1" 2
     sleep 0.1
     printf 'sys\t\r'
-    wait_for_primary_log "system: Arwill 0.17.0"
+    wait_for_primary_log "system: Arwill 0.17.1"
     wait_for_primary_log_count "uptime: " 1
     sleep 0.1
     printf 'devices p\t\r'
@@ -192,6 +192,12 @@ run_qemu_to_log() {
     wait_for_primary_log "kernel heap:"
     wait_for_primary_log "  initialized: yes"
     sleep 0.1
+    printf 'system st\t\r'
+    wait_for_primary_log "storage: arfs mutable"
+    wait_for_primary_log "entries: 15/24 used"
+    wait_for_primary_log "manifest: 2 sectors"
+    wait_for_primary_log "limits: path 63 bytes, file 8192 bytes"
+    sleep 0.1
     printf 'heaptest\r'
     wait_for_primary_log "heaptest: allocated and freed 2 blocks"
     wait_for_primary_log "heaptest: allocations 2, frees 2"
@@ -213,7 +219,7 @@ run_qemu_to_log() {
     printf 'irqprobe\r'
     wait_for_primary_log "exception probe: handled vector 3"
     sleep 0.1
-    printf 'system s\t\r'
+    printf 'system sc\t\r'
     wait_for_primary_log "scheduler: kernel/user tick accounting + AWP round-robin"
     sleep 0.1
     printf 'run he\t\r'
@@ -359,6 +365,9 @@ run_qemu_to_log() {
     printf 'writehex /scratch/data.bin 0001027f80feff\r'
     wait_for_primary_log "writehex: wrote 7 bytes to /scratch/data.bin"
     sleep 0.1
+    printf 'system storage\r'
+    wait_for_primary_log "entries: 18/24 used"
+    sleep 0.1
     printf 'write /owner/note owner note persisted across reboot\r'
     wait_for_primary_log "write: wrote 34 bytes to /owner/note"
     sleep 0.1
@@ -393,7 +402,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.17.0"
+    wait_for_primary_log "version: 0.17.1"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -481,7 +490,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.17.0"
+check_line "Arwill 0.17.1"
 check_line "system     show system state and subsystem details"
 check_line "devices    list devices or inspect pci/disk0/net0"
 check_line "network    show network state, ping, or TCP details"
@@ -515,12 +524,12 @@ check_line "remote bytes: received 0, sent 0, dropped 0, send failures 0"
 check_line "tcp integrity: checksum drops 0, duplicate acks 0"
 check_line "tcp reliability: retransmissions 0, timeouts 0, pending no"
 check_line "   A    RRR   W   W  III  L     L"
-check_line "Arwill 0.17.0 ready"
+check_line "Arwill 0.17.1 ready"
 check_line "config: /owner/arwill.conf"
 check_line "help: type 'help' or press Tab"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.17.0"
+check_line "Arwill 0.17.1"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -547,7 +556,7 @@ check_line "Up/Down    browse command history"
 check_absent "  dir [path]  list the current filesystem"
 check_absent "info [path]"
 check_absent "poweroff"
-check_line "system: Arwill 0.17.0"
+check_line "system: Arwill 0.17.1"
 check_line "processes: kernel 0, awp 0/4"
 check_line "PID KIND STATE RUNS EXIT NAME"
 check_line "1002 awp finished"
@@ -560,6 +569,13 @@ check_line "page size: 4096 bytes"
 check_line "kernel heap:"
 check_line "initialized: yes"
 check_line "size: 16384 bytes"
+check_line "storage: arfs mutable"
+check_line "entries: 15/24 used"
+check_line "data sectors: "
+check_line "largest free run: "
+check_line "manifest: 2 sectors"
+check_line "limits: path 63 bytes, file 8192 bytes"
+check_line "entries: 18/24 used"
 check_line "heaptest: allocated and freed 2 blocks"
 check_line "heaptest: allocations 2, frees 2"
 check_line "name kind driver status"
@@ -668,7 +684,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.17.0"
+check_line "version: 0.17.1"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
@@ -683,7 +699,7 @@ for expected in \
     "Access denied" \
     "Arwill remote console" \
     "warning: plaintext trusted-LAN access" \
-    "Arwill 0.17.0" \
+    "Arwill 0.17.1" \
     "^C" \
     "remote console: disconnected" \
     "uptime: " \
@@ -711,7 +727,7 @@ if ! tr -d '\r' < "$remote_console_log" | grep -x -q '/'; then
     exit 1
 fi
 
-remote_version_count=$(grep -F -c "Arwill 0.17.0" "$remote_console_log")
+remote_version_count=$(grep -F -c "Arwill 0.17.1" "$remote_console_log")
 if [ "$remote_version_count" -lt 2 ]; then
     echo "remote console Up history did not repeat the command" >&2
     cat "$remote_console_log" >&2
@@ -740,6 +756,9 @@ fi
     sleep 0.1
     printf 'stat /scratch/data.bin\r'
     wait_for_reboot_log "size: 7 bytes"
+    sleep 0.1
+    printf 'system storage\r'
+    wait_for_reboot_log "entries: 18/24 used"
     sleep 0.1
     printf 'cat /scratch/data.bin\r'
     wait_for_reboot_log "cat: cannot display binary file: /scratch/data.bin"
@@ -777,6 +796,9 @@ fi
     sleep 0.1
     printf 'rm /scratch\r'
     wait_for_reboot_log "rm: removed /scratch"
+    sleep 0.1
+    printf 'system storage\r'
+    wait_for_reboot_log "entries: 15/24 used"
     sleep 0.1
     printf 'ls /scratch\r'
     wait_for_reboot_log "ls: no such directory: /scratch"

@@ -1,6 +1,6 @@
 # Arwill
 
-Arwill `0.17.0` is a small experimental x86-64 operating system for QEMU.
+Arwill `0.17.1` is a small experimental x86-64 operating system for QEMU.
 It is built around explicit, replaceable components and documented decisions.
 See [MANIFESTO.md](MANIFESTO.md).
 
@@ -45,7 +45,7 @@ The boot screen is intentionally short:
  A   A  R R   WW WW   I   L     L
  A   A  R  R  W   W  III  LLLL  LLLL
 
-Arwill 0.17.0 ready
+Arwill 0.17.1 ready
 config: /owner/arwill.conf
 help: type 'help' or press Tab
 Arwill:/>
@@ -75,7 +75,7 @@ for command entry only.
 Inspection commands use one canonical interface per subsystem:
 
 ```text
-system [memory|interrupts|scheduler|runtime|owner]
+system [memory|storage|interrupts|scheduler|runtime|owner]
 devices [pci|disk0|net0]
 network [ping|tcp]
 top
@@ -85,6 +85,11 @@ Without an argument, `system` and `network` print a summary and `devices` lists
 the registry. `top` refreshes once per second, keeps kernel built-ins and AWP
 tasks distinct through `KIND`, and exits with `q` or `Ctrl+C`. `ps` remains the
 stable one-shot process listing.
+
+`system storage` reports the mounted filesystem's entry usage, data-sector
+usage, largest free contiguous run, manifest size, and current path and file
+limits. These are ARFS allocation-unit counters, not quotas or a generic disk
+capacity API.
 
 On serial, `exit` powers off QEMU. In a TCP session it closes only that
 session.
