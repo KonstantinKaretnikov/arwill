@@ -946,7 +946,7 @@ static void print_help(const struct arwill_console *console, int remote_session)
     arwill_console_write_line(console, "  config     show or change system configuration");
     arwill_console_write_line(console, "  logs       show the complete event log");
     arwill_console_write_line(console, "  service    inspect or control built-in services");
-    arwill_console_write_line(console, "  ps         show kernel process table");
+    arwill_console_write_line(console, "  ps         show system, kernel, and AWP tasks");
     arwill_console_write_line(console, "  run [name] launch a built-in kernel process");
     arwill_console_write_line(console, "  exec [program] [file] run a stored program image");
     arwill_console_write_line(console, remote_session ?
@@ -1916,7 +1916,10 @@ static void print_owner_info(const struct arwill_console *console) {
     arwill_console_write_line(console, "privileged code: explicit kernel or driver work");
 }
 
-static size_t kernel_process_count(const struct arwill_process_manager *processes) {
+static size_t process_count_kind(
+    const struct arwill_process_manager *processes,
+    enum arwill_process_kind kind
+) {
     const struct arwill_process *table = arwill_process_table(processes);
     size_t count = 0;
 
@@ -1924,7 +1927,10 @@ static size_t kernel_process_count(const struct arwill_process_manager *processe
         return 0;
     }
     for (size_t index = 0; index < arwill_process_table_capacity; index++) {
-        if (table[index].state != arwill_process_state_empty) {
+        if (
+            table[index].state != arwill_process_state_empty &&
+            table[index].kind == kind
+        ) {
             count++;
         }
     }
@@ -1968,8 +1974,14 @@ static void print_system_summary(
     arwill_console_write(console, "scheduler: ticks ");
     write_uint64_decimal(console, scheduler.ticks);
     arwill_console_write_line(console, "");
-    arwill_console_write(console, "processes: kernel ");
-    write_size_decimal(console, kernel_process_count(processes));
+    arwill_console_write(console, "processes: system ");
+    write_size_decimal(
+        console, process_count_kind(processes, arwill_process_kind_system)
+    );
+    arwill_console_write(console, ", kernel ");
+    write_size_decimal(
+        console, process_count_kind(processes, arwill_process_kind_kernel)
+    );
     arwill_console_write(console, ", awp ");
     write_size_decimal(console, task_count);
     arwill_console_write(console, "/");
@@ -2429,7 +2441,7 @@ static void print_process_table(
         return;
     }
 
-    arwill_console_write_line(console, "pid state runs exit name");
+    arwill_console_write_line(console, "pid kind state runs exit name");
 
     for (size_t index = 0; index < arwill_process_table_capacity; index++) {
         const struct arwill_process *process = &table[index];
@@ -2440,6 +2452,8 @@ static void print_process_table(
 
         saw_process = 1;
         write_uint64_decimal(console, (uint64_t)process->pid);
+        arwill_console_write(console, " ");
+        arwill_console_write(console, arwill_process_kind_name(process->kind));
         arwill_console_write(console, " ");
         arwill_console_write(console, arwill_process_state_name(process->state));
         arwill_console_write(console, " ");
@@ -2490,7 +2504,11 @@ static void print_top_processes(
                 continue;
             }
             write_uint64_decimal(console, process->pid);
-            arwill_console_write(console, " kernel ");
+            arwill_console_write(console, " ");
+            arwill_console_write(
+                console, arwill_process_kind_name(process->kind)
+            );
+            arwill_console_write(console, " ");
             arwill_console_write(console, arwill_process_state_name(process->state));
             arwill_console_write(console, " ");
             write_uint64_decimal(console, process->run_count);
@@ -2516,7 +2534,11 @@ static void print_top_processes(
         arwill_console_write(console, " ");
         arwill_console_write_line(console, tasks[index].name);
     }
-    if (kernel_process_count(processes) == 0U && task_count == 0U) {
+    if (
+        process_count_kind(processes, arwill_process_kind_kernel) == 0U &&
+        process_count_kind(processes, arwill_process_kind_system) == 0U &&
+        task_count == 0U
+    ) {
         arwill_console_write_line(console, "no processes");
     }
 }
@@ -2570,9 +2592,19 @@ static void render_top(
         session->console, environment->processes, environment->user_runtime
     );
     arwill_console_write_line(session->console, "");
-    arwill_console_write(session->console, "KERNEL ");
+    arwill_console_write(session->console, "SYSTEM ");
     write_size_decimal(
-        session->console, kernel_process_count(environment->processes)
+        session->console,
+        process_count_kind(
+            environment->processes, arwill_process_kind_system
+        )
+    );
+    arwill_console_write(session->console, " tasks  KERNEL ");
+    write_size_decimal(
+        session->console,
+        process_count_kind(
+            environment->processes, arwill_process_kind_kernel
+        )
     );
     arwill_console_write(session->console, " tasks  AWP ");
     struct arwill_user_task_info tasks[arwill_user_task_capacity];
@@ -4162,7 +4194,6 @@ static void service_remote_shell(
         return;
     }
 
-    (void)arwill_ipv4_poll_tcp(ipv4);
     if (!arwill_ipv4_remote_console_connected(ipv4)) {
         if (session->active) {
             cancel_remote_program(session, environment);
@@ -4227,6 +4258,72 @@ static void service_remote_shell(
     }
 }
 
+struct shell_system_task_context {
+    struct arwill_ipv4_stack *ipv4;
+    struct shell_session *remote_session;
+    const struct shell_environment *environment;
+};
+
+static struct arwill_process_result network_poll_system_task(
+    const struct arwill_process_runtime *runtime
+) {
+    if (runtime == 0 || runtime->context == 0) {
+        return arwill_process_finish(1);
+    }
+
+    struct shell_system_task_context *context =
+        (struct shell_system_task_context *)runtime->context;
+    if (context->ipv4 == 0) {
+        return arwill_process_finish(1);
+    }
+
+    for (;;) {
+        (void)arwill_ipv4_poll_tcp(context->ipv4);
+        arwill_process_yield(runtime);
+    }
+}
+
+static struct arwill_process_result remote_console_system_task(
+    const struct arwill_process_runtime *runtime
+) {
+    if (runtime == 0 || runtime->context == 0) {
+        return arwill_process_finish(1);
+    }
+
+    struct shell_system_task_context *context =
+        (struct shell_system_task_context *)runtime->context;
+    if (context->remote_session == 0 || context->environment == 0) {
+        return arwill_process_finish(1);
+    }
+
+    for (;;) {
+        service_remote_shell(context->remote_session, context->environment);
+        arwill_process_yield(runtime);
+    }
+}
+
+static int start_shell_system_tasks(
+    struct arwill_process_manager *processes,
+    struct shell_system_task_context *context
+) {
+    uint32_t network_pid = 0;
+    uint32_t remote_console_pid = 0;
+
+    return arwill_process_spawn_system(
+        processes,
+        "network-poll",
+        network_poll_system_task,
+        context,
+        &network_pid
+    ) && arwill_process_spawn_system(
+        processes,
+        "remote-console",
+        remote_console_system_task,
+        context,
+        &remote_console_pid
+    );
+}
+
 static void finish_foreground_program(
     struct shell_session *session,
     const struct arwill_user_runtime *user_runtime,
@@ -4287,6 +4384,7 @@ void arwill_shell_run(
     struct shell_session serial_session;
     struct shell_session remote_session;
     struct arwill_console remote_console;
+    struct shell_system_task_context system_task_context;
 
     environment.filesystem = filesystem;
     environment.memory = memory;
@@ -4309,7 +4407,14 @@ void arwill_shell_run(
     remote_session.console = &remote_console;
     remote_session.active = 0;
 
+    system_task_context.ipv4 = ipv4;
+    system_task_context.remote_session = &remote_session;
+    system_task_context.environment = &environment;
+
     initialize_shell_session(&serial_session, console, user_runtime, 0);
+    if (!start_shell_system_tasks(processes, &system_task_context)) {
+        arwill_console_write_line(console, "system tasks: initialization failed");
+    }
     write_prompt(console, serial_session.current_directory);
 
     for (;;) {
@@ -4317,7 +4422,7 @@ void arwill_shell_run(
         if (arwill_input_try_read_byte(input, &byte)) {
             (void)handle_shell_byte(&serial_session, &environment, byte);
         }
-        service_remote_shell(&remote_session, &environment);
+        (void)arwill_process_run_system(processes);
         arwill_user_poll(user_runtime);
         finish_foreground_program(&serial_session, user_runtime, log);
         finish_foreground_program(&remote_session, user_runtime, log);

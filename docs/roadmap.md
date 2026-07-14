@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.18.0`.
+Status: `0.19.0`.
 
 Arwill already has:
 
@@ -54,6 +54,8 @@ Arwill already has:
 - [x] stackful cooperative kernel-managed tasks with PID, state, run count,
   exit code, saved x86-64 contexts, fixed 8 KiB stacks, `run [name]`, internal
   `step`, and `ps`;
+- [x] boot-created `network-poll` and `remote-console` system tasks with an
+  automatic cooperative dispatch pass and explicit `system` process kind;
 - [x] x86-64 IDT setup, legacy PIC remap, PIT timer interrupts, and a safe
   breakpoint exception diagnostic;
 - [x] scheduler tick accounting exposed through `system scheduler`;
@@ -631,3 +633,18 @@ driver work, not accidental default access for every ring 3 program.
    Verified by: QEMU smoke observes `counter` yield as ready after its first
    dispatch, then resume twice with a stack-local value progressing from 10 to
    11 to 13 before finishing with three runs.
+
+31. [x] System tasks v1
+
+   Status: implemented in `0.19.0` per ADR-0055.
+
+   Scope: create long-lived `network-poll` and `remote-console` tasks at shell
+   startup; automatically dispatch only the `system` kind from the main loop;
+   retain manual `kernel` built-in stepping; and show both kinds separately in
+   `system`, `ps`, and `top`. Use scoped scheduler contexts so a remote system
+   task may safely dispatch a nested kernel built-in.
+
+   Verified by: the full QEMU TCP smoke retains authentication, service
+   lifecycle, retransmission-safe output, concurrent AWP operation, and remote
+   shell behavior. It also runs and completes `counter` from the remote console
+   before continuing the same connection through `system`, `top`, and `exit`.

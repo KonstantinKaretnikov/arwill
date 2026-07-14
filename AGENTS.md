@@ -41,6 +41,12 @@ Rules for future work:
   has a dedicated 8 KiB stack and a saved cooperative x86-64 context, but all
   share the kernel address space and switch only at explicit yield points.
   Arwill still has no ELF loader, kernel preemption, or SMP.
+- Treat `network-poll` and `remote-console` as the two long-lived system tasks
+  introduced by ADR-0055. They use the same cooperative context mechanism but
+  a separate `system` process kind and automatic dispatch pass. Manual
+  built-ins retain the `kernel` kind and hidden `step` behavior. The serial
+  shell remains in the main service loop. Do not collapse system, kernel, and
+  AWP kinds in `ps` or `top`.
 - The AWP syscall ABI also includes bounded whole-text-file `read_file` and
   `write_file` operations for current consumers such as `/apps/edit.awp`.
   These are not file descriptors, streams, append, seek, or a POSIX file API.

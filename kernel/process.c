@@ -6,6 +6,7 @@
 static void clear_process(struct arwill_process *process) {
     process->pid = 0;
     process->name = "";
+    process->kind = arwill_process_kind_kernel;
     process->state = arwill_process_state_empty;
     process->exit_code = 0;
     process->run_count = 0;
@@ -29,9 +30,7 @@ void arwill_process_manager_init(
         clear_process(&manager->table[index]);
     }
 
-    manager->scheduler_context.stack_pointer = 0;
-    manager->scheduler_context.entry = 0;
-    manager->scheduler_context.argument = 0;
+    manager->scheduler_context = 0;
     manager->context_backend = context_backend;
     manager->current = 0;
     manager->next_pid = 1;
@@ -58,10 +57,14 @@ static void process_trampoline(void *argument) {
 
     process->exit_code = result.exit_code;
     process->state = arwill_process_state_finished;
+    if (manager->scheduler_context == 0) {
+        for (;;) {
+        }
+    }
     manager->current = 0;
     manager->context_backend->switch_context(
         &process->saved_context,
-        &manager->scheduler_context
+        manager->scheduler_context
     );
 
     for (;;) {
@@ -86,9 +89,10 @@ static int find_spawn_slot(struct arwill_process_manager *manager, size_t *slot)
     return 0;
 }
 
-int arwill_process_spawn(
+static int spawn_process(
     struct arwill_process_manager *manager,
     const char *name,
+    enum arwill_process_kind kind,
     arwill_process_entry entry,
     void *context,
     uint32_t *pid
@@ -117,6 +121,7 @@ int arwill_process_spawn(
 
     manager->table[slot].pid = new_pid;
     manager->table[slot].name = name;
+    manager->table[slot].kind = kind;
     manager->table[slot].state = arwill_process_state_ready;
     manager->table[slot].exit_code = 0;
     manager->table[slot].run_count = 0;
@@ -139,6 +144,30 @@ int arwill_process_spawn(
     return 1;
 }
 
+int arwill_process_spawn(
+    struct arwill_process_manager *manager,
+    const char *name,
+    arwill_process_entry entry,
+    void *context,
+    uint32_t *pid
+) {
+    return spawn_process(
+        manager, name, arwill_process_kind_kernel, entry, context, pid
+    );
+}
+
+int arwill_process_spawn_system(
+    struct arwill_process_manager *manager,
+    const char *name,
+    arwill_process_entry entry,
+    void *context,
+    uint32_t *pid
+) {
+    return spawn_process(
+        manager, name, arwill_process_kind_system, entry, context, pid
+    );
+}
+
 struct arwill_process_result arwill_process_finish(uint32_t exit_code) {
     struct arwill_process_result result;
 
@@ -156,7 +185,7 @@ void arwill_process_yield(const struct arwill_process_runtime *runtime) {
 
     if (
         process == 0 || process->pid != runtime->pid ||
-        manager->context_backend == 0 ||
+        manager->scheduler_context == 0 || manager->context_backend == 0 ||
         manager->context_backend->switch_context == 0
     ) {
         return;
@@ -166,14 +195,17 @@ void arwill_process_yield(const struct arwill_process_runtime *runtime) {
     manager->current = 0;
     manager->context_backend->switch_context(
         &process->saved_context,
-        &manager->scheduler_context
+        manager->scheduler_context
     );
 
     manager->current = process;
     process->state = arwill_process_state_running;
 }
 
-size_t arwill_process_run_ready(struct arwill_process_manager *manager) {
+static size_t run_ready_kind(
+    struct arwill_process_manager *manager,
+    enum arwill_process_kind kind
+) {
     size_t run_count = 0;
 
     if (
@@ -183,25 +215,47 @@ size_t arwill_process_run_ready(struct arwill_process_manager *manager) {
         return 0;
     }
 
+    struct arwill_process *previous_process = manager->current;
+    struct arwill_process_context *previous_scheduler =
+        manager->scheduler_context;
+
     for (size_t index = 0; index < arwill_process_table_capacity; index++) {
         struct arwill_process *process = &manager->table[index];
 
-        if (process->state != arwill_process_state_ready) {
+        if (
+            process->state != arwill_process_state_ready ||
+            process->kind != kind
+        ) {
             continue;
         }
+
+        struct arwill_process_context scheduler_context;
+        scheduler_context.stack_pointer = 0;
+        scheduler_context.entry = 0;
+        scheduler_context.argument = 0;
 
         process->state = arwill_process_state_running;
         process->run_count++;
         manager->current = process;
+        manager->scheduler_context = &scheduler_context;
         manager->context_backend->switch_context(
-            &manager->scheduler_context,
+            &scheduler_context,
             &process->saved_context
         );
-        manager->current = 0;
+        manager->current = previous_process;
+        manager->scheduler_context = previous_scheduler;
         run_count++;
     }
 
     return run_count;
+}
+
+size_t arwill_process_run_ready(struct arwill_process_manager *manager) {
+    return run_ready_kind(manager, arwill_process_kind_kernel);
+}
+
+size_t arwill_process_run_system(struct arwill_process_manager *manager) {
+    return run_ready_kind(manager, arwill_process_kind_system);
 }
 
 const struct arwill_process *arwill_process_table(
@@ -224,6 +278,17 @@ const char *arwill_process_state_name(enum arwill_process_state state) {
             return "running";
         case arwill_process_state_finished:
             return "finished";
+        default:
+            return "unknown";
+    }
+}
+
+const char *arwill_process_kind_name(enum arwill_process_kind kind) {
+    switch (kind) {
+        case arwill_process_kind_kernel:
+            return "kernel";
+        case arwill_process_kind_system:
+            return "system";
         default:
             return "unknown";
     }

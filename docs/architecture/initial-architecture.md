@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.18.0 has one executable path:
+Arwill 0.19.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -22,6 +22,7 @@ Limine bootloader
   -> stackful cooperative kernel task manager initialization
   -> kernel/user scheduler accounting initialization
   -> CPU interrupt enable
+  -> network-poll and remote-console system task creation
   -> serial shell and authenticated TCP remote-console service
   -> storage-backed filesystem
   -> persistent whole-file writes through AWP syscalls and internal smoke commands
@@ -87,7 +88,10 @@ Shell:
   program names, both `exec` positions, built-in process names, and fixed
   subsystem arguments.
 - Keeps `top` as nonblocking per-session shell state. The main service loop
-  refreshes it once per second while TCP polling and AWP dispatch continue.
+  refreshes it once per second while system-task and AWP dispatch continue.
+- Starts `network-poll` and `remote-console` as automatic system tasks. The
+  first polls one bounded TCP/network pass; the second owns connection,
+  authentication, remote input, and remote shell-session progress.
 - Owns a small in-memory command history navigated by Up and Down escape
   sequences.
 - Normalizes standard Russian-layout UTF-8 input back to ASCII key positions;
@@ -135,6 +139,9 @@ Process manager:
 - Implementation lives in `kernel/process.c`.
 - Owns a fixed-size table of kernel-managed tasks with PID, state, run count,
   exit code, saved context, and one preallocated 8 KiB stack per slot.
+- Distinguishes automatically dispatched `system` tasks from manually
+  launched `kernel` built-ins. Both use the same stackful cooperative context
+  contract; AWP remains a third, separate task model.
 - The scheduler behavior is cooperative: the shell can spawn a built-in kernel
   task with `run [name]`, then the process manager resumes each ready task once
   per dispatch pass.
@@ -151,6 +158,9 @@ Process manager:
 - The architecture-independent process manager receives a context backend at
   boot. The x86-64 backend saves the stack pointer and ABI callee-saved
   registers at cooperative switch boundaries.
+- Each dispatch pass uses a scoped scheduler context. This permits a remote
+  system task to dispatch a manual kernel built-in through the canonical shell
+  without losing the outer system-task continuation.
 - Kernel tasks share one kernel address space. They have no stack guards and
   are never preempted; AWP full ring 3 contexts, address spaces, and PIT
   preemption remain a separate user-runtime mechanism.

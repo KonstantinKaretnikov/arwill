@@ -39,6 +39,9 @@ tasks in this milestone. Do not add timer-driven kernel preemption, SMP,
 dynamic stacks, stack guard pages, priorities, blocking primitives, or a new
 public shell command.
 
+ADR-0055 later moves network polling and remote-console servicing onto this
+context mechanism while leaving the serial shell in the main loop.
+
 ## Consequences
 
 Kernel-task code can now use ordinary loops, local variables, and nested calls
