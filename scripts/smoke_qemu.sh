@@ -2,21 +2,34 @@
 set -eu
 
 if [ "$#" -ne 6 ]; then
-    echo "usage: smoke_qemu.sh <qemu-system-x86_64> <machine> <image.iso> <test-disk> <serial-log> <poweroff-exit-status>" >&2
+    echo "usage: smoke_qemu.sh <qemu-system-x86_64> <machine> <disk.img> <serial-log> <poweroff-exit-status> <arfs-region-lba>" >&2
     exit 2
 fi
 
 qemu=$1
 machine=$2
-iso=$3
-test_disk=$4
-serial_log=$5
-expected_qemu_status=$6
+disk_image=$3
+serial_log=$4
+expected_qemu_status=$5
+arfs_region_lba=$6
 qemu_status_log=$serial_log.status
 reboot_serial_log=$serial_log.reboot
 reboot_status_log=$serial_log.reboot.status
 remote_console_log=$serial_log.remote
 remote_console_port=$((30000 + $$ % 20000))
+
+port_attempts=0
+while nc -z 127.0.0.1 "$remote_console_port" >/dev/null 2>&1; do
+    remote_console_port=$((remote_console_port + 1))
+    if [ "$remote_console_port" -gt 49999 ]; then
+        remote_console_port=30000
+    fi
+    port_attempts=$((port_attempts + 1))
+    if [ "$port_attempts" -ge 20000 ]; then
+        echo "no free localhost port for QEMU remote-console smoke" >&2
+        exit 1
+    fi
+done
 
 rm -f "$serial_log" "$qemu_status_log" "$reboot_serial_log" "$reboot_status_log" "$remote_console_log"
 
@@ -73,10 +86,10 @@ wait_for_reboot_log() {
 run_qemu_to_log() {
     log_file=$1
 
-    "$qemu" -M "$machine" -m 128M -cdrom "$iso" -boot d \
+    "$qemu" -M "$machine" -m 128M -boot c \
         -serial stdio -monitor none -display none -no-reboot \
         -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
-        -drive file="$test_disk",format=raw,if=ide,index=0,media=disk \
+        -drive file="$disk_image",format=raw,if=ide,index=0,media=disk \
         -netdev user,id=net0,hostfwd=tcp:127.0.0.1:"$remote_console_port"-:23232 \
         -device e1000,netdev=net0,mac=52:54:00:12:34:56 \
         > "$log_file" 2>&1
@@ -92,10 +105,10 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.19.0" 2
+    wait_for_primary_log_count "Arwill 0.20.0" 2
     sleep 0.1
     printf 'sys\t\r'
-    wait_for_primary_log "system: Arwill 0.19.0"
+    wait_for_primary_log "system: Arwill 0.20.0"
     wait_for_primary_log_count "uptime: " 1
     sleep 0.1
     printf 'devices p\t\r'
@@ -209,7 +222,7 @@ run_qemu_to_log() {
     wait_for_primary_log "name kind driver status"
     wait_for_primary_log "serial0 console qemu serial ready"
     wait_for_primary_log "fb0 console limine framebuffer text ready"
-    wait_for_primary_log "disk0 block qemu ata pio ready"
+    wait_for_primary_log "disk0 block qemu ata pio arfs region ready"
     wait_for_primary_log "heap0 memory hhdm free-list ready"
     wait_for_primary_log "user0 user x86_64 ring3 awp scheduler ready"
     sleep 0.1
@@ -413,7 +426,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.19.0"
+    wait_for_primary_log "version: 0.20.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -501,7 +514,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.19.0"
+check_line "Arwill 0.20.0"
 check_line "system     show system state and subsystem details"
 check_line "devices    list devices or inspect pci/disk0/net0"
 check_line "network    show network state, ping, or TCP details"
@@ -535,12 +548,12 @@ check_line "remote bytes: received 0, sent 0, dropped 0, send failures 0"
 check_line "tcp integrity: checksum drops 0, duplicate acks 0"
 check_line "tcp reliability: retransmissions 0, timeouts 0, pending no"
 check_line "   A    RRR   W   W  III  L     L"
-check_line "Arwill 0.19.0 ready"
+check_line "Arwill 0.20.0 ready"
 check_line "config: /owner/arwill.conf"
 check_line "help: type 'help' or press Tab"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.19.0"
+check_line "Arwill 0.20.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -567,7 +580,7 @@ check_line "Up/Down    browse command history"
 check_absent "  dir [path]  list the current filesystem"
 check_absent "info [path]"
 check_absent "poweroff"
-check_line "system: Arwill 0.19.0"
+check_line "system: Arwill 0.20.0"
 check_line "processes: system 2, kernel 0, awp 0/4"
 check_line "PID KIND STATE RUNS EXIT NAME"
 check_line "1002 awp finished"
@@ -593,13 +606,13 @@ check_line "name kind driver status"
 check_line "serial0 console qemu serial ready"
 check_line "fb0 console limine framebuffer text ready"
 check_line "input0 input qemu serial ready"
-check_line "disk0 block qemu ata pio ready"
+check_line "disk0 block qemu ata pio arfs region ready"
 check_line "fs0 filesystem arfs mutable mounted"
 check_line "heap0 memory hhdm free-list ready"
 check_line "timer0 interrupts x86_64 idt pic pit ready"
 check_line "power0 power qemu debug exit ready"
 check_line "user0 user x86_64 ring3 awp scheduler ready"
-check_line "block device: qemu ata pio"
+check_line "block device: qemu ata pio arfs region"
 check_line "sector size: 512 bytes"
 check_line "sample lba: 1"
 check_line "sample: ARWILL-BLOCK-DEVICE-TEST"
@@ -703,7 +716,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.19.0"
+check_line "version: 0.20.0"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
@@ -718,7 +731,7 @@ for expected in \
     "Access denied" \
     "Arwill remote console" \
     "warning: plaintext trusted-LAN access" \
-    "Arwill 0.19.0" \
+    "Arwill 0.20.0" \
     "^C" \
     "remote console: disconnected" \
     "uptime: " \
@@ -747,7 +760,7 @@ if ! tr -d '\r' < "$remote_console_log" | grep -x -q '/'; then
     exit 1
 fi
 
-remote_version_count=$(grep -F -c "Arwill 0.19.0" "$remote_console_log")
+remote_version_count=$(grep -F -c "Arwill 0.20.0" "$remote_console_log")
 if [ "$remote_version_count" -lt 2 ]; then
     echo "remote console Up history did not repeat the command" >&2
     cat "$remote_console_log" >&2
@@ -896,13 +909,13 @@ do
     fi
 done
 
-reused_data=$(dd if="$test_disk" bs=512 skip=24 count=1 2>/dev/null | LC_ALL=C tr -d '\000')
+reused_data=$(dd if="$disk_image" bs=512 skip=$((arfs_region_lba + 24)) count=1 2>/dev/null | LC_ALL=C tr -d '\000')
 if [ "$reused_data" != "reused sector" ]; then
     echo "released ARFS data sector was not reused as expected" >&2
     exit 1
 fi
 
-binary_hex=$(od -An -tx1 -N7 -j $((25 * 512)) "$test_disk" | tr -d ' \n')
+binary_hex=$(od -An -tx1 -N7 -j $(((arfs_region_lba + 25) * 512)) "$disk_image" | tr -d ' \n')
 if [ "$binary_hex" != "0001027f80feff" ]; then
     echo "persisted ARFS binary contents differ: $binary_hex" >&2
     exit 1

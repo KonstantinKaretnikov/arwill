@@ -38,6 +38,7 @@ static struct arwill_ipv4_stack arwill_limine_ipv4;
 static struct arwill_config arwill_limine_config;
 static struct arwill_event_log arwill_limine_log;
 static struct arwill_service_manager arwill_limine_services;
+static struct arwill_block_region arwill_limine_storage_region;
 
 static enum arwill_memory_region_type convert_limine_memory_region_type(uint64_t type) {
     switch (type) {
@@ -110,7 +111,18 @@ void arwill_limine_entry(void) {
     );
     const struct arwill_input *input = arwill_qemu_serial_input();
     const struct arwill_power *power = arwill_qemu_power();
-    const struct arwill_block_device *block_device = arwill_qemu_ata_block_device_init();
+    const struct arwill_block_device *physical_block_device =
+        arwill_qemu_ata_block_device_init();
+    const struct arwill_block_device *block_device = 0;
+    if (arwill_block_region_init(
+            &arwill_limine_storage_region,
+            physical_block_device,
+            "qemu ata pio arfs region",
+            ARWILL_ARFS_REGION_LBA,
+            ARWILL_ARFS_REGION_SECTORS
+        )) {
+        block_device = arwill_block_region_device(&arwill_limine_storage_region);
+    }
     const struct arwill_filesystem *filesystem = arwill_arfs_mount(block_device);
     const struct limine_hhdm_response *hhdm = arwill_limine_hhdm_response();
     const uint64_t hhdm_offset = hhdm == 0 ? 0 : hhdm->offset;

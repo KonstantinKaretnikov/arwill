@@ -1,6 +1,6 @@
 # Arwill
 
-Arwill `0.19.0` is a small experimental x86-64 operating system for QEMU.
+Arwill `0.20.0` is a small experimental x86-64 operating system for QEMU.
 It is built around explicit, replaceable components and documented decisions.
 See [MANIFESTO.md](MANIFESTO.md).
 
@@ -9,6 +9,7 @@ Arwill is not a production OS.
 ## Current system
 
 - Limine boot on QEMU x86-64.
+- One bootable, persistent `build/arwill.img` system-disk artifact.
 - Serial owner shell with framebuffer output mirroring.
 - ATA PIO storage and mutable ARFS v2.
 - Small kernel heap, device registry, IDT/PIC/PIT, and monotonic uptime.
@@ -36,9 +37,16 @@ make build
 make run
 ```
 
-`make setup` fetches the pinned Limine dependency. `make run` attaches the
-QEMU serial console to the terminal. Press `Ctrl+C` in the host terminal to
-stop QEMU.
+`make setup` fetches the pinned Limine dependency. `make build` produces
+`build/arwill.img`; it contains Limine, the kernel, applications, configuration,
+and the mutable ARFS region. `make run` boots that one image as the primary IDE
+disk and attaches the QEMU serial console to the terminal. No separate ISO or
+test disk needs to be attached. Press `Ctrl+C` in the host terminal to stop
+QEMU.
+
+For UTM, create an x86_64 virtual machine using legacy BIOS boot, import
+`build/arwill.img` as its IDE primary disk, and use the built-in serial terminal
+for input. UTM is a documented manual target; the automated checks use QEMU.
 
 The boot screen is intentionally short:
 
@@ -49,7 +57,7 @@ The boot screen is intentionally short:
  A   A  R R   WW WW   I   L     L
  A   A  R  R  W   W  III  LLLL  LLLL
 
-Arwill 0.19.0 ready
+Arwill 0.20.0 ready
 config: /owner/arwill.conf
 help: type 'help' or press Tab
 Arwill:/>
@@ -110,7 +118,7 @@ rm [path]
 
 Paths may be absolute or relative to the session's current directory.
 Use `/apps/edit.awp` for interactive ASCII text creation and editing. Mutations
-persist in the QEMU raw test disk.
+persist in the ARFS region of the same bootable system disk.
 
 Limits: 24 entries, short paths, 8192 bytes per file, and contiguous
 allocation. ARFS has no append, rename, journal, atomic metadata update, or

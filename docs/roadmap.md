@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.19.0`.
+Status: `0.20.0`.
 
 Arwill already has:
 
@@ -25,6 +25,8 @@ Arwill already has:
   idle;
 - [x] a buildable bootable ISO and `make check` with native IPv4/TCP checks plus
   a bounded QEMU serial/TCP smoke test;
+- [x] one bootable `arwill.img` system disk containing the Limine boot image
+  and a bounded persistent ARFS region, used by normal QEMU run and smoke paths;
 - [x] QEMU serial console output and blocking serial input;
 - [x] a serial shell with canonical commands only: `help`, `version`, `system`,
   `devices`, `network`, `top`, `pwd`, `cd`, `clear`, `ls`, `cat`, `mkdir`,
@@ -648,3 +650,19 @@ driver work, not accidental default access for every ring 3 program.
    lifecycle, retransmission-safe output, concurrent AWP operation, and remote
    shell behavior. It also runs and completes `counter` from the remote console
    before continuing the same connection through `system`, `top`, and `exit`.
+
+32. [x] Bootable system disk v1
+
+   Status: implemented in `0.20.0` per ADR-0056.
+
+   Scope: produce one `build/arwill.img` containing the existing hybrid Limine
+   boot image and a fixed 1 MiB ARFS region at LBA 32768; add an
+   architecture-independent bounded block-device region; boot QEMU from that
+   one IDE disk; and keep smoke mutations on a disposable copy. Do not add a
+   partition parser, interactive installer, disk selection, or filesystem
+   formatter inside the kernel.
+
+   Verified by: host tests cover region translation and bounds, artifact
+   checks locate the ARFS2 superblock at the configured offset, and the full
+   two-boot QEMU smoke test boots without a CD-ROM or second disk and verifies
+   persistent text and binary writes across reboot.

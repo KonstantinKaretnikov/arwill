@@ -25,6 +25,12 @@ struct arwill_block_device {
     );
 };
 
+struct arwill_block_region {
+    const struct arwill_block_device *parent;
+    uint64_t first_lba;
+    struct arwill_block_device device;
+};
+
 int arwill_block_read(
     const struct arwill_block_device *device,
     uint64_t lba,
@@ -39,6 +45,18 @@ int arwill_block_write(
     uint32_t sector_count,
     const uint8_t *buffer,
     size_t buffer_size
+);
+
+int arwill_block_region_init(
+    struct arwill_block_region *region,
+    const struct arwill_block_device *parent,
+    const char *name,
+    uint64_t first_lba,
+    uint64_t sector_count
+);
+
+const struct arwill_block_device *arwill_block_region_device(
+    const struct arwill_block_region *region
 );
 
 #endif

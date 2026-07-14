@@ -1,13 +1,17 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.19.0
+PROJECT_VERSION := 0.20.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
 ISO_ROOT := $(BUILD_DIR)/iso-root
 KERNEL := $(BUILD_DIR)/kernel.elf
 ISO := $(BUILD_DIR)/arwill.iso
-TEST_DISK := $(BUILD_DIR)/arwill-test-disk.img
+DISK_IMAGE := $(BUILD_DIR)/arwill.img
+ARFS_SEED := $(BUILD_DIR)/arwill-arfs-seed.img
+SMOKE_DISK := $(BUILD_DIR)/arwill-smoke.img
 SERIAL_LOG := $(BUILD_DIR)/serial-smoke.log
+ARFS_REGION_LBA := 32768
+ARFS_REGION_SECTORS := 2048
 HELLO_APP := $(BUILD_DIR)/apps/hello.awp
 CALC_APP := $(BUILD_DIR)/apps/calc.awp
 EDIT_APP := $(BUILD_DIR)/apps/edit.awp
@@ -21,6 +25,9 @@ CONFIG_LOG_HOST_TEST_SOURCES := tests/config_log_test.c kernel/clock.c kernel/co
 CONFIG_LOG_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/config.h \
 	include/arwill/kernel/filesystem.h include/arwill/kernel/ipv4.h \
 	include/arwill/kernel/log.h include/arwill/kernel/service.h
+BLOCK_DEVICE_HOST_TEST := $(BUILD_DIR)/tests/block_device_test
+BLOCK_DEVICE_HOST_TEST_SOURCES := tests/block_device_test.c kernel/block_device.c
+BLOCK_DEVICE_HOST_TEST_HEADERS := include/arwill/kernel/block_device.h
 
 BREW_LLVM_PREFIX := $(shell brew --prefix llvm 2>/dev/null)
 BREW_LLD_PREFIX := $(shell brew --prefix lld 2>/dev/null)
@@ -31,7 +38,7 @@ QEMU ?= qemu-system-x86_64
 QEMU_MACHINE := pc
 QEMU_POWEROFF_EXIT_STATUS := 33
 QEMU_POWEROFF_ARGS := -device isa-debug-exit,iobase=0xf4,iosize=0x04
-QEMU_STORAGE_ARGS := -drive file=$(TEST_DISK),format=raw,if=ide,index=0,media=disk
+QEMU_STORAGE_ARGS := -drive file=$(DISK_IMAGE),format=raw,if=ide,index=0,media=disk
 QEMU_REMOTE_CONSOLE_BIND ?= 127.0.0.1
 QEMU_REMOTE_CONSOLE_HOST_PORT ?= 23232
 QEMU_REMOTE_CONSOLE_GUEST_PORT ?= 23232
@@ -47,6 +54,8 @@ CFLAGS += -MMD -MP
 CFLAGS += -Iinclude -Iarch/x86_64/include -Iplatform/qemu/include -Ithird_party/limine
 CFLAGS += -DARWILL_PROJECT_NAME=\"$(PROJECT_NAME)\"
 CFLAGS += -DARWILL_PROJECT_VERSION=\"$(PROJECT_VERSION)\"
+CFLAGS += -DARWILL_ARFS_REGION_LBA=$(ARFS_REGION_LBA)
+CFLAGS += -DARWILL_ARFS_REGION_SECTORS=$(ARFS_REGION_SECTORS)
 
 LDFLAGS := -nostdlib -static -z max-page-size=0x1000
 LDFLAGS += -T arch/x86_64/linker.ld
@@ -93,25 +102,28 @@ DEPENDENCIES := $(OBJECTS:.o=.d)
 
 -include $(DEPENDENCIES)
 
-.PHONY: setup build run check check-host clean check-tools check-artifacts smoke FORCE
+.PHONY: setup build image run check check-host clean check-tools check-artifacts smoke FORCE
 
 setup:
 	@scripts/setup_limine.sh
 
-build: check-tools setup $(ISO)
+build: check-tools setup $(ISO) $(DISK_IMAGE)
 
-run: build $(TEST_DISK)
+image: build
+
+run: build
 	@set +e; \
-	$(QEMU) -M $(QEMU_MACHINE) -m 128M -cdrom $(ISO) -boot d -serial stdio -monitor none -display none -no-reboot $(QEMU_POWEROFF_ARGS) $(QEMU_STORAGE_ARGS) $(QEMU_NETWORK_ARGS); \
+	$(QEMU) -M $(QEMU_MACHINE) -m 128M -boot c -serial stdio -monitor none -display none -no-reboot $(QEMU_POWEROFF_ARGS) $(QEMU_STORAGE_ARGS) $(QEMU_NETWORK_ARGS); \
 	status=$$?; \
 	if [ "$$status" -eq "$(QEMU_POWEROFF_EXIT_STATUS)" ]; then exit 0; fi; \
 	exit "$$status"
 
 check: build check-host check-artifacts smoke
 
-check-host: $(IPV4_HOST_TEST) $(CONFIG_LOG_HOST_TEST)
+check-host: $(IPV4_HOST_TEST) $(CONFIG_LOG_HOST_TEST) $(BLOCK_DEVICE_HOST_TEST)
 	@$(IPV4_HOST_TEST)
 	@$(CONFIG_LOG_HOST_TEST)
+	@$(BLOCK_DEVICE_HOST_TEST)
 
 clean:
 	rm -rf $(BUILD_DIR)
@@ -119,11 +131,14 @@ clean:
 check-tools:
 	@scripts/check_prereqs.sh "$(CLANG)" "$(LD_LLD)" "$(XORRISO)" "$(QEMU)"
 
-check-artifacts: $(ISO)
-	@scripts/check_artifacts.sh "$(KERNEL)" "$(ISO)"
+check-artifacts: $(ISO) $(DISK_IMAGE)
+	@scripts/check_artifacts.sh "$(KERNEL)" "$(ISO)" "$(DISK_IMAGE)" \
+		"$(ARFS_REGION_LBA)" "$(ARFS_REGION_SECTORS)"
 
-smoke: $(ISO) $(TEST_DISK)
-	@scripts/smoke_qemu.sh "$(QEMU)" "$(QEMU_MACHINE)" "$(ISO)" "$(TEST_DISK)" "$(SERIAL_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)"
+smoke: $(DISK_IMAGE)
+	@cp "$(DISK_IMAGE)" "$(SMOKE_DISK)"
+	@scripts/smoke_qemu.sh "$(QEMU)" "$(QEMU_MACHINE)" "$(SMOKE_DISK)" \
+		"$(SERIAL_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)" "$(ARFS_REGION_LBA)"
 
 $(IPV4_HOST_TEST): $(IPV4_HOST_TEST_SOURCES) $(IPV4_HOST_TEST_HEADERS) Makefile
 	@mkdir -p $(dir $@)
@@ -134,6 +149,11 @@ $(CONFIG_LOG_HOST_TEST): $(CONFIG_LOG_HOST_TEST_SOURCES) $(CONFIG_LOG_HOST_TEST_
 	@mkdir -p $(dir $@)
 	$(CLANG) -std=c11 -Wall -Wextra -Werror -Wpedantic -Wconversion \
 		-Wsign-conversion -Iinclude $(CONFIG_LOG_HOST_TEST_SOURCES) -o $@
+
+$(BLOCK_DEVICE_HOST_TEST): $(BLOCK_DEVICE_HOST_TEST_SOURCES) $(BLOCK_DEVICE_HOST_TEST_HEADERS) Makefile
+	@mkdir -p $(dir $@)
+	$(CLANG) -std=c11 -Wall -Wextra -Werror -Wpedantic -Wconversion \
+		-Wsign-conversion -Iinclude $(BLOCK_DEVICE_HOST_TEST_SOURCES) -o $@
 
 $(KERNEL): $(OBJECTS) arch/x86_64/linker.ld
 	@mkdir -p $(dir $@)
@@ -161,8 +181,12 @@ $(ISO): $(KERNEL) platform/qemu/limine.conf third_party/limine/limine
 		$(ISO_ROOT) -o $(ISO)
 	third_party/limine/limine bios-install $(ISO)
 
-$(TEST_DISK): scripts/create_test_disk.sh $(HELLO_APP) $(CALC_APP) $(EDIT_APP) Makefile FORCE
+$(ARFS_SEED): scripts/create_test_disk.sh $(HELLO_APP) $(CALC_APP) $(EDIT_APP) Makefile
 	@sh scripts/create_test_disk.sh "$@" "$(PROJECT_VERSION)" "$(HELLO_APP)" "$(CALC_APP)" "$(EDIT_APP)"
+
+$(DISK_IMAGE): $(ISO) $(ARFS_SEED) scripts/create_disk_image.sh Makefile
+	@sh scripts/create_disk_image.sh "$@" "$(ISO)" "$(ARFS_SEED)" \
+		"$(ARFS_REGION_LBA)" "$(ARFS_REGION_SECTORS)"
 
 FORCE:
 

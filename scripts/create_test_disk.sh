@@ -41,7 +41,7 @@ printf 'name: Arwill\nversion: %s\narchitecture: x86_64\nplatform: qemu\nfilesys
 printf 'timeout: 0\nquiet: yes\nserial: yes\n\n/Arwill\nprotocol: limine\npath: boot():/boot/kernel.elf\n' \
     > "$limine_conf"
 
-printf 'Arwill storage-backed filesystem\nsource: qemu ata pio test disk\nwritable: ARFS v2 mutable core\n' \
+printf 'Arwill storage-backed filesystem\nsource: bootable system disk ARFS region\nwritable: ARFS v2 mutable core\n' \
     > "$readme"
 
 printf 'owner note: empty\n' > "$owner_note"

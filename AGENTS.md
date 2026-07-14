@@ -60,6 +60,12 @@ Rules for future work:
   atomic metadata update, or crash consistency. The user shell exposes
   `mkdir` and `rm`; `/apps/edit.awp` is the user-facing ASCII text editor.
   `write` and `writehex` remain exact-match internal smoke commands.
+- Treat `build/arwill.img` as the normal bootable system-disk artifact. Its
+  Limine boot image occupies the first 16 MiB and its fixed 1 MiB ARFS region
+  begins at LBA 32768. Expose ARFS through the architecture-independent bounded
+  block-device region so filesystem LBAs stay relative and cannot reach boot
+  sectors. The ISO and ARFS seed are build inputs or compatibility artifacts,
+  not additional disks users must attach. See ADR-0056.
 - Keep `netprobe`, `arping`, `tcpcheck`, `tcplisten`, `heaptest`, `irqprobe`,
   `step`, `write`, and `writehex` available only as exact-match internal smoke
   commands. Do not list them in `help`, include them in Tab completion, or

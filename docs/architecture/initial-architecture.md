@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.19.0 has one executable path:
+Arwill 0.20.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -11,8 +11,9 @@ Limine bootloader
   -> tiny device registry publication
   -> QEMU serial I/O block
   -> Limine framebuffer text console mirror
-  -> QEMU ATA PIO block-device initialization
-  -> ARFS filesystem mount from the raw test disk
+  -> QEMU ATA PIO system-disk initialization
+  -> bounded block-device region at LBA 32768
+  -> ARFS filesystem mount from that region
   -> owner configuration and event-log initialization
   -> single-owner model publication
   -> QEMU e1000 initialization and supervisor-only MMIO mapping
@@ -30,7 +31,7 @@ Limine bootloader
   -> bounded filesystem allocation statistics through system storage
   -> live per-session system and process dashboard when top is requested
   -> kernel heap diagnostics through system memory and an internal heap smoke probe
-  -> deterministic raw disk sector read through devices disk0
+  -> bounded ARFS-region sector read through devices disk0
   -> interrupt/timer diagnostics through system interrupts
   -> scheduler tick diagnostics through system scheduler
   -> cooperative built-in kernel process launch when run is requested
@@ -127,11 +128,13 @@ Block device contract:
 
 - Lives in `include/arwill/kernel/block_device.h`.
 - Provides bounded sector reads and writes by LBA.
+- Can expose a caller-owned bounded region whose LBAs are translated into a
+  parent block device and cannot escape the configured range.
 - The first block-device implementation has no block cache, partition table
   handling, request queue, DMA, or flush policy beyond the narrow ATA cache
   flush used after single-sector writes.
-- `devices disk0` reads LBA 1 from the deterministic QEMU test disk image and
-  prints a sample string.
+- `devices disk0` reads LBA 1 from the bounded ARFS region and prints its
+  internal diagnostic sample string.
 
 Process manager:
 
@@ -296,8 +299,8 @@ ARFS filesystem:
 
 - Public mount entry lives in `include/arwill/kernel/arfs.h`.
 - Implementation lives in `kernel/arfs.c`.
-- Mounts from the current block device by reading a small ARFS superblock and
-  manifest from the deterministic raw test disk image.
+- Mounts from the bounded system-disk region by reading a small ARFS
+  superblock and manifest at region-relative LBAs.
 - Provides the primary filesystem for `ls`, `cd`, Tab completion, `cat`, and
   `stat` in the normal QEMU test path.
 - Persists bounded catalog mutations and contiguous data allocation across a
@@ -333,8 +336,10 @@ QEMU ATA PIO block device:
 
 - Lives in `platform/qemu/x86_64/ata_pio.c`.
 - Uses legacy ATA PIO ports exposed by the QEMU `pc` machine type.
-- Reads and writes sectors from the raw test disk image attached by the
+- Reads and writes the one bootable raw system-disk image attached by the
   host-side run and smoke commands.
+- The architecture-independent region wrapper exposes only LBA 32768 through
+  LBA 34815 to ARFS, so allocation cannot overwrite Limine or the kernel.
 - It is intentionally a first storage path, not a general disk subsystem.
 
 QEMU serial I/O:
