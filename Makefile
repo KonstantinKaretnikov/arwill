@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.17.3
+PROJECT_VERSION := 0.18.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -81,6 +81,7 @@ SOURCES := \
 	arch/x86_64/cpu/idle.c \
 	arch/x86_64/cpu/interrupts.c \
 	arch/x86_64/cpu/pci.c \
+	arch/x86_64/cpu/process_context.c \
 	arch/x86_64/cpu/user_mode.c \
 	platform/qemu/x86_64/ata_pio.c \
 	platform/qemu/x86_64/e1000.c \

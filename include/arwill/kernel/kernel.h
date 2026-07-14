@@ -15,6 +15,7 @@
 #include <arwill/kernel/ipv4.h>
 #include <arwill/kernel/log.h>
 #include <arwill/kernel/power.h>
+#include <arwill/kernel/process.h>
 #include <arwill/kernel/service.h>
 #include <arwill/kernel/user.h>
 
@@ -34,7 +35,8 @@ void arwill_kernel_start(
     const struct arwill_device_registry *devices,
     struct arwill_config *config,
     struct arwill_event_log *log,
-    struct arwill_service_manager *services
+    struct arwill_service_manager *services,
+    const struct arwill_process_context_backend *process_context_backend
 ) __attribute__((noreturn));
 
 #endif

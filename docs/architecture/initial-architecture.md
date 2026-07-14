@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.17.3 has one executable path:
+Arwill 0.18.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -19,7 +19,7 @@ Limine bootloader
   -> x86-64 GDT, TSS, and user runtime initialization
   -> x86-64 IDT, PIC, and PIT timer initialization
   -> architecture-independent kernel startup
-  -> cooperative kernel process manager initialization
+  -> stackful cooperative kernel task manager initialization
   -> kernel/user scheduler accounting initialization
   -> CPU interrupt enable
   -> serial shell and authenticated TCP remote-console service
@@ -33,7 +33,7 @@ Limine bootloader
   -> interrupt/timer diagnostics through system interrupts
   -> scheduler tick diagnostics through system scheduler
   -> cooperative built-in kernel process launch when run is requested
-  -> yielded cooperative process continuation through an internal smoke command
+  -> saved kernel task context continuation through an internal smoke command
   -> stored Arwill Program spawn into one of four AWP slots when exec is requested
   -> user page mapping and built-in ring 3 user program launch when userhello
      or userbad is run
@@ -133,23 +133,27 @@ Process manager:
 
 - Public contract lives in `include/arwill/kernel/process.h`.
 - Implementation lives in `kernel/process.c`.
-- Owns a fixed-size table of kernel-managed processes with PID, state, run
-  count, and exit code.
-- The first scheduler behavior is cooperative: the shell can spawn a built-in
-  kernel process with `run [name]`, then the process manager runs ready entries
-  synchronously.
+- Owns a fixed-size table of kernel-managed tasks with PID, state, run count,
+  exit code, saved context, and one preallocated 8 KiB stack per slot.
+- The scheduler behavior is cooperative: the shell can spawn a built-in kernel
+  task with `run [name]`, then the process manager resumes each ready task once
+  per dispatch pass.
 - `counter` is the only cooperative kernel built-in. The obsolete
   run-to-completion `hello` demonstration is not part of the current surface.
-- Process entries can finish or yield. A yielded process returns to the ready
-  state and can be continued by the internal smoke path; the first saved
-  progress value is the process run count.
+- Process entries can finish or explicitly call `arwill_process_yield`. A
+  yielded task returns to the ready state; its stack, local variables, call
+  chain, stack pointer, and x86-64 callee-saved registers remain intact until
+  the next dispatch resumes immediately after the yield call.
 - Built-in `userhello` and `userbad` process entries enter ring 3 through the
   user runtime and return user exit status to this same process table.
 - `ps` displays cooperative kernel entries and the separate AWP task table;
   `top` renders both in one live table with an explicit process-kind column.
-- The cooperative process manager is not a hardware-context scheduler. AWP
-  saved contexts, address spaces, and PIT preemption belong to the user
-  runtime. There are no independent kernel stacks or kernel preemption.
+- The architecture-independent process manager receives a context backend at
+  boot. The x86-64 backend saves the stack pointer and ABI callee-saved
+  registers at cooperative switch boundaries.
+- Kernel tasks share one kernel address space. They have no stack guards and
+  are never preempted; AWP full ring 3 contexts, address spaces, and PIT
+  preemption remain a separate user-runtime mechanism.
 
 Interrupt controller contract:
 

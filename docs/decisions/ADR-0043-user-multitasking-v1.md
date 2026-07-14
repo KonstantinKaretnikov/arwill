@@ -31,6 +31,9 @@ Keep cooperative kernel built-ins as their existing, distinct process kind.
 `ps` displays both kinds. Do not add `jobs`, `fg`, `bg`, priorities, signals,
 SMP, kernel preemption, fork, independent kernel stacks, or ELF.
 
+ADR-0054 later adds dedicated stacks for cooperative kernel tasks. It does not
+change the AWP context model or introduce kernel preemption or SMP.
+
 ## Consequences
 
 Two interactive AWP images can make progress independently on one vCPU and

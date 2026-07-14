@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.17.3`.
+Status: `0.18.0`.
 
 Arwill already has:
 
@@ -51,8 +51,9 @@ Arwill already has:
   `/apps` names, explicit image paths, and at most
   one bounded, shell-resolved launch file path;
 - [x] QEMU debug-exit poweroff through `exit`;
-- [x] cooperative kernel-managed processes with PID, state, run count, exit
-  code, `run [name]`, cooperative `step`, and `ps`;
+- [x] stackful cooperative kernel-managed tasks with PID, state, run count,
+  exit code, saved x86-64 contexts, fixed 8 KiB stacks, `run [name]`, internal
+  `step`, and `ps`;
 - [x] x86-64 IDT setup, legacy PIC remap, PIT timer interrupts, and a safe
   breakpoint exception diagnostic;
 - [x] scheduler tick accounting exposed through `system scheduler`;
@@ -82,8 +83,8 @@ Arwill already has:
 Arwill has an ARFS v2 mutable core exposed to users through directory creation,
 interactive ASCII editing, and removal. Internal smoke commands retain bounded
 whole-file text and binary writes. Arwill does not have append, rename,
-ELF program loading, dynamic linking, independent kernel stacks, kernel
-preemption, SMP, multi-user accounts, or a general-purpose writable storage
+ELF program loading, dynamic linking, kernel stack guards, kernel preemption,
+SMP, multi-user accounts, or a general-purpose writable storage
 subsystem.
 
 ## Product Direction
@@ -615,3 +616,18 @@ driver work, not accidental default access for every ring 3 program.
 
    Verified by: QEMU smoke rejects `run hello`, lists only `counter`,
    `userhello`, and `userbad`, and exercises the remaining process kinds.
+
+30. [x] Kernel task contexts v1
+
+   Status: implemented in `0.18.0` per ADR-0054.
+
+   Scope: give every fixed kernel-task slot a dedicated 8 KiB stack, inject an
+   architecture context backend into the process manager, save the x86-64
+   stack pointer and callee-saved registers at explicit yield boundaries, and
+   resume at the instruction after `arwill_process_yield`. Keep the shared
+   kernel address space, cooperative dispatch, fixed task table, and existing
+   `run`, `ps`, and internal `step` interfaces.
+
+   Verified by: QEMU smoke observes `counter` yield as ready after its first
+   dispatch, then resume twice with a stack-local value progressing from 10 to
+   11 to 13 before finishing with three runs.

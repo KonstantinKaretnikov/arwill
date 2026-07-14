@@ -2312,18 +2312,23 @@ static struct arwill_process_result shell_counter_process(
         return arwill_process_finish(1);
     }
 
-    const uint64_t step = runtime->run_count + 1U;
+    uint64_t value = 10;
 
-    arwill_console_write(context->console, "process ");
-    arwill_console_write(context->console, runtime->name);
-    arwill_console_write(context->console, ": pid ");
-    write_uint64_decimal(context->console, (uint64_t)runtime->pid);
-    arwill_console_write(context->console, " step ");
-    write_uint64_decimal(context->console, step);
-    arwill_console_write_line(context->console, "/3");
+    for (uint64_t step = 1; step <= 3U; step++) {
+        arwill_console_write(context->console, "process ");
+        arwill_console_write(context->console, runtime->name);
+        arwill_console_write(context->console, ": pid ");
+        write_uint64_decimal(context->console, (uint64_t)runtime->pid);
+        arwill_console_write(context->console, " step ");
+        write_uint64_decimal(context->console, step);
+        arwill_console_write(context->console, "/3 value ");
+        write_uint64_decimal(context->console, value);
+        arwill_console_write_line(context->console, "");
 
-    if (step < 3U) {
-        return arwill_process_yield();
+        value += step;
+        if (step < 3U) {
+            arwill_process_yield(runtime);
+        }
     }
 
     return arwill_process_finish(0);

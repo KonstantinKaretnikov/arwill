@@ -1,6 +1,6 @@
 # Arwill
 
-Arwill `0.17.3` is a small experimental x86-64 operating system for QEMU.
+Arwill `0.18.0` is a small experimental x86-64 operating system for QEMU.
 It is built around explicit, replaceable components and documented decisions.
 See [MANIFESTO.md](MANIFESTO.md).
 
@@ -14,6 +14,8 @@ Arwill is not a production OS.
 - Small kernel heap, device registry, IDT/PIC/PIT, and monotonic uptime.
 - e1000, fixed IPv4, ARP/ICMP, and a bounded TCP remote console.
 - Four-slot ring 3 AWP runtime with PIT preemption and fault containment.
+- Fixed-slot cooperative kernel tasks with saved x86-64 contexts and dedicated
+  8 KiB stacks.
 - Persistent owner configuration, a volatile event log, and one built-in
   service.
 
@@ -45,7 +47,7 @@ The boot screen is intentionally short:
  A   A  R R   WW WW   I   L     L
  A   A  R  R  W   W  III  LLLL  LLLL
 
-Arwill 0.17.3 ready
+Arwill 0.18.0 ready
 config: /owner/arwill.conf
 help: type 'help' or press Tab
 Arwill:/>
@@ -146,7 +148,10 @@ interactive applications**, one in each session. The other two slots do not
 provide extra user-visible concurrency because Arwill has no `jobs`, `bg`,
 `fg`, or additional TCP sessions.
 
-`run counter` exercises the cooperative kernel-managed process path.
+`run counter` exercises the stackful cooperative kernel-task path. Its local
+variables and call stack survive each explicit yield, and execution resumes at
+the instruction after that yield. Kernel tasks share the kernel address space
+and are not preempted.
 `run userhello` and `run userbad` exercise the narrow ring 3 syscall path.
 These are distinct from scheduled AWP tasks.
 

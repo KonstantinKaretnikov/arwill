@@ -1,6 +1,6 @@
 # ADR-0023: Cooperative Yield for Kernel Processes
 
-Status: Accepted
+Status: superseded by ADR-0054
 
 ## Context
 
@@ -35,3 +35,6 @@ and later as `finished`.
 
 Future work can add real saved CPU contexts, independent stacks, or preemption,
 but those should be introduced by a separate ADR and testable milestone.
+
+ADR-0054 later replaces returned `yielded` results with stackful cooperative
+contexts and a yield call that resumes at the following instruction.

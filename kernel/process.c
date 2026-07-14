@@ -11,9 +11,16 @@ static void clear_process(struct arwill_process *process) {
     process->run_count = 0;
     process->entry = 0;
     process->context = 0;
+    process->saved_context.stack_pointer = 0;
+    process->saved_context.entry = 0;
+    process->saved_context.argument = 0;
+    process->manager = 0;
 }
 
-void arwill_process_manager_init(struct arwill_process_manager *manager) {
+void arwill_process_manager_init(
+    struct arwill_process_manager *manager,
+    const struct arwill_process_context_backend *context_backend
+) {
     if (manager == 0) {
         return;
     }
@@ -22,7 +29,43 @@ void arwill_process_manager_init(struct arwill_process_manager *manager) {
         clear_process(&manager->table[index]);
     }
 
+    manager->scheduler_context.stack_pointer = 0;
+    manager->scheduler_context.entry = 0;
+    manager->scheduler_context.argument = 0;
+    manager->context_backend = context_backend;
+    manager->current = 0;
     manager->next_pid = 1;
+}
+
+static void process_trampoline(void *argument) {
+    struct arwill_process *process = (struct arwill_process *)argument;
+
+    if (process == 0 || process->manager == 0) {
+        for (;;) {
+        }
+    }
+
+    struct arwill_process_manager *manager = process->manager;
+    struct arwill_process_runtime runtime;
+
+    runtime.pid = process->pid;
+    runtime.name = process->name;
+    runtime.run_count = process->run_count - 1U;
+    runtime.context = process->context;
+    runtime.manager = manager;
+
+    const struct arwill_process_result result = process->entry(&runtime);
+
+    process->exit_code = result.exit_code;
+    process->state = arwill_process_state_finished;
+    manager->current = 0;
+    manager->context_backend->switch_context(
+        &process->saved_context,
+        &manager->scheduler_context
+    );
+
+    for (;;) {
+    }
 }
 
 static int find_spawn_slot(struct arwill_process_manager *manager, size_t *slot) {
@@ -50,7 +93,12 @@ int arwill_process_spawn(
     void *context,
     uint32_t *pid
 ) {
-    if (manager == 0 || name == 0 || entry == 0 || pid == 0) {
+    if (
+        manager == 0 || manager->context_backend == 0 ||
+        manager->context_backend->initialize == 0 ||
+        manager->context_backend->switch_context == 0 || name == 0 ||
+        entry == 0 || pid == 0
+    ) {
         return 0;
     }
 
@@ -74,6 +122,18 @@ int arwill_process_spawn(
     manager->table[slot].run_count = 0;
     manager->table[slot].entry = entry;
     manager->table[slot].context = context;
+    manager->table[slot].manager = manager;
+
+    if (!manager->context_backend->initialize(
+        &manager->table[slot].saved_context,
+        manager->stacks[slot],
+        arwill_process_stack_capacity,
+        process_trampoline,
+        &manager->table[slot]
+    )) {
+        clear_process(&manager->table[slot]);
+        return 0;
+    }
 
     *pid = new_pid;
     return 1;
@@ -82,23 +142,44 @@ int arwill_process_spawn(
 struct arwill_process_result arwill_process_finish(uint32_t exit_code) {
     struct arwill_process_result result;
 
-    result.state = arwill_process_result_finished;
     result.exit_code = exit_code;
     return result;
 }
 
-struct arwill_process_result arwill_process_yield(void) {
-    struct arwill_process_result result;
+void arwill_process_yield(const struct arwill_process_runtime *runtime) {
+    if (runtime == 0 || runtime->manager == 0) {
+        return;
+    }
 
-    result.state = arwill_process_result_yielded;
-    result.exit_code = 0;
-    return result;
+    struct arwill_process_manager *manager = runtime->manager;
+    struct arwill_process *process = manager->current;
+
+    if (
+        process == 0 || process->pid != runtime->pid ||
+        manager->context_backend == 0 ||
+        manager->context_backend->switch_context == 0
+    ) {
+        return;
+    }
+
+    process->state = arwill_process_state_ready;
+    manager->current = 0;
+    manager->context_backend->switch_context(
+        &process->saved_context,
+        &manager->scheduler_context
+    );
+
+    manager->current = process;
+    process->state = arwill_process_state_running;
 }
 
 size_t arwill_process_run_ready(struct arwill_process_manager *manager) {
     size_t run_count = 0;
 
-    if (manager == 0) {
+    if (
+        manager == 0 || manager->context_backend == 0 ||
+        manager->context_backend->switch_context == 0
+    ) {
         return 0;
     }
 
@@ -109,24 +190,14 @@ size_t arwill_process_run_ready(struct arwill_process_manager *manager) {
             continue;
         }
 
-        struct arwill_process_runtime runtime;
-
-        runtime.pid = process->pid;
-        runtime.name = process->name;
-        runtime.run_count = process->run_count;
-        runtime.context = process->context;
-
         process->state = arwill_process_state_running;
         process->run_count++;
-
-        const struct arwill_process_result result = process->entry(&runtime);
-
-        process->exit_code = result.exit_code;
-        if (result.state == arwill_process_result_yielded) {
-            process->state = arwill_process_state_ready;
-        } else {
-            process->state = arwill_process_state_finished;
-        }
+        manager->current = process;
+        manager->context_backend->switch_context(
+            &manager->scheduler_context,
+            &process->saved_context
+        );
+        manager->current = 0;
         run_count++;
     }
 

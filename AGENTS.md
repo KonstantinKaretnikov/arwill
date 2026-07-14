@@ -37,9 +37,10 @@ Rules for future work:
   `read`, and `clock`). Stored AWP programs use the fixed four-slot model in
   ADR-0043: saved ring 3 contexts, preallocated per-slot address spaces,
   PIT preemption, round-robin dispatch, session-bound input, and user-fault
-  containment. Cooperative kernel built-ins remain distinct and do not save a
-  hardware execution context. Arwill still has no ELF loader, independent
-  kernel stacks, kernel preemption, or SMP.
+  containment. Cooperative kernel built-ins remain distinct: each fixed slot
+  has a dedicated 8 KiB stack and a saved cooperative x86-64 context, but all
+  share the kernel address space and switch only at explicit yield points.
+  Arwill still has no ELF loader, kernel preemption, or SMP.
 - The AWP syscall ABI also includes bounded whole-text-file `read_file` and
   `write_file` operations for current consumers such as `/apps/edit.awp`.
   These are not file descriptors, streams, append, seek, or a POSIX file API.

@@ -4,6 +4,7 @@
 #include <limine.h>
 
 #include <arwill/arch/x86_64/framebuffer_console.h>
+#include <arwill/arch/x86_64/process_context.h>
 #include <arwill/arch/x86_64/interrupts.h>
 #include <arwill/arch/x86_64/pci.h>
 #include <arwill/arch/x86_64/limine_requests.h>
@@ -243,7 +244,8 @@ void arwill_limine_entry(void) {
         &arwill_limine_devices,
         &arwill_limine_config,
         &arwill_limine_log,
-        &arwill_limine_services
+        &arwill_limine_services,
+        arwill_x86_64_process_context_backend()
     );
     arwill_cpu_idle_forever();
 }

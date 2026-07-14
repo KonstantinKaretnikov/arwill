@@ -35,11 +35,12 @@ void arwill_kernel_start(
     const struct arwill_device_registry *devices,
     struct arwill_config *config,
     struct arwill_event_log *log,
-    struct arwill_service_manager *services
+    struct arwill_service_manager *services,
+    const struct arwill_process_context_backend *process_context_backend
 ) {
     static struct arwill_process_manager process_manager;
 
-    arwill_process_manager_init(&process_manager);
+    arwill_process_manager_init(&process_manager, process_context_backend);
     arwill_scheduler_init();
 
     arwill_interrupts_enable(interrupts);
