@@ -2298,29 +2298,6 @@ static void control_service(
     );
 }
 
-static struct arwill_process_result shell_hello_process(
-    const struct arwill_process_runtime *runtime
-) {
-    if (runtime == 0 || runtime->context == 0) {
-        return arwill_process_finish(1);
-    }
-
-    const struct shell_process_context *context =
-        (const struct shell_process_context *)runtime->context;
-
-    if (context->console == 0) {
-        return arwill_process_finish(1);
-    }
-
-    arwill_console_write(context->console, "process ");
-    arwill_console_write(context->console, runtime->name);
-    arwill_console_write(context->console, ": hello from pid ");
-    write_uint64_decimal(context->console, (uint64_t)runtime->pid);
-    arwill_console_write_line(context->console, "");
-
-    return arwill_process_finish(0);
-}
-
 static struct arwill_process_result shell_counter_process(
     const struct arwill_process_runtime *runtime
 ) {
@@ -2402,7 +2379,6 @@ static struct arwill_process_result shell_user_bad_process(
 }
 
 static const struct shell_builtin_process shell_builtin_processes[] = {
-    { .name = "hello", .entry = shell_hello_process },
     { .name = "counter", .entry = shell_counter_process },
     { .name = "userhello", .entry = shell_user_hello_process },
     { .name = "userbad", .entry = shell_user_bad_process },

@@ -92,10 +92,10 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.17.2" 2
+    wait_for_primary_log_count "Arwill 0.17.3" 2
     sleep 0.1
     printf 'sys\t\r'
-    wait_for_primary_log "system: Arwill 0.17.2"
+    wait_for_primary_log "system: Arwill 0.17.3"
     wait_for_primary_log_count "uptime: " 1
     sleep 0.1
     printf 'devices p\t\r'
@@ -222,27 +222,28 @@ run_qemu_to_log() {
     printf 'system sc\t\r'
     wait_for_primary_log "scheduler: kernel/user tick accounting + AWP round-robin"
     sleep 0.1
-    printf 'run he\t\r'
-    wait_for_primary_log "process hello: hello from pid"
+    printf 'run hello\r'
+    wait_for_primary_log "run: unknown process: hello"
+    wait_for_primary_log "available processes: counter userhello userbad"
     sleep 0.1
     printf 'run count\t\r'
-    wait_for_primary_log "process counter: pid 2 step 1/3"
+    wait_for_primary_log "process counter: pid 1 step 1/3"
     sleep 0.1
     printf 'ps\r'
-    wait_for_primary_log "2 ready 1 0 counter"
+    wait_for_primary_log "1 ready 1 0 counter"
     sleep 0.1
     printf 'step\r'
-    wait_for_primary_log "process counter: pid 2 step 2/3"
+    wait_for_primary_log "process counter: pid 1 step 2/3"
     wait_for_primary_log "step: ran 1 process step(s)"
     sleep 0.1
     printf 'step\r'
-    wait_for_primary_log "process counter: pid 2 step 3/3"
+    wait_for_primary_log "process counter: pid 1 step 3/3"
     sleep 0.1
     printf 'run userh\t\r'
     wait_for_primary_log "user hello: hello from ring 3"
     sleep 0.1
     printf 'run userb\t\r'
-    wait_for_primary_log "run: spawned pid 4: userbad"
+    wait_for_primary_log "run: spawned pid 3: userbad"
     sleep 0.1
     printf 'exec hello\r'
     wait_for_primary_log "awp hello from storage"
@@ -269,7 +270,7 @@ run_qemu_to_log() {
     sleep 1.1
     wait_for_primary_log_count "PID KIND STATE RUNS EXIT NAME" 2
     printf '\003'
-    wait_for_primary_log "KERNEL 4 tasks"
+    wait_for_primary_log "KERNEL 3 tasks"
     sleep 0.1
     printf 'ls\r'
     wait_for_primary_log "system/"
@@ -405,7 +406,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.17.2"
+    wait_for_primary_log "version: 0.17.3"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -493,7 +494,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.17.2"
+check_line "Arwill 0.17.3"
 check_line "system     show system state and subsystem details"
 check_line "devices    list devices or inspect pci/disk0/net0"
 check_line "network    show network state, ping, or TCP details"
@@ -527,12 +528,12 @@ check_line "remote bytes: received 0, sent 0, dropped 0, send failures 0"
 check_line "tcp integrity: checksum drops 0, duplicate acks 0"
 check_line "tcp reliability: retransmissions 0, timeouts 0, pending no"
 check_line "   A    RRR   W   W  III  L     L"
-check_line "Arwill 0.17.2 ready"
+check_line "Arwill 0.17.3 ready"
 check_line "config: /owner/arwill.conf"
 check_line "help: type 'help' or press Tab"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.17.2"
+check_line "Arwill 0.17.3"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -559,11 +560,11 @@ check_line "Up/Down    browse command history"
 check_absent "  dir [path]  list the current filesystem"
 check_absent "info [path]"
 check_absent "poweroff"
-check_line "system: Arwill 0.17.2"
+check_line "system: Arwill 0.17.3"
 check_line "processes: kernel 0, awp 0/4"
 check_line "PID KIND STATE RUNS EXIT NAME"
 check_line "1002 awp finished"
-check_line "KERNEL 4 tasks"
+check_line "KERNEL 3 tasks"
 check_line "q/Ctrl+C exit"
 check_line "memory map:"
 check_line "usable"
@@ -608,15 +609,17 @@ check_line "scheduler slots: 2"
 check_line "slot kernel ticks:"
 check_line "slot user ticks:"
 check_line "run: spawned pid"
-check_line "process hello: hello from pid"
-check_line "process counter: pid 2 step 1/3"
-check_line "2 ready 1 0 counter"
-check_line "process counter: pid 2 step 2/3"
+check_line "run: unknown process: hello"
+check_line "available processes: counter userhello userbad"
+check_absent "process hello: hello from pid"
+check_line "process counter: pid 1 step 1/3"
+check_line "1 ready 1 0 counter"
+check_line "process counter: pid 1 step 2/3"
 check_line "step: ran 1 process step(s)"
-check_line "process counter: pid 2 step 3/3"
-check_line "run: spawned pid 3: userhello"
+check_line "process counter: pid 1 step 3/3"
+check_line "run: spawned pid 2: userhello"
 check_line "user hello: hello from ring 3"
-check_line "run: spawned pid 4: userbad"
+check_line "run: spawned pid 3: userbad"
 check_line "awp hello from storage"
 check_line "exec: exited 9"
 check_line "exec: no such file: /apps/missing.awp"
@@ -635,9 +638,9 @@ check_line "owner access: full system control"
 check_line "kernel boundary: ring 3 programs use syscalls"
 check_line "privileged code: explicit kernel or driver work"
 check_line "pid state runs exit name"
-check_line "2 finished 3 0 counter"
-check_line "3 finished 1 7 userhello"
-check_line "4 finished 1 127 userbad"
+check_line "1 finished 3 0 counter"
+check_line "2 finished 1 7 userhello"
+check_line "3 finished 1 127 userbad"
 check_line "finished"
 check_line "boot/"
 check_line "docs/"
@@ -688,7 +691,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.17.2"
+check_line "version: 0.17.3"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
@@ -703,7 +706,7 @@ for expected in \
     "Access denied" \
     "Arwill remote console" \
     "warning: plaintext trusted-LAN access" \
-    "Arwill 0.17.2" \
+    "Arwill 0.17.3" \
     "^C" \
     "remote console: disconnected" \
     "uptime: " \
@@ -731,7 +734,7 @@ if ! tr -d '\r' < "$remote_console_log" | grep -x -q '/'; then
     exit 1
 fi
 
-remote_version_count=$(grep -F -c "Arwill 0.17.2" "$remote_console_log")
+remote_version_count=$(grep -F -c "Arwill 0.17.3" "$remote_console_log")
 if [ "$remote_version_count" -lt 2 ]; then
     echo "remote console Up history did not repeat the command" >&2
     cat "$remote_console_log" >&2

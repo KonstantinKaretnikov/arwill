@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.17.2 has one executable path:
+Arwill 0.17.3 has one executable path:
 
 ```text
 Limine bootloader
@@ -138,6 +138,8 @@ Process manager:
 - The first scheduler behavior is cooperative: the shell can spawn a built-in
   kernel process with `run [name]`, then the process manager runs ready entries
   synchronously.
+- `counter` is the only cooperative kernel built-in. The obsolete
+  run-to-completion `hello` demonstration is not part of the current surface.
 - Process entries can finish or yield. A yielded process returns to the ready
   state and can be continued by the internal smoke path; the first saved
   progress value is the process run count.

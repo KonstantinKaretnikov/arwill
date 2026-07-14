@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.17.2`.
+Status: `0.17.3`.
 
 Arwill already has:
 
@@ -108,8 +108,9 @@ driver work, not accidental default access for every ring 3 program.
    and inspect them with `ps`. These began as kernel-managed run-to-completion
    work units, not user-space processes.
 
-   Verified by: QEMU smoke test for `run hello`, process output, `ps`, and
-   successful `exit` poweroff.
+   Historical verification used `run hello`; that redundant built-in was
+   retired in `0.17.3` per ADR-0053. Current smoke retains `counter`, `ps`, and
+   successful `exit` poweroff coverage.
 
 2. [x] Block device reads
 
@@ -602,3 +603,15 @@ driver work, not accidental default access for every ring 3 program.
    Verified by: QEMU smoke launches `hello`, completes `ca` to `calc`, opens a
    relative file through `edit`, exercises the same form over TCP, and retains
    an explicit `/apps/hello.awp` launch after reboot.
+
+29. [x] Retire the kernel hello built-in
+
+   Status: implemented in `0.17.3` per ADR-0053.
+
+   Scope: remove the run-to-completion `run hello` demonstration from code,
+   process-name completion, and current documentation. Retain `counter` as the
+   cooperative kernel-process probe and keep ring 3 `userhello` plus the stored
+   `/apps/hello.awp` fixture as distinct mechanisms.
+
+   Verified by: QEMU smoke rejects `run hello`, lists only `counter`,
+   `userhello`, and `userbad`, and exercises the remaining process kinds.

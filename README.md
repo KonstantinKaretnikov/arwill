@@ -1,6 +1,6 @@
 # Arwill
 
-Arwill `0.17.2` is a small experimental x86-64 operating system for QEMU.
+Arwill `0.17.3` is a small experimental x86-64 operating system for QEMU.
 It is built around explicit, replaceable components and documented decisions.
 See [MANIFESTO.md](MANIFESTO.md).
 
@@ -45,7 +45,7 @@ The boot screen is intentionally short:
  A   A  R R   WW WW   I   L     L
  A   A  R  R  W   W  III  LLLL  LLLL
 
-Arwill 0.17.2 ready
+Arwill 0.17.3 ready
 config: /owner/arwill.conf
 help: type 'help' or press Tab
 Arwill:/>
@@ -146,9 +146,9 @@ interactive applications**, one in each session. The other two slots do not
 provide extra user-visible concurrency because Arwill has no `jobs`, `bg`,
 `fg`, or additional TCP sessions.
 
-`run hello` starts a cooperative kernel-managed demo. `run userhello` and
-`run userbad` exercise the narrow ring 3 syscall path. These are distinct from
-scheduled AWP tasks.
+`run counter` exercises the cooperative kernel-managed process path.
+`run userhello` and `run userbad` exercise the narrow ring 3 syscall path.
+These are distinct from scheduled AWP tasks.
 
 AWP is not ELF. Arwill has no general executable loader, dynamic linker,
 per-process heap, `fork`, POSIX signals, or SMP.

@@ -31,8 +31,8 @@ Rules for future work:
   convenience, not as Cyrillic text support.
 - Keep shell commands canonical; do not add built-in alias commands unless a
   later ADR explicitly reverses ADR-0015.
-- Distinguish process kinds precisely. `hello` and `counter` are cooperative
-  kernel-managed built-ins. `userhello` and `userbad` are narrow ring 3
+- Distinguish process kinds precisely. `counter` is the only cooperative
+  kernel-managed built-in. `userhello` and `userbad` are narrow ring 3
   user-mode demos using the first `int 0x80` syscall ABI (`write`, `exit`,
   `read`, and `clock`). Stored AWP programs use the fixed four-slot model in
   ADR-0043: saved ring 3 contexts, preallocated per-slot address spaces,
