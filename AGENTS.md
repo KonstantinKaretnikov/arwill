@@ -70,6 +70,9 @@ Rules for future work:
   master and slave on both primary and secondary IDE channels. Do not regress
   storage discovery to a hard-coded primary-master assumption; the focused
   secondary-master QEMU smoke represents the UTM compatibility case.
+- Keep e1000 MAC ownership with the virtual device/backend. Read the configured
+  unicast address from RAL/RAH after reset; do not restore a kernel-hardcoded
+  test MAC. QEMU smoke deliberately uses a non-default address to cover this.
 - Keep `netprobe`, `arping`, `tcpcheck`, `tcplisten`, `heaptest`, `irqprobe`,
   `step`, `write`, and `writehex` available only as exact-match internal smoke
   commands. Do not list them in `help`, include them in Tab completion, or

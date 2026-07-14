@@ -344,6 +344,13 @@ QEMU ATA PIO block device:
   LBA 34815 to ARFS, so allocation cannot overwrite Limine or the kernel.
 - It is intentionally a first storage path, not a general disk subsystem.
 
+QEMU e1000 network device:
+
+- Reads the backend-configured unicast MAC from e1000 RAL/RAH after reset and
+  uses that address for receive filtering and generated Ethernet frames.
+- Does not assume the deterministic MAC used by the repository's normal QEMU
+  launch path; UTM may assign a different address to the same emulated device.
+
 QEMU serial I/O:
 
 - Lives in `platform/qemu/x86_64/`.

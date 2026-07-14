@@ -17,6 +17,7 @@ reboot_serial_log=$serial_log.reboot
 reboot_status_log=$serial_log.reboot.status
 remote_console_log=$serial_log.remote
 remote_console_port=$((30000 + $$ % 20000))
+guest_mac=52:54:00:ab:cd:ef
 
 port_attempts=0
 while nc -z 127.0.0.1 "$remote_console_port" >/dev/null 2>&1; do
@@ -91,7 +92,7 @@ run_qemu_to_log() {
         -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
         -drive file="$disk_image",format=raw,if=ide,index=0,media=disk \
         -netdev user,id=net0,hostfwd=tcp:127.0.0.1:"$remote_console_port"-:23232 \
-        -device e1000,netdev=net0,mac=52:54:00:12:34:56 \
+        -device e1000,netdev=net0,mac="$guest_mac" \
         > "$log_file" 2>&1
 }
 
@@ -117,7 +118,7 @@ run_qemu_to_log() {
     sleep 0.1
     printf 'devices n\t\r'
     wait_for_primary_log "network: qemu e1000"
-    wait_for_primary_log "mac: 52:54:00:12:34:56"
+    wait_for_primary_log "mac: 52:54:00:ab:cd:ef"
     wait_for_primary_log "frame path: tx/rx bounded polling ready"
     sleep 0.1
     printf 'netprobe\r'
@@ -533,7 +534,7 @@ check_absent "tcpcheck   exercise the TCP listener handshake"
 check_absent "tcplisten  poll the remote console TCP listener"
 check_absent "tcpinfo    show remote console TCP state"
 check_line "network: qemu e1000"
-check_line "mac: 52:54:00:12:34:56"
+check_line "mac: 52:54:00:ab:cd:ef"
 check_line "frame path: tx/rx bounded polling ready"
 check_line "netprobe: transmitted 60 bytes"
 check_line "ipv4: 10.0.2.15/24"

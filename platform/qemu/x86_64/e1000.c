@@ -49,6 +49,7 @@ enum {
 };
 
 static const uint64_t e1000_mmio_virtual_base = 0xffff900000000000ULL;
+static const uint32_t e1000_rah_address_valid = 1U << 31U;
 
 struct e1000_descriptor {
     uint64_t address;
@@ -90,9 +91,6 @@ struct e1000_context {
 };
 
 static struct e1000_context e1000;
-static const uint8_t e1000_configured_mac[arwill_network_mac_length] = {
-    0x52, 0x54, 0x00, 0x12, 0x34, 0x56
-};
 
 static uint8_t *physical_to_virtual(uint64_t offset, uint64_t physical) {
     return (uint8_t *)(uintptr_t)(offset + physical);
@@ -205,6 +203,34 @@ static int read_mac(void *context, uint8_t mac[arwill_network_mac_length]) {
     return 1;
 }
 
+static int load_mac_from_receive_address(void) {
+    const uint32_t ral = register_read(e1000_register_ral);
+    const uint32_t rah = register_read(e1000_register_rah);
+
+    if ((rah & e1000_rah_address_valid) == 0U) {
+        return 0;
+    }
+
+    e1000.mac[0] = (uint8_t)ral;
+    e1000.mac[1] = (uint8_t)(ral >> 8U);
+    e1000.mac[2] = (uint8_t)(ral >> 16U);
+    e1000.mac[3] = (uint8_t)(ral >> 24U);
+    e1000.mac[4] = (uint8_t)rah;
+    e1000.mac[5] = (uint8_t)(rah >> 8U);
+
+    if ((e1000.mac[0] & 1U) != 0U) {
+        return 0;
+    }
+
+    for (size_t index = 0; index < arwill_network_mac_length; index++) {
+        if (e1000.mac[index] != 0U) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static int send_frame(void *context, const uint8_t *frame, size_t length) {
     struct e1000_context *device = (struct e1000_context *)context;
     if (device == 0 || !device->ready || frame == 0 || length == 0U ||
@@ -315,8 +341,8 @@ const struct arwill_network_device *arwill_qemu_e1000_init(
         (void)register_read(e1000_register_status);
     }
 
-    for (size_t index = 0; index < arwill_network_mac_length; index++) {
-        e1000.mac[index] = e1000_configured_mac[index];
+    if (!load_mac_from_receive_address()) {
+        return 0;
     }
     register_write(e1000_register_ral,
         (uint32_t)e1000.mac[0] |
@@ -326,7 +352,7 @@ const struct arwill_network_device *arwill_qemu_e1000_init(
     register_write(e1000_register_rah,
         (uint32_t)e1000.mac[4] |
         ((uint32_t)e1000.mac[5] << 8U) |
-        (1U << 31U));
+        e1000_rah_address_valid);
 
     if (!allocate_page(&e1000.tx_descriptor_physical, &virtual)) {
         return 0;

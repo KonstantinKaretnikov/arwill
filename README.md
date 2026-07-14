@@ -49,6 +49,8 @@ For UTM, create an x86_64 virtual machine using legacy BIOS boot, import
 for input. Arwill probes both legacy IDE channels and both drive positions.
 UTM remains a documented manual target; automated QEMU checks also cover a
 secondary-master attachment.
+The e1000 driver uses the MAC configured by the VM, so UTM's generated address
+does not need to match the deterministic address used by `make run`.
 
 The boot screen is intentionally short:
 
