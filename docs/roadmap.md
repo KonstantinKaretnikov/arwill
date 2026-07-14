@@ -665,4 +665,6 @@ driver work, not accidental default access for every ring 3 program.
    Verified by: host tests cover region translation and bounds, artifact
    checks locate the ARFS2 superblock at the configured offset, and the full
    two-boot QEMU smoke test boots without a CD-ROM or second disk and verifies
-   persistent text and binary writes across reboot.
+   persistent text and binary writes across reboot. A focused smoke also boots
+   the image from the secondary-master IDE slot and verifies ARFS mount for UTM
+   compatibility.

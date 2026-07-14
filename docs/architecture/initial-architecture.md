@@ -336,6 +336,8 @@ QEMU ATA PIO block device:
 
 - Lives in `platform/qemu/x86_64/ata_pio.c`.
 - Uses legacy ATA PIO ports exposed by the QEMU `pc` machine type.
+- Probes master and slave positions on both the primary and secondary legacy
+  IDE channels, then exposes the first ATA disk it identifies.
 - Reads and writes the one bootable raw system-disk image attached by the
   host-side run and smoke commands.
 - The architecture-independent region wrapper exposes only LBA 32768 through

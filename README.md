@@ -45,8 +45,10 @@ test disk needs to be attached. Press `Ctrl+C` in the host terminal to stop
 QEMU.
 
 For UTM, create an x86_64 virtual machine using legacy BIOS boot, import
-`build/arwill.img` as its IDE primary disk, and use the built-in serial terminal
-for input. UTM is a documented manual target; the automated checks use QEMU.
+`build/arwill.img` as its only IDE disk, and use the built-in serial terminal
+for input. Arwill probes both legacy IDE channels and both drive positions.
+UTM remains a documented manual target; automated QEMU checks also cover a
+secondary-master attachment.
 
 The boot screen is intentionally short:
 

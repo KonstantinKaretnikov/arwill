@@ -10,6 +10,7 @@ DISK_IMAGE := $(BUILD_DIR)/arwill.img
 ARFS_SEED := $(BUILD_DIR)/arwill-arfs-seed.img
 SMOKE_DISK := $(BUILD_DIR)/arwill-smoke.img
 SERIAL_LOG := $(BUILD_DIR)/serial-smoke.log
+IDE_SLOT_LOG := $(BUILD_DIR)/ide-slot-smoke.log
 ARFS_REGION_LBA := 32768
 ARFS_REGION_SECTORS := 2048
 HELLO_APP := $(BUILD_DIR)/apps/hello.awp
@@ -102,7 +103,7 @@ DEPENDENCIES := $(OBJECTS:.o=.d)
 
 -include $(DEPENDENCIES)
 
-.PHONY: setup build image run check check-host clean check-tools check-artifacts smoke FORCE
+.PHONY: setup build image run check check-host clean check-tools check-artifacts smoke smoke-ide-slot FORCE
 
 setup:
 	@scripts/setup_limine.sh
@@ -118,7 +119,7 @@ run: build
 	if [ "$$status" -eq "$(QEMU_POWEROFF_EXIT_STATUS)" ]; then exit 0; fi; \
 	exit "$$status"
 
-check: build check-host check-artifacts smoke
+check: build check-host check-artifacts smoke smoke-ide-slot
 
 check-host: $(IPV4_HOST_TEST) $(CONFIG_LOG_HOST_TEST) $(BLOCK_DEVICE_HOST_TEST)
 	@$(IPV4_HOST_TEST)
@@ -139,6 +140,10 @@ smoke: $(DISK_IMAGE)
 	@cp "$(DISK_IMAGE)" "$(SMOKE_DISK)"
 	@scripts/smoke_qemu.sh "$(QEMU)" "$(QEMU_MACHINE)" "$(SMOKE_DISK)" \
 		"$(SERIAL_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)" "$(ARFS_REGION_LBA)"
+
+smoke-ide-slot: $(DISK_IMAGE)
+	@scripts/smoke_ide_slot.sh "$(QEMU)" "$(QEMU_MACHINE)" "$(DISK_IMAGE)" \
+		"$(IDE_SLOT_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)"
 
 $(IPV4_HOST_TEST): $(IPV4_HOST_TEST_SOURCES) $(IPV4_HOST_TEST_HEADERS) Makefile
 	@mkdir -p $(dir $@)

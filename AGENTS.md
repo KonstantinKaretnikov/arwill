@@ -66,6 +66,10 @@ Rules for future work:
   block-device region so filesystem LBAs stay relative and cannot reach boot
   sectors. The ISO and ARFS seed are build inputs or compatibility artifacts,
   not additional disks users must attach. See ADR-0056.
+- Keep legacy ATA PIO discovery compatible with VM disk placement: probe
+  master and slave on both primary and secondary IDE channels. Do not regress
+  storage discovery to a hard-coded primary-master assumption; the focused
+  secondary-master QEMU smoke represents the UTM compatibility case.
 - Keep `netprobe`, `arping`, `tcpcheck`, `tcplisten`, `heaptest`, `irqprobe`,
   `step`, `write`, and `writehex` available only as exact-match internal smoke
   commands. Do not list them in `help`, include them in Tab completion, or

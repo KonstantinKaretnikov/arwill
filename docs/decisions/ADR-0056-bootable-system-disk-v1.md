@@ -50,6 +50,11 @@ Automated verification covers QEMU BIOS boot. UTM remains a manual target using
 x86_64 legacy BIOS, the image as IDE primary disk, and its built-in serial
 terminal.
 
+UTM may assign its only imported IDE image to a legacy slot other than primary
+master. The ATA PIO driver therefore probes master and slave positions on both
+primary and secondary channels. A focused QEMU smoke boots the system image as
+secondary master and verifies both disk publication and ARFS mount.
+
 ## Alternatives Considered
 
 An interactive installer was deferred because it would require safe disk
