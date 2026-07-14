@@ -45,13 +45,10 @@ void arwill_kernel_start(
 
     arwill_interrupts_enable(interrupts);
 
-    arwill_console_show_boot_banner(
+    arwill_console_write_line(
         console,
-        ARWILL_PROJECT_NAME,
-        ARWILL_PROJECT_VERSION
+        ARWILL_PROJECT_NAME " " ARWILL_PROJECT_VERSION " ready"
     );
-    arwill_console_write_line(console, "config: /owner/arwill.conf");
-    arwill_console_write_line(console, "help: type 'help' or press Tab");
 
     arwill_shell_run(
         console,

@@ -1,6 +1,6 @@
 # ADR-0057: Framebuffer Boot Presentation
 
-Status: accepted
+Status: superseded by ADR-0058
 
 ## Context
 

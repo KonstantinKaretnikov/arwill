@@ -1,6 +1,6 @@
 # ADR-0026: Framebuffer Text Console Mirror
 
-Status: Accepted; boot presentation amended by ADR-0057
+Status: Accepted
 
 ## Context
 

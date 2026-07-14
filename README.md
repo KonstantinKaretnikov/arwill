@@ -1,6 +1,6 @@
 # Arwill
 
-Arwill `0.20.1` is a small experimental x86-64 operating system for QEMU.
+Arwill `0.20.2` is a small experimental x86-64 operating system for QEMU.
 It is built around explicit, replaceable components and documented decisions.
 See [MANIFESTO.md](MANIFESTO.md).
 
@@ -10,7 +10,7 @@ Arwill is not a production OS.
 
 - Limine boot on QEMU x86-64.
 - One bootable, persistent `build/arwill.img` system-disk artifact.
-- Serial owner shell with a framebuffer boot splash and text output mirroring.
+- Serial owner shell with framebuffer text output mirroring.
 - ATA PIO storage and mutable ARFS v2.
 - Small kernel heap, device registry, IDT/PIC/PIT, and monotonic uptime.
 - e1000, fixed IPv4, ARP/ICMP, and a bounded TCP remote console.
@@ -52,19 +52,10 @@ secondary-master attachment.
 The e1000 driver uses the MAC configured by the VM, so UTM's generated address
 does not need to match the deterministic address used by `make run`.
 
-The framebuffer starts with a compact graphical splash. The serial terminal
-keeps a text-only equivalent so boot diagnostics remain observable:
+Boot output is intentionally minimal and identical on serial and framebuffer:
 
 ```text
-             /\
-            /  \
-           / /\ \       ARWILL
-          / ____ \      ARCHITECTURE IS THE PRODUCT
-         /_/    \_\
-
-Arwill 0.20.1 ready
-config: /owner/arwill.conf
-help: type 'help' or press Tab
+Arwill 0.20.2 ready
 Arwill:/>
 ```
 
@@ -240,8 +231,7 @@ records keys, commands, or file contents.
 ## Important limits
 
 - The clock is PIT-backed uptime with 10 ms resolution, not calendar time.
-- The framebuffer has a fixed boot splash and then mirrors serial text output;
-  it is not a terminal or GUI.
+- The framebuffer mirrors serial text output; it is not a terminal or GUI.
 - Networking has no DHCP, socket API, general routing, congestion control, SSH,
   or TLS.
 - TCP keeps bounded state for the single remote-console connection, including

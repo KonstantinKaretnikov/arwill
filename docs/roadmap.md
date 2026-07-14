@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.20.1`.
+Status: `0.20.2`.
 
 Arwill already has:
 
@@ -47,8 +47,8 @@ Arwill already has:
 - [x] a Limine memory map snapshot, first bump-only physical page allocator
   counters, and a small HHDM-backed kernel heap;
 - [x] a tiny fixed-size device registry and `devices` shell command;
-- [x] a fixed framebuffer boot splash followed by serial text mirroring when
-  Limine provides a 32-bit framebuffer;
+- [x] minimal identical boot text on serial and framebuffer when Limine
+  provides a 32-bit framebuffer;
 - [x] simple Arwill Program loader through `exec [program] [file]`, with short
   `/apps` names, explicit image paths, and at most
   one bounded, shell-resolved launch file path;
@@ -681,3 +681,17 @@ driver work, not accidental default access for every ring 3 program.
 
    Verified by: the full QEMU smoke confirms the serial fallback and versioned
    ready line, while a QEMU framebuffer screendump is rendered for visual QA.
+
+   Superseded in `0.20.2` by ADR-0058 after deciding that the additional visual
+   identity did not fit Arwill's minimal system surface.
+
+34. [x] Minimal boot identity
+
+   Status: implemented in `0.20.2` per ADR-0058.
+
+   Scope: remove the specialized boot-presentation console operation, scaled
+   framebuffer drawing, logo, tagline, and presentation-only test. Emit only
+   `Arwill <version> ready` through the normal text console before the prompt.
+
+   Verified by: the full QEMU smoke requires the single ready line across both
+   boots and rejects the retired logo, tagline, and startup hints.
