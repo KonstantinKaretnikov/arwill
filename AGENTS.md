@@ -87,9 +87,11 @@ Rules for future work:
   memory subsystem, userspace heap, or physical page release mechanism.
 - Treat the current device registry as a fixed-size inspection table. It is not
   a full driver model, bus hierarchy, hotplug system, or ownership layer.
-- Treat the current framebuffer text console as a serial-output mirror. It is
-  not a graphics subsystem, terminal emulator, windowing layer, or input focus
-  model.
+- Treat boot presentation as one optional semantic console capability. Serial
+  keeps the ASCII fallback; the Limine framebuffer renders a fixed scaled
+  splash and then resumes serial-output mirroring. This is not an image asset
+  path, graphics subsystem, terminal emulator, windowing layer, runtime theme,
+  or input focus model. See ADR-0057.
 - Treat the current clock as a PIT-backed monotonic millisecond counter with
   10 ms resolution. It is uptime since timer initialization, not RTC/CMOS
   calendar time, a date service, a timezone model, NTP, or process timers.

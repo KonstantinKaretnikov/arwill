@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.20.0`.
+Status: `0.20.1`.
 
 Arwill already has:
 
@@ -47,8 +47,8 @@ Arwill already has:
 - [x] a Limine memory map snapshot, first bump-only physical page allocator
   counters, and a small HHDM-backed kernel heap;
 - [x] a tiny fixed-size device registry and `devices` shell command;
-- [x] framebuffer text console mirroring serial output when Limine provides a
-  32-bit framebuffer;
+- [x] a fixed framebuffer boot splash followed by serial text mirroring when
+  Limine provides a 32-bit framebuffer;
 - [x] simple Arwill Program loader through `exec [program] [file]`, with short
   `/apps` names, explicit image paths, and at most
   one bounded, shell-resolved launch file path;
@@ -668,3 +668,16 @@ driver work, not accidental default access for every ring 3 program.
    persistent text and binary writes across reboot. A focused smoke also boots
    the image from the secondary-master IDE slot and verifies ARFS mount for UTM
    compatibility.
+
+33. [x] Framebuffer boot presentation
+
+   Status: implemented in `0.20.1` per ADR-0057.
+
+   Scope: add one optional semantic boot-banner operation to the console
+   contract; retain a serial ASCII fallback; and let the Limine framebuffer
+   render a fixed, scaled, colored Arwill splash before returning to normal
+   text mirroring. Do not add image assets, a bitmap loader, a graphics API,
+   themes, or animation.
+
+   Verified by: the full QEMU smoke confirms the serial fallback and versioned
+   ready line, while a QEMU framebuffer screendump is rendered for visual QA.

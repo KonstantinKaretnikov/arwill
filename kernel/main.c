@@ -45,16 +45,11 @@ void arwill_kernel_start(
 
     arwill_interrupts_enable(interrupts);
 
-    arwill_console_write_line(console, "   A    RRR   W   W  III  L     L");
-    arwill_console_write_line(console, "  A A   R  R  W   W   I   L     L");
-    arwill_console_write_line(console, " AAAAA  RRR   W W W   I   L     L");
-    arwill_console_write_line(console, " A   A  R R   WW WW   I   L     L");
-    arwill_console_write_line(console, " A   A  R  R  W   W  III  LLLL  LLLL");
-    arwill_console_write_line(console, "");
-    arwill_console_write(console, ARWILL_PROJECT_NAME);
-    arwill_console_write(console, " ");
-    arwill_console_write(console, ARWILL_PROJECT_VERSION);
-    arwill_console_write_line(console, " ready");
+    arwill_console_show_boot_banner(
+        console,
+        ARWILL_PROJECT_NAME,
+        ARWILL_PROJECT_VERSION
+    );
     arwill_console_write_line(console, "config: /owner/arwill.conf");
     arwill_console_write_line(console, "help: type 'help' or press Tab");
 

@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.20.0 has one executable path:
+Arwill 0.20.1 has one executable path:
 
 ```text
 Limine bootloader
@@ -10,7 +10,7 @@ Limine bootloader
   -> small kernel heap initialization from HHDM-mapped physical pages
   -> tiny device registry publication
   -> QEMU serial I/O block
-  -> Limine framebuffer text console mirror
+  -> Limine framebuffer boot presentation and text console mirror
   -> QEMU ATA PIO system-disk initialization
   -> bounded block-device region at LBA 32768
   -> ARFS filesystem mount from that region
@@ -55,7 +55,9 @@ Kernel entry:
 Console contract:
 
 - Lives in `include/arwill/kernel/console.h`.
-- Provides only `write` and `write_line`.
+- Provides text writes plus one optional semantic boot-banner presentation.
+- Falls back to a text-only boot banner when a console has no specialized
+  presentation.
 - Is intentionally smaller than a driver model or formatting library.
 
 Framebuffer text console:
@@ -64,11 +66,12 @@ Framebuffer text console:
   `arch/x86_64/include/arwill/arch/x86_64/framebuffer_console.h`.
 - Implementation lives in `arch/x86_64/boot/framebuffer_console.c`.
 - Uses Limine's first 32-bit framebuffer when available.
-- Mirrors the serial console with a small built-in 5x7 bitmap font.
+- Presents a fixed colored boot splash with scaled glyphs, then mirrors the
+  serial console with the same small built-in 5x7 bitmap font.
 - Handles printable ASCII, newlines, carriage returns, and backspace well
   enough for current shell output.
-- It is not a graphics subsystem: there is no windowing, color theme, font
-  loading, acceleration, scrolling buffer, or input focus.
+- It is not a graphics subsystem: there is no asset loader, windowing, runtime
+  theme, font loading, acceleration, scrolling buffer, or input focus.
 
 Input contract:
 

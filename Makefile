@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.20.0
+PROJECT_VERSION := 0.20.1
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -29,6 +29,9 @@ CONFIG_LOG_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/ker
 BLOCK_DEVICE_HOST_TEST := $(BUILD_DIR)/tests/block_device_test
 BLOCK_DEVICE_HOST_TEST_SOURCES := tests/block_device_test.c kernel/block_device.c
 BLOCK_DEVICE_HOST_TEST_HEADERS := include/arwill/kernel/block_device.h
+CONSOLE_HOST_TEST := $(BUILD_DIR)/tests/console_test
+CONSOLE_HOST_TEST_SOURCES := tests/console_test.c kernel/console.c
+CONSOLE_HOST_TEST_HEADERS := include/arwill/kernel/console.h
 
 BREW_LLVM_PREFIX := $(shell brew --prefix llvm 2>/dev/null)
 BREW_LLD_PREFIX := $(shell brew --prefix lld 2>/dev/null)
@@ -121,10 +124,11 @@ run: build
 
 check: build check-host check-artifacts smoke smoke-ide-slot
 
-check-host: $(IPV4_HOST_TEST) $(CONFIG_LOG_HOST_TEST) $(BLOCK_DEVICE_HOST_TEST)
+check-host: $(IPV4_HOST_TEST) $(CONFIG_LOG_HOST_TEST) $(BLOCK_DEVICE_HOST_TEST) $(CONSOLE_HOST_TEST)
 	@$(IPV4_HOST_TEST)
 	@$(CONFIG_LOG_HOST_TEST)
 	@$(BLOCK_DEVICE_HOST_TEST)
+	@$(CONSOLE_HOST_TEST)
 
 clean:
 	rm -rf $(BUILD_DIR)
@@ -159,6 +163,11 @@ $(BLOCK_DEVICE_HOST_TEST): $(BLOCK_DEVICE_HOST_TEST_SOURCES) $(BLOCK_DEVICE_HOST
 	@mkdir -p $(dir $@)
 	$(CLANG) -std=c11 -Wall -Wextra -Werror -Wpedantic -Wconversion \
 		-Wsign-conversion -Iinclude $(BLOCK_DEVICE_HOST_TEST_SOURCES) -o $@
+
+$(CONSOLE_HOST_TEST): $(CONSOLE_HOST_TEST_SOURCES) $(CONSOLE_HOST_TEST_HEADERS) Makefile
+	@mkdir -p $(dir $@)
+	$(CLANG) -std=c11 -Wall -Wextra -Werror -Wpedantic -Wconversion \
+		-Wsign-conversion -Iinclude $(CONSOLE_HOST_TEST_SOURCES) -o $@
 
 $(KERNEL): $(OBJECTS) arch/x86_64/linker.ld
 	@mkdir -p $(dir $@)

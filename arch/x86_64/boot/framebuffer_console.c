@@ -12,8 +12,10 @@ enum {
     cell_width = 6,
     cell_height = 8,
     framebuffer_bpp = 32,
-    color_background = 0x00101010U,
-    color_foreground = 0x00d8dee9U,
+    color_background = 0x00080d18U,
+    color_foreground = 0x00e8eef8U,
+    color_accent = 0x0048d7ffU,
+    color_muted = 0x008594adU,
 };
 
 struct framebuffer_console_context {
@@ -139,6 +141,87 @@ static void draw_pixel(
     *pixel = color;
 }
 
+static void draw_rectangle(
+    struct framebuffer_console_context *context,
+    uint64_t x_start,
+    uint64_t y_start,
+    uint64_t width,
+    uint64_t height,
+    uint32_t color
+) {
+    for (uint64_t y = 0; y < height; y++) {
+        for (uint64_t x = 0; x < width; x++) {
+            draw_pixel(context, x_start + x, y_start + y, color);
+        }
+    }
+}
+
+static size_t text_length(const char *text) {
+    size_t length = 0;
+
+    while (text[length] != '\0') {
+        length++;
+    }
+
+    return length;
+}
+
+static uint64_t scaled_text_width(const char *text, uint64_t scale) {
+    const size_t length = text_length(text);
+
+    if (length == 0U) {
+        return 0;
+    }
+
+    return ((uint64_t)length * (glyph_width + 1U) - 1U) * scale;
+}
+
+static void draw_scaled_char(
+    struct framebuffer_console_context *context,
+    uint8_t value,
+    uint64_t x_start,
+    uint64_t y_start,
+    uint64_t scale,
+    uint32_t color
+) {
+    const uint8_t *rows = glyph_rows(value);
+
+    for (uint64_t y = 0; y < glyph_height; y++) {
+        const uint8_t bits = rows[y];
+
+        for (uint64_t x = 0; x < glyph_width; x++) {
+            const uint8_t mask = (uint8_t)(1U << (glyph_width - x - 1U));
+
+            if ((bits & mask) != 0U) {
+                draw_rectangle(
+                    context,
+                    x_start + x * scale,
+                    y_start + y * scale,
+                    scale,
+                    scale,
+                    color
+                );
+            }
+        }
+    }
+}
+
+static void draw_scaled_text(
+    struct framebuffer_console_context *context,
+    const char *text,
+    uint64_t x_start,
+    uint64_t y_start,
+    uint64_t scale,
+    uint32_t color
+) {
+    uint64_t x = x_start;
+
+    for (const char *cursor = text; *cursor != '\0'; cursor++) {
+        draw_scaled_char(context, (uint8_t)*cursor, x, y_start, scale, color);
+        x += (glyph_width + 1U) * scale;
+    }
+}
+
 static void clear_cell(struct framebuffer_console_context *context, uint64_t column, uint64_t row) {
     const uint64_t x_start = column * cell_width;
     const uint64_t y_start = row * cell_height;
@@ -251,9 +334,119 @@ static void framebuffer_console_write(void *raw_context, const char *text) {
     }
 }
 
+static void framebuffer_show_boot_banner(
+    void *raw_context,
+    const char *system_name,
+    const char *system_version
+) {
+    struct framebuffer_console_context *context =
+        (struct framebuffer_console_context *)raw_context;
+
+    if (context == 0 || system_name == 0 || system_version == 0) {
+        return;
+    }
+
+    arwill_console_write_boot_banner(
+        context->serial,
+        system_name,
+        system_version
+    );
+
+    if (!context->available) {
+        return;
+    }
+
+    clear_screen(context);
+
+    const uint64_t title_scale = context->width >= 900U ? 7U :
+        (context->width >= 600U ? 5U : 3U);
+    const uint64_t mark_scale = title_scale + 3U;
+    const uint64_t detail_scale = context->width >= 600U ? 2U : 1U;
+    const uint64_t mark_width = glyph_width * mark_scale;
+    const uint64_t title_width = scaled_text_width(system_name, title_scale);
+    const uint64_t gap = title_scale * 5U;
+    const uint64_t group_width = mark_width + gap + title_width;
+    const uint64_t group_x = context->width > group_width ?
+        (context->width - group_width) / 2U : 8U;
+    const uint64_t top = context->height >= 500U ? 64U : 28U;
+    const uint64_t title_y = top + (glyph_height * (mark_scale - title_scale)) / 2U;
+
+    draw_scaled_text(
+        context,
+        "A",
+        group_x,
+        top,
+        mark_scale,
+        color_accent
+    );
+    draw_scaled_text(
+        context,
+        system_name,
+        group_x + mark_width + gap,
+        title_y,
+        title_scale,
+        color_foreground
+    );
+
+    const char *tagline = "ARCHITECTURE IS THE PRODUCT";
+    const uint64_t tagline_width = scaled_text_width(tagline, detail_scale);
+    const uint64_t tagline_x = context->width > tagline_width ?
+        (context->width - tagline_width) / 2U : 8U;
+    const uint64_t tagline_y = top + glyph_height * mark_scale + 24U;
+    draw_scaled_text(
+        context,
+        tagline,
+        tagline_x,
+        tagline_y,
+        detail_scale,
+        color_muted
+    );
+
+    const uint64_t rule_width = context->width > 96U ? context->width - 96U : context->width;
+    const uint64_t rule_x = (context->width - rule_width) / 2U;
+    const uint64_t rule_y = tagline_y + glyph_height * detail_scale + 18U;
+    draw_rectangle(context, rule_x, rule_y, rule_width, 2U, color_accent);
+
+    const char *version_label = "VERSION";
+    const char *ready_label = "SYSTEM READY";
+    const uint64_t ready_width = scaled_text_width(ready_label, detail_scale);
+    const uint64_t status_y = rule_y + 18U;
+    draw_scaled_text(
+        context,
+        version_label,
+        rule_x,
+        status_y,
+        detail_scale,
+        color_muted
+    );
+    draw_scaled_text(
+        context,
+        system_version,
+        rule_x + scaled_text_width(version_label, detail_scale) + 4U * detail_scale,
+        status_y,
+        detail_scale,
+        color_foreground
+    );
+    draw_scaled_text(
+        context,
+        ready_label,
+        context->width > rule_x + ready_width ? context->width - rule_x - ready_width : rule_x,
+        status_y,
+        detail_scale,
+        color_accent
+    );
+
+    context->column = 0;
+    context->row = (status_y + glyph_height * detail_scale + 24U) / cell_height;
+    if (context->row >= context->rows) {
+        context->row = context->rows - 1U;
+    }
+}
+
 static const struct arwill_console framebuffer_console = {
     .context = &framebuffer_console_context,
     .write = framebuffer_console_write,
+    .show_boot_banner = framebuffer_show_boot_banner,
 };
 
 const struct arwill_console *arwill_x86_64_framebuffer_console_init(
