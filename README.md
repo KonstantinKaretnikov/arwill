@@ -77,8 +77,9 @@ The script targets the exact VM name `Arwill OS`, asks for destructive
 confirmation, clones the old VM configuration, replaces its single IDE drive
 with `build/arwill.img`, and deletes the old VM only after the replacement was
 created successfully. This preserves UTM-specific display, serial, e1000, and
-network settings. Use `scripts/recreate_utm.sh --help` for a different name,
-an existing image, non-interactive operation, or immediate serial attachment.
+network settings. The VM name is deliberately fixed as `Arwill OS`. Use
+`scripts/recreate_utm.sh --help` for an existing image, non-interactive
+operation, or immediate serial attachment.
 
 Boot output is intentionally minimal and identical on serial and framebuffer:
 

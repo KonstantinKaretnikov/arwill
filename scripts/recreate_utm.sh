@@ -9,7 +9,6 @@ Build a fresh Arwill image, replace an existing UTM VM while preserving its
 configuration, and start the replacement.
 
 Options:
-  --name NAME       exact UTM VM name (default: Arwill OS)
   --image PATH      image to install (default: build/arwill.img)
   --no-build        use the existing image without running make build
   --attach          attach this terminal to the first UTM serial port
@@ -17,7 +16,6 @@ Options:
   -h, --help        show this help
 
 Environment:
-  UTM_VM_NAME       default VM name
   UTM_IMAGE         default image path
 EOF
 }
@@ -26,7 +24,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 apple_script="$script_dir/recreate_utm.applescript"
 utmctl=/Applications/UTM.app/Contents/MacOS/utmctl
-vm_name=${UTM_VM_NAME:-Arwill OS}
+vm_name='Arwill OS'
 image_path=${UTM_IMAGE:-$repo_root/build/arwill.img}
 build_image=true
 attach_serial=false
@@ -34,11 +32,6 @@ confirmed=false
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --name)
-            [ "$#" -ge 2 ] || { echo "--name requires a value" >&2; exit 2; }
-            vm_name=$2
-            shift 2
-            ;;
         --image)
             [ "$#" -ge 2 ] || { echo "--image requires a value" >&2; exit 2; }
             image_path=$2
@@ -71,7 +64,6 @@ done
 [ "$(uname -s)" = Darwin ] || { echo "UTM recreation requires macOS" >&2; exit 1; }
 [ -x "$utmctl" ] || { echo "UTM CLI not found at $utmctl" >&2; exit 1; }
 [ -f "$apple_script" ] || { echo "missing helper: $apple_script" >&2; exit 1; }
-[ -n "$vm_name" ] || { echo "VM name must not be empty" >&2; exit 2; }
 
 if [ "$build_image" = true ]; then
     echo "Building fresh Arwill image..."
