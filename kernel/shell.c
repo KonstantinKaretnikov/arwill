@@ -543,7 +543,14 @@ static void print_remote_console_info(
     arwill_console_write(console, ", timeouts ");
     write_uint64_decimal(console, ipv4->tcp_timeouts);
     arwill_console_write(console, ", pending ");
-    arwill_console_write_line(console, ipv4->tcp_pending.active ? "yes" : "no");
+    arwill_console_write_line(console, ipv4->tcp_pending_count != 0U ? "yes" : "no");
+    arwill_console_write(console, "tcp timing: srtt ");
+    write_uint64_decimal(console, ipv4->tcp_smoothed_round_trip_ms);
+    arwill_console_write(console, " ms, rto ");
+    write_uint64_decimal(console, ipv4->tcp_retransmission_timeout_ms);
+    arwill_console_write(console, " ms, backoffs ");
+    write_uint64_decimal(console, ipv4->tcp_retransmission_backoffs);
+    arwill_console_write_line(console, "");
 }
 
 static uint64_t saturating_add_uint64(uint64_t left, uint64_t right) {
@@ -1067,6 +1074,20 @@ static void print_tcp_info(
     write_uint64_decimal(console, ipv4->tcp_unknown_port_frames);
     arwill_console_write(console, ", tuple mismatch ");
     write_uint64_decimal(console, ipv4->tcp_tuple_mismatches);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "tcp flow: receive window ");
+    write_uint64_decimal(console, arwill_remote_console_receive_capacity -
+        ipv4->remote_console_receive_count);
+    arwill_console_write(console, "/");
+    write_uint64_decimal(console, arwill_remote_console_receive_capacity);
+    arwill_console_write(console, ", peer window ");
+    write_uint64_decimal(console, ipv4->tcp_listener.peer_window);
+    arwill_console_write(console, ", peer mss ");
+    write_uint64_decimal(console, ipv4->tcp_listener.peer_maximum_segment_size);
+    arwill_console_write(console, ", drops ");
+    write_uint64_decimal(console, ipv4->tcp_receive_window_drops);
+    arwill_console_write(console, ", updates ");
+    write_uint64_decimal(console, ipv4->tcp_window_updates);
     arwill_console_write_line(console, "");
     print_remote_console_info(console, ipv4);
 }

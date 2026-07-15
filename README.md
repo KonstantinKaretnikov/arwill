@@ -1,6 +1,6 @@
 # Arwill
 
-Arwill `0.21.0` is a small experimental x86-64 operating system for QEMU.
+Arwill `0.21.1` is a small experimental x86-64 operating system for QEMU.
 It is built around explicit, replaceable components and documented decisions.
 See [MANIFESTO.md](MANIFESTO.md).
 
@@ -82,7 +82,7 @@ console window when the replacement starts.
 Boot output is intentionally minimal and identical on serial and framebuffer:
 
 ```text
-Arwill 0.21.0 ready
+Arwill 0.21.1 ready
 Arwill:/>
 ```
 
@@ -262,9 +262,10 @@ records keys, commands, or file contents.
 - Networking has no DHCP, socket API, general routing, congestion control, SSH,
   or TLS.
 - TCP keeps bounded state for the single remote-console connection, including
-  a complete peer tuple, bounded close states, and one retained output segment
-  for limited retransmission. `network` separates ICMP echo counters, general
-  TCP transport counters, and remote-console service counters.
+  a complete peer tuple, bounded close states, negotiated MSS, an advertised
+  receive window, adaptive retransmission timing, and four retained output
+  segments. `network` separates ICMP echo counters, general TCP transport
+  counters, and remote-console service counters.
 
 ## Verification
 

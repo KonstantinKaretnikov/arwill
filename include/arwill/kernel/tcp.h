@@ -32,6 +32,8 @@ struct arwill_tcp_segment {
     uint32_t sequence;
     uint32_t acknowledgement;
     uint8_t flags;
+    uint16_t window;
+    uint16_t maximum_segment_size;
     size_t payload_length;
 };
 
@@ -42,6 +44,8 @@ struct arwill_tcp_listener {
     uint8_t peer_address[4];
     uint32_t sequence;
     uint32_t acknowledgement;
+    uint16_t peer_window;
+    uint16_t peer_maximum_segment_size;
     enum arwill_tcp_state state;
 };
 

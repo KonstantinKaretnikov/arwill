@@ -32,6 +32,8 @@ static void prepare_reply(const struct arwill_tcp_segment *incoming,
     reply->sequence = 0;
     reply->acknowledgement = 0;
     reply->flags = 0;
+    reply->window = 0U;
+    reply->maximum_segment_size = 0U;
     reply->payload_length = 0;
 }
 
@@ -48,6 +50,8 @@ void arwill_tcp_listener_init(struct arwill_tcp_listener *listener, uint16_t por
     }
     listener->sequence = initial_sequence;
     listener->acknowledgement = 0;
+    listener->peer_window = 0U;
+    listener->peer_maximum_segment_size = 536U;
     listener->state = arwill_tcp_state_listen;
 }
 
@@ -95,6 +99,8 @@ int arwill_tcp_listener_receive(struct arwill_tcp_listener *listener,
 
     prepare_reply(incoming, reply);
 
+    listener->peer_window = incoming->window;
+
     if ((incoming->flags & arwill_tcp_flag_rst) != 0U) {
         if (listener->state != arwill_tcp_state_listen) {
             arwill_tcp_listener_reset(listener, listener->sequence);
@@ -108,6 +114,9 @@ int arwill_tcp_listener_receive(struct arwill_tcp_listener *listener,
         copy_address(listener->local_address, incoming->destination_address);
         copy_address(listener->peer_address, incoming->source_address);
         listener->peer_port = incoming->source_port;
+        if (incoming->maximum_segment_size != 0U) {
+            listener->peer_maximum_segment_size = incoming->maximum_segment_size;
+        }
         listener->acknowledgement = incoming->sequence + 1U;
         reply->sequence = listener->sequence;
         reply->acknowledgement = listener->acknowledgement;
@@ -246,6 +255,8 @@ int arwill_tcp_listener_begin_close(struct arwill_tcp_listener *listener,
     segment->sequence = listener->sequence;
     segment->acknowledgement = listener->acknowledgement;
     segment->flags = arwill_tcp_flag_fin | arwill_tcp_flag_ack;
+    segment->window = 0U;
+    segment->maximum_segment_size = 0U;
     segment->payload_length = 0;
     listener->sequence++;
     listener->state = listener->state == arwill_tcp_state_close_wait

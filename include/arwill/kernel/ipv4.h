@@ -14,7 +14,11 @@ enum {
     arwill_remote_console_receive_capacity = 512,
     arwill_remote_console_transmit_capacity = 8192,
     arwill_tcp_pending_payload_capacity = 1024,
+    arwill_tcp_pending_segment_capacity = 4,
+    arwill_tcp_local_maximum_segment_size = 1024,
     arwill_tcp_retransmission_interval_ms = 250,
+    arwill_tcp_retransmission_minimum_ms = 100,
+    arwill_tcp_retransmission_maximum_ms = 2000,
     arwill_tcp_max_retransmissions = 3,
     arwill_tcp_time_wait_ms = 500,
     arwill_tcp_close_timeout_ms = 2500,
@@ -26,6 +30,7 @@ struct arwill_tcp_pending_segment {
     size_t payload_length;
     uint32_t expected_acknowledgement;
     uint64_t sent_at_milliseconds;
+    uint64_t retransmission_timeout_ms;
     unsigned retransmissions;
     int active;
 };
@@ -45,8 +50,16 @@ struct arwill_ipv4_stack {
     uint32_t icmp_checksum_drops;
     struct arwill_tcp_listener tcp_listener;
     uint8_t tcp_peer_mac[arwill_network_mac_length];
-    struct arwill_tcp_pending_segment tcp_pending;
+    struct arwill_tcp_pending_segment
+        tcp_pending[arwill_tcp_pending_segment_capacity];
+    size_t tcp_pending_head;
+    size_t tcp_pending_count;
     uint64_t tcp_time_wait_started_milliseconds;
+    uint64_t tcp_smoothed_round_trip_ms;
+    uint64_t tcp_round_trip_variance_ms;
+    uint64_t tcp_retransmission_timeout_ms;
+    uint16_t tcp_last_advertised_window;
+    int tcp_window_update_pending;
     uint8_t remote_console_receive[arwill_remote_console_receive_capacity];
     size_t remote_console_receive_head;
     size_t remote_console_receive_count;
@@ -69,7 +82,10 @@ struct arwill_ipv4_stack {
     uint32_t tcp_checksum_drops;
     uint32_t tcp_duplicate_acks;
     uint32_t tcp_retransmissions;
+    uint32_t tcp_retransmission_backoffs;
     uint32_t tcp_timeouts;
+    uint32_t tcp_receive_window_drops;
+    uint32_t tcp_window_updates;
     uint32_t remote_console_connections;
     uint32_t remote_console_disconnects;
     uint32_t remote_console_bytes_received;

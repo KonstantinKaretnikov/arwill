@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.21.0`.
+Status: `0.21.1`.
 
 Arwill already has:
 
@@ -722,13 +722,19 @@ driver work, not accidental default access for every ring 3 program.
    sequence wraparound, active close, passive close, and retained reliability;
    the full QEMU smoke retains authenticated console reuse and clean exit.
 
-37. [ ] Bounded TCP flow control and retransmission v2
+37. [x] Bounded TCP flow control and retransmission v2
 
-   Planned for `0.21.1` per ADR-0060.
+   Status: implemented in `0.21.1` per ADR-0060.
 
    Scope: advertise receive capacity, negotiate MSS, add adaptive bounded
    retransmission timing, and retain a fixed multi-segment send queue without
    dynamic allocation.
+
+   Verified by: native packet tests cover MSS negotiation, three-segment
+   flight with cumulative acknowledgement, bounded adaptive RTO, receive-ring
+   saturation, rejection without false acknowledgement, zero-window
+   advertisement, and explicit window reopening. The full QEMU TCP smoke
+   retains interactive `nc` behavior.
 
 38. [ ] Kernel TCP stream contract
 
