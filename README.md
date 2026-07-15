@@ -73,13 +73,12 @@ and start it with:
 make utm-recreate
 ```
 
-The script targets the fixed VM name `Arwill OS`, asks for a simple `y/N`
-confirmation, clones the old VM configuration, replaces its single IDE drive
-with `build/arwill.img`, and deletes the old VM only after the replacement was
+The script immediately targets the fixed VM name `Arwill OS` without asking,
+clones the old VM configuration, replaces its single IDE drive with
+`build/arwill.img`, and deletes the old VM only after the replacement was
 created successfully. This preserves UTM-specific display, serial, e1000, and
-network settings. The VM name is deliberately fixed as `Arwill OS`. Use
-`scripts/recreate_utm.sh --help` for an existing image, non-interactive
-operation, or immediate serial attachment.
+network settings. Use `scripts/recreate_utm.sh --help` for an existing image or
+immediate serial attachment.
 
 Boot output is intentionally minimal and identical on serial and framebuffer:
 

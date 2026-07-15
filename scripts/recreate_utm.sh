@@ -12,7 +12,6 @@ Options:
   --image PATH      image to install (default: build/arwill.img)
   --no-build        use the existing image without running make build
   --attach          attach this terminal to the first UTM serial port
-  --yes             skip the destructive confirmation prompt
   -h, --help        show this help
 
 Environment:
@@ -28,7 +27,6 @@ vm_name='Arwill OS'
 image_path=${UTM_IMAGE:-$repo_root/build/arwill.img}
 build_image=true
 attach_serial=false
-confirmed=false
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -43,10 +41,6 @@ while [ "$#" -gt 0 ]; do
             ;;
         --attach)
             attach_serial=true
-            shift
-            ;;
-        --yes)
-            confirmed=true
             shift
             ;;
         -h|--help)
@@ -79,22 +73,6 @@ case "$image_path" in
         exit 1
         ;;
 esac
-
-if [ "$confirmed" != true ]; then
-    [ -t 0 ] || {
-        echo "refusing destructive UTM replacement without --yes in a non-interactive shell" >&2
-        exit 1
-    }
-    echo "This will stop and permanently delete the UTM VM named: $vm_name"
-    echo "Its configuration will be cloned first and its only IDE drive replaced with:"
-    echo "  $image_path"
-    printf "Continue? [y/N] "
-    IFS= read -r confirmation
-    case "$confirmation" in
-        y|Y|yes|YES|Yes) ;;
-        *) echo "cancelled" >&2; exit 1 ;;
-    esac
-fi
 
 replacement_name="$vm_name replacement $(date +%s)-$$"
 echo "Replacing UTM VM '$vm_name'..."
