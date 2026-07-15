@@ -8,6 +8,23 @@ on waitForStatus(vmReference, expectedStatus, attempts)
     return false
 end waitForStatus
 
+on waitForCloneReady(vmName, attempts)
+    tell application "UTM"
+        repeat attempts times
+            try
+                set vmReference to virtual machine named vmName
+                if backend of vmReference is qemu then
+                    set configRecord to configuration of vmReference
+                    set driveRecords to drives of configRecord
+                    if (length of driveRecords) is 1 then return true
+                end if
+            end try
+            delay 0.25
+        end repeat
+    end tell
+    return false
+end waitForCloneReady
+
 on run arguments
     if (count of arguments) is not 3 then error "expected VM name, image path, and replacement name"
 
@@ -15,8 +32,6 @@ on run arguments
     set imagePath to item 2 of arguments
     set replacementName to item 3 of arguments
     set imageFile to POSIX file imagePath
-    set replacementVM to missing value
-    set oldDeleted to false
 
     tell application "UTM"
         set oldVM to missing value
@@ -45,45 +60,47 @@ on run arguments
             end if
         end if
 
+        duplicate oldVM with properties {configuration:{name:replacementName}}
         try
-            set replacementVM to duplicate oldVM with properties {configuration:{name:replacementName}}
-            set replacementConfig to configuration of replacementVM
+            if not my waitForCloneReady(replacementName, 80) then
+                error "replacement VM configuration did not become ready: " & replacementName
+            end if
+            set replacementConfig to configuration of virtual machine named replacementName
 
             if architecture of replacementConfig is not "x86_64" then
                 error "VM architecture must be x86_64"
             end if
-            if (count of drives of replacementConfig) is not 1 then
+            set replacementDrives to drives of replacementConfig
+            if (length of replacementDrives) is not 1 then
                 error "VM must have exactly one drive"
             end if
 
-            set replacementDrive to item 1 of drives of replacementConfig
+            set replacementDrive to item 1 of replacementDrives
             if interface of replacementDrive is not IDE then
                 error "the only VM drive must use the IDE interface"
             end if
             set replacementDriveId to id of replacementDrive
             set item 1 of drives of replacementConfig to {id:replacementDriveId, source:imageFile}
-            update configuration of replacementVM with replacementConfig
-
-            delete oldVM
-            set oldDeleted to true
-
-            set finalConfig to configuration of replacementVM
-            set name of finalConfig to vmName
-            update configuration of replacementVM with finalConfig
-            start replacementVM
-
-            if not my waitForStatus(replacementVM, started, 80) then
-                error "replacement VM was created but did not reach started state: " & vmName
-            end if
-
-            return id of replacementVM
+            update configuration of virtual machine named replacementName with replacementConfig
         on error errorMessage number errorNumber
-            if replacementVM is not missing value and oldDeleted is false then
-                try
-                    delete replacementVM
-                end try
-            end if
+            try
+                delete virtual machine named replacementName
+            end try
             error errorMessage number errorNumber
         end try
+
+        delete oldVM
+
+        set finalConfig to configuration of virtual machine named replacementName
+        set name of finalConfig to vmName
+        update configuration of virtual machine named replacementName with finalConfig
+        set finalVM to virtual machine named vmName
+        start finalVM
+
+        if not my waitForStatus(finalVM, started, 80) then
+            error "replacement VM was created but did not reach started state: " & vmName
+        end if
+
+        return id of finalVM
     end tell
 end run
