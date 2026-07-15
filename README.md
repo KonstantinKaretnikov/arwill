@@ -66,6 +66,20 @@ ready prompt appears, run `ping 10.0.2.15` in a macOS terminal. UTM's
 `Emulated VLAN` port forwarding supports only TCP and UDP, so it cannot expose
 ICMP ping. See the [UTM network settings documentation](https://docs.getutm.app/settings-qemu/devices/network/network/).
 
+After the VM has been configured once, replace it with a freshly built image
+and start it with:
+
+```sh
+make utm-recreate
+```
+
+The script targets the exact VM name `Arwill OS`, asks for destructive
+confirmation, clones the old VM configuration, replaces its single IDE drive
+with `build/arwill.img`, and deletes the old VM only after the replacement was
+created successfully. This preserves UTM-specific display, serial, e1000, and
+network settings. Use `scripts/recreate_utm.sh --help` for a different name,
+an existing image, non-interactive operation, or immediate serial attachment.
+
 Boot output is intentionally minimal and identical on serial and framebuffer:
 
 ```text

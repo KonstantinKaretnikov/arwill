@@ -103,7 +103,7 @@ DEPENDENCIES := $(OBJECTS:.o=.d)
 
 -include $(DEPENDENCIES)
 
-.PHONY: setup build image run check check-host clean check-tools check-artifacts smoke smoke-ide-slot FORCE
+.PHONY: setup build image run utm-recreate check check-host clean check-tools check-artifacts smoke smoke-ide-slot FORCE
 
 setup:
 	@scripts/setup_limine.sh
@@ -118,6 +118,9 @@ run: build
 	status=$$?; \
 	if [ "$$status" -eq "$(QEMU_POWEROFF_EXIT_STATUS)" ]; then exit 0; fi; \
 	exit "$$status"
+
+utm-recreate:
+	@scripts/recreate_utm.sh
 
 check: build check-host check-artifacts smoke smoke-ide-slot
 
