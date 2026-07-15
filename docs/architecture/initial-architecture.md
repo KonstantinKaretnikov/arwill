@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.20.2 has one executable path:
+Arwill 0.20.3 has one executable path:
 
 ```text
 Limine bootloader
@@ -350,6 +350,8 @@ QEMU e1000 network device:
   uses that address for receive filtering and generated Ethernet frames.
 - Does not assume the deterministic MAC used by the repository's normal QEMU
   launch path; UTM may assign a different address to the same emulated device.
+- The bounded IPv4 poll path answers valid, unfragmented ICMP echo requests for
+  `10.0.2.15` as well as ARP requests and remote-console TCP traffic.
 
 QEMU serial I/O:
 

@@ -1,6 +1,6 @@
 # Arwill
 
-Arwill `0.20.2` is a small experimental x86-64 operating system for QEMU.
+Arwill `0.20.3` is a small experimental x86-64 operating system for QEMU.
 It is built around explicit, replaceable components and documented decisions.
 See [MANIFESTO.md](MANIFESTO.md).
 
@@ -52,10 +52,24 @@ secondary-master attachment.
 The e1000 driver uses the MAC configured by the VM, so UTM's generated address
 does not need to match the deterministic address used by `make run`.
 
+To ping Arwill from the Mac, configure the UTM network device as follows before
+starting the VM:
+
+- emulated network card: `Intel Gigabit Ethernet (e1000)`;
+- network mode: `macOS Shared`;
+- guest network: `10.0.2.0/24`;
+- host address: `10.0.2.2`;
+- isolate guest from host: disabled.
+
+Arwill has the fixed address `10.0.2.15/24`; it does not use DHCP. After the
+ready prompt appears, run `ping 10.0.2.15` in a macOS terminal. UTM's
+`Emulated VLAN` port forwarding supports only TCP and UDP, so it cannot expose
+ICMP ping. See the [UTM network settings documentation](https://docs.getutm.app/settings-qemu/devices/network/network/).
+
 Boot output is intentionally minimal and identical on serial and framebuffer:
 
 ```text
-Arwill 0.20.2 ready
+Arwill 0.20.3 ready
 Arwill:/>
 ```
 

@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.20.2`.
+Status: `0.20.3`.
 
 Arwill already has:
 
@@ -695,3 +695,17 @@ driver work, not accidental default access for every ring 3 program.
 
    Verified by: the full QEMU smoke requires the single ready line across both
    boots and rejects the retired logo, tagline, and startup hints.
+
+35. [x] Host-visible ICMP echo replies
+
+   Status: implemented in `0.20.3` per ADR-0059.
+
+   Scope: extend the existing bounded network poll path to validate and answer
+   unfragmented ICMP echo requests addressed to Arwill while retaining the
+   fixed `10.0.2.15/24` configuration. Document a matching UTM macOS Shared
+   network so the host can reach the guest directly. Do not add DHCP, dynamic
+   addressing, IP fragmentation, or a general ICMP API.
+
+   Verified by: the native IPv4 host test checks a valid echo reply including
+   checksums, identifier, sequence, and payload, and rejects a request with a
+   bad ICMP checksum. UTM remains a manual platform target.

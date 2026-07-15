@@ -125,6 +125,46 @@ static uint64_t fake_milliseconds(void *context) {
 void arwill_cpu_wait_for_interrupt(void) {
 }
 
+static void queue_echo_request(struct fake_network *network) {
+    uint8_t *frame = network->incoming;
+    uint8_t *ip = frame + 14U;
+    uint8_t *icmp = ip + 20U;
+    const uint8_t payload[4] = { 0x61U, 0x72U, 0x77U, 0x69U };
+
+    for (size_t index = 0; index < sizeof(network->incoming); index++) {
+        frame[index] = 0U;
+    }
+    for (size_t index = 0; index < arwill_network_mac_length; index++) {
+        frame[index] = guest_mac[index];
+        frame[6U + index] = peer_mac[index];
+    }
+    put16(frame, 12U, 0x0800U);
+    ip[0] = 0x45U;
+    put16(ip, 2U, 32U);
+    put16(ip, 4U, 0x1234U);
+    ip[6] = 0x40U;
+    ip[8] = 64U;
+    ip[9] = 1U;
+    ip[12] = 10U;
+    ip[13] = 0U;
+    ip[14] = 2U;
+    ip[15] = 2U;
+    ip[16] = 10U;
+    ip[17] = 0U;
+    ip[18] = 2U;
+    ip[19] = 15U;
+    put16(ip, 10U, checksum(ip, 20U));
+    icmp[0] = 8U;
+    put16(icmp, 4U, 0x4321U);
+    put16(icmp, 6U, 7U);
+    for (size_t index = 0; index < sizeof(payload); index++) {
+        icmp[8U + index] = payload[index];
+    }
+    put16(icmp, 2U, checksum(icmp, 12U));
+    network->incoming_length = 60U;
+    network->incoming_ready = 1;
+}
+
 static void queue_segment(struct fake_network *network, uint16_t source_port,
     uint32_t sequence, uint32_t acknowledgement, uint8_t flags,
     const uint8_t *payload, size_t payload_length) {
@@ -201,6 +241,46 @@ int main(void) {
     if (!expect(arwill_ipv4_init(
             &stack, &network, &clock, test_remote_console_port
         ), "stack initialization")) {
+        return 1;
+    }
+
+    arwill_ipv4_remote_console_stop(&stack);
+    queue_echo_request(&fake);
+    if (!expect(arwill_ipv4_poll_tcp(&stack), "ICMP echo request accepted")
+        || !expect(fake.send_count == 1U, "ICMP echo reply sent")
+        || !expect(fake.outgoing_length == 60U, "ICMP reply padded")
+        || !expect(get16(fake.outgoing, 12U) == 0x0800U,
+            "ICMP reply Ethernet type")
+        || !expect(fake.outgoing[23] == 1U, "ICMP reply IPv4 protocol")
+        || !expect(fake.outgoing[34] == 0U && fake.outgoing[35] == 0U,
+            "ICMP echo reply type and code")
+        || !expect(get16(fake.outgoing, 38U) == 0x4321U,
+            "ICMP identifier preserved")
+        || !expect(get16(fake.outgoing, 40U) == 7U,
+            "ICMP sequence preserved")
+        || !expect(fake.outgoing[42] == 0x61U && fake.outgoing[43] == 0x72U &&
+            fake.outgoing[44] == 0x77U && fake.outgoing[45] == 0x69U,
+            "ICMP payload preserved")
+        || !expect(checksum(fake.outgoing + 14U, 20U) == 0U,
+            "ICMP reply IPv4 checksum")
+        || !expect(checksum(fake.outgoing + 34U, 12U) == 0U,
+            "ICMP reply checksum")) {
+        return 1;
+    }
+
+    queue_echo_request(&fake);
+    fake.incoming[44] ^= 1U;
+    if (!expect(!arwill_ipv4_poll_tcp(&stack),
+            "bad ICMP checksum rejected")
+        || !expect(fake.send_count == 1U,
+            "bad ICMP request produced no reply")) {
+        return 1;
+    }
+    fake.send_count = 0U;
+    fake.outgoing_length = 0U;
+    if (!expect(arwill_ipv4_remote_console_start(
+            &stack, test_remote_console_port
+        ), "remote console restarted after ICMP test")) {
         return 1;
     }
 
@@ -319,6 +399,6 @@ int main(void) {
         return 1;
     }
 
-    puts("IPv4/TCP host test passed");
+    puts("IPv4/ICMP/TCP host test passed");
     return 0;
 }

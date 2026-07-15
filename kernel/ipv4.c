@@ -168,6 +168,57 @@ static int send_arp_reply(struct arwill_ipv4_stack *stack, const uint8_t *reques
     return arwill_network_send_frame(stack->network, frame, sizeof(frame));
 }
 
+static int send_echo_reply(struct arwill_ipv4_stack *stack,
+    const uint8_t *request, size_t request_length) {
+    uint8_t frame[arwill_network_frame_capacity];
+    const uint8_t *request_ip = request + 14U;
+    const size_t ip_header_length = (size_t)(request_ip[0] & 0x0fU) * 4U;
+    const size_t ip_length = get16(request_ip, 2U);
+    const size_t frame_length = 14U + ip_length;
+
+    if ((request_ip[0] >> 4U) != 4U || ip_header_length < 20U ||
+        ip_length < ip_header_length + 8U || frame_length > request_length ||
+        get16(request_ip, 6U) & 0x3fffU || request_ip[9] != 1U ||
+        !same_bytes(request_ip + 16U, stack->address, 4U) ||
+        checksum(request_ip, ip_header_length) != 0U) {
+        return 0;
+    }
+
+    const size_t icmp_length = ip_length - ip_header_length;
+    const uint8_t *request_icmp = request_ip + ip_header_length;
+    if (request_icmp[0] != 8U || request_icmp[1] != 0U ||
+        checksum(request_icmp, icmp_length) != 0U) {
+        return 0;
+    }
+
+    for (size_t index = 0; index < sizeof(frame); index++) {
+        frame[index] = 0U;
+    }
+    for (size_t index = 0; index < frame_length; index++) {
+        frame[index] = request[index];
+    }
+    for (size_t index = 0; index < arwill_network_mac_length; index++) {
+        frame[index] = request[6U + index];
+        frame[6U + index] = stack->mac[index];
+    }
+
+    uint8_t *ip = frame + 14U;
+    for (size_t index = 0; index < 4U; index++) {
+        ip[12U + index] = stack->address[index];
+        ip[16U + index] = request_ip[12U + index];
+    }
+    ip[8] = 64U;
+    put16(ip, 10U, 0U);
+    put16(ip, 10U, checksum(ip, ip_header_length));
+
+    uint8_t *icmp = ip + ip_header_length;
+    icmp[0] = 0U;
+    put16(icmp, 2U, 0U);
+    put16(icmp, 2U, checksum(icmp, icmp_length));
+    return arwill_network_send_frame(stack->network, frame,
+        frame_length < 60U ? 60U : frame_length);
+}
+
 static int resolve_gateway(struct arwill_ipv4_stack *stack) {
     uint8_t frame[arwill_network_frame_capacity];
     size_t length = 0;
@@ -530,6 +581,10 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
     if (length >= 42U && get16(frame, 12U) == 0x0806U && get16(frame, 20U) == 1U &&
         same_bytes(frame + 38U, stack->address, 4U)) {
         return send_arp_reply(stack, frame);
+    }
+    if (length >= 42U && get16(frame, 12U) == 0x0800U &&
+        (frame[14] >> 4U) == 4U && frame[23] == 1U) {
+        return send_echo_reply(stack, frame, length);
     }
     if (!stack->remote_console_running) {
         return 0;
