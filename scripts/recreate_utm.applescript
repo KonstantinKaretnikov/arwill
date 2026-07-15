@@ -76,7 +76,7 @@ on run arguments
             end if
         end if
 
-        make new virtual machine with properties {backend:qemu, configuration:{name:replacementName, architecture:"x86_64", machine:"pc", memory:128, cpu cores:1, hypervisor:false, uefi:true, drives:{{removable:false, interface:IDE, raw:true, source:imageFile}}}}
+        make new virtual machine with properties {backend:qemu, configuration:{name:replacementName, architecture:"x86_64", machine:"pc", memory:128, cpu cores:1, hypervisor:false, uefi:false, drives:{{removable:false, interface:IDE, raw:true, source:imageFile}}}}
         try
             if not my waitForVMReady(replacementName, 80) then
                 error "replacement VM configuration did not become ready: " & replacementName
