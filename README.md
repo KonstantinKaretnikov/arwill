@@ -77,8 +77,9 @@ The script immediately targets the fixed VM name `Arwill OS` without asking.
 It creates a replacement from `build/arwill.img` with one IDE drive, an e1000
 adapter, and one PTTY serial console. If the old VM exists, it is deleted only
 after the replacement is ready; if it does not exist, the same command creates
-it from scratch. Use `scripts/recreate_utm.sh --attach` to attach the current
-terminal to the console after startup.
+it from scratch. The command attaches the current terminal to the serial
+console after startup. Use `scripts/recreate_utm.sh --no-attach` for unattended
+operation.
 
 Boot output is intentionally minimal and identical on serial and framebuffer:
 

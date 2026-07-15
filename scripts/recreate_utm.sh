@@ -5,13 +5,13 @@ usage() {
     cat <<'EOF'
 usage: scripts/recreate_utm.sh [options]
 
-Build a fresh Arwill image, replace an existing UTM VM while preserving its
-configuration, and start the replacement.
+Build a fresh Arwill image, create or replace the fixed UTM VM, and start it
+with an attached serial console.
 
 Options:
   --image PATH      image to install (default: build/arwill.img)
   --no-build        use the existing image without running make build
-  --attach          attach this terminal to the first UTM serial port
+  --no-attach       start the VM without attaching this terminal
   -h, --help        show this help
 
 Environment:
@@ -26,7 +26,7 @@ utmctl=/Applications/UTM.app/Contents/MacOS/utmctl
 vm_name='Arwill OS'
 image_path=${UTM_IMAGE:-$repo_root/build/arwill.img}
 build_image=true
-attach_serial=false
+attach_serial=true
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -39,8 +39,8 @@ while [ "$#" -gt 0 ]; do
             build_image=false
             shift
             ;;
-        --attach)
-            attach_serial=true
+        --no-attach)
+            attach_serial=false
             shift
             ;;
         -h|--help)
@@ -80,6 +80,7 @@ vm_id=$(osascript "$apple_script" "$vm_name" "$image_path" "$replacement_name")
 echo "UTM VM '$vm_name' started (UUID $vm_id)."
 
 if [ "$attach_serial" = true ]; then
+    echo "Attaching to the Arwill serial console..."
     exec "$utmctl" attach "$vm_name"
 fi
 
