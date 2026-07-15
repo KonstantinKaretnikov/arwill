@@ -73,7 +73,7 @@ and start it with:
 make utm-recreate
 ```
 
-The script targets the exact VM name `Arwill OS`, asks for destructive
+The script targets the fixed VM name `Arwill OS`, asks for a simple `y/N`
 confirmation, clones the old VM configuration, replaces its single IDE drive
 with `build/arwill.img`, and deletes the old VM only after the replacement was
 created successfully. This preserves UTM-specific display, serial, e1000, and

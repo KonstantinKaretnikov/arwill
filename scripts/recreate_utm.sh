@@ -88,9 +88,12 @@ if [ "$confirmed" != true ]; then
     echo "This will stop and permanently delete the UTM VM named: $vm_name"
     echo "Its configuration will be cloned first and its only IDE drive replaced with:"
     echo "  $image_path"
-    printf "Type the exact VM name to continue: "
+    printf "Continue? [y/N] "
     IFS= read -r confirmation
-    [ "$confirmation" = "$vm_name" ] || { echo "cancelled" >&2; exit 1; }
+    case "$confirmation" in
+        y|Y|yes|YES|Yes) ;;
+        *) echo "cancelled" >&2; exit 1 ;;
+    esac
 fi
 
 replacement_name="$vm_name replacement $(date +%s)-$$"
