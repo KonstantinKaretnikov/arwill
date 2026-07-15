@@ -165,7 +165,8 @@ static void queue_echo_request(struct fake_network *network) {
     network->incoming_ready = 1;
 }
 
-static void queue_segment(struct fake_network *network, uint16_t source_port,
+static void queue_segment_for_port(struct fake_network *network,
+    uint16_t source_port, uint16_t destination_port,
     uint32_t sequence, uint32_t acknowledgement, uint8_t flags,
     const uint8_t *payload, size_t payload_length) {
     uint8_t *frame = network->incoming;
@@ -197,7 +198,7 @@ static void queue_segment(struct fake_network *network, uint16_t source_port,
     ip[19] = 15U;
     put16(ip, 10U, checksum(ip, 20U));
     put16(tcp, 0U, source_port);
-    put16(tcp, 2U, test_remote_console_port);
+    put16(tcp, 2U, destination_port);
     put32(tcp, 4U, sequence);
     put32(tcp, 8U, acknowledgement);
     tcp[12] = 0x50U;
@@ -209,6 +210,25 @@ static void queue_segment(struct fake_network *network, uint16_t source_port,
     put16(tcp, 16U, tcp_checksum(ip, tcp, 20U + payload_length));
     network->incoming_length = frame_length < 60U ? 60U : frame_length;
     network->incoming_ready = 1;
+}
+
+static void queue_segment(struct fake_network *network, uint16_t source_port,
+    uint32_t sequence, uint32_t acknowledgement, uint8_t flags,
+    const uint8_t *payload, size_t payload_length) {
+    queue_segment_for_port(network, source_port, test_remote_console_port,
+        sequence, acknowledgement, flags, payload, payload_length);
+}
+
+static void change_queued_source_address(struct fake_network *network,
+    uint8_t last_octet) {
+    uint8_t *ip = network->incoming + 14U;
+    uint8_t *tcp = ip + 20U;
+    const size_t tcp_length = (size_t)get16(ip, 2U) - 20U;
+    ip[15] = last_octet;
+    put16(ip, 10U, 0U);
+    put16(ip, 10U, checksum(ip, 20U));
+    put16(tcp, 16U, 0U);
+    put16(tcp, 16U, tcp_checksum(ip, tcp, tcp_length));
 }
 
 static int expect(int condition, const char *message) {
@@ -264,7 +284,11 @@ int main(void) {
         || !expect(checksum(fake.outgoing + 14U, 20U) == 0U,
             "ICMP reply IPv4 checksum")
         || !expect(checksum(fake.outgoing + 34U, 12U) == 0U,
-            "ICMP reply checksum")) {
+            "ICMP reply checksum")
+        || !expect(stack.icmp_echo_requests_received == 1U,
+            "ICMP request counted")
+        || !expect(stack.icmp_echo_replies_sent == 1U,
+            "ICMP reply counted")) {
         return 1;
     }
 
@@ -273,7 +297,9 @@ int main(void) {
     if (!expect(!arwill_ipv4_poll_tcp(&stack),
             "bad ICMP checksum rejected")
         || !expect(fake.send_count == 1U,
-            "bad ICMP request produced no reply")) {
+            "bad ICMP request produced no reply")
+        || !expect(stack.icmp_checksum_drops == 1U,
+            "bad ICMP checksum counted")) {
         return 1;
     }
     fake.send_count = 0U;
@@ -283,6 +309,21 @@ int main(void) {
         ), "remote console restarted after ICMP test")) {
         return 1;
     }
+
+    queue_segment_for_port(&fake, peer_port, 24000U, peer_initial_sequence, 0U,
+        arwill_tcp_flag_syn, 0, 0U);
+    if (!expect(arwill_ipv4_poll_tcp(&stack), "closed port SYN handled")
+        || !expect(stack.tcp_unknown_port_frames == 1U,
+            "closed port counted")
+        || !expect(stack.tcp_rst_sent == 1U, "closed port RST counted")
+        || !expect((fake.outgoing[47] &
+            (arwill_tcp_flag_rst | arwill_tcp_flag_ack)) ==
+            (arwill_tcp_flag_rst | arwill_tcp_flag_ack),
+            "closed port produced RST-ACK")) {
+        return 1;
+    }
+    fake.send_count = 0U;
+    fake.outgoing_length = 0U;
 
     queue_segment(&fake, peer_port, peer_initial_sequence, 0U,
         arwill_tcp_flag_syn, 0, 0U);
@@ -337,6 +378,20 @@ int main(void) {
         || !expect(arwill_ipv4_remote_console_connected(&stack),
             "listener established")
         || !expect(!stack.tcp_pending.active, "SYN-ACK acknowledged")) {
+        return 1;
+    }
+
+    queue_segment(&fake, peer_port, peer_initial_sequence + 1U,
+        stack.tcp_listener.sequence, arwill_tcp_flag_ack, 0, 0U);
+    change_queued_source_address(&fake, 3U);
+    const unsigned sends_before_tuple_mismatch = fake.send_count;
+    if (!expect(!arwill_ipv4_poll_tcp(&stack), "wrong peer tuple rejected")
+        || !expect(stack.tcp_tuple_mismatches == 1U,
+            "wrong peer tuple counted")
+        || !expect(fake.send_count == sends_before_tuple_mismatch,
+            "wrong peer tuple produced no reply")
+        || !expect(arwill_ipv4_remote_console_connected(&stack),
+            "wrong peer did not disturb connection")) {
         return 1;
     }
 
@@ -396,6 +451,110 @@ int main(void) {
         || !expect(stack.tcp_listener.state == arwill_tcp_state_listen,
             "timeout returned listener to listen")
         || !expect(!stack.tcp_pending.active, "timeout cleared pending segment")) {
+        return 1;
+    }
+
+    if (!expect(arwill_tcp_sequence_before(UINT32_MAX, 0U),
+            "sequence comparison wraps before zero")
+        || !expect(arwill_tcp_sequence_after(0U, UINT32_MAX),
+            "sequence comparison wraps after max")) {
+        return 1;
+    }
+
+    struct arwill_tcp_listener close_listener;
+    struct arwill_tcp_segment close_incoming = { 0 };
+    struct arwill_tcp_segment close_reply;
+    struct arwill_tcp_segment close_fin;
+    close_incoming.source_address[0] = 10U;
+    close_incoming.source_address[2] = 2U;
+    close_incoming.source_address[3] = 2U;
+    close_incoming.destination_address[0] = 10U;
+    close_incoming.destination_address[2] = 2U;
+    close_incoming.destination_address[3] = 15U;
+    close_incoming.source_port = peer_port;
+    close_incoming.destination_port = test_remote_console_port;
+    close_incoming.sequence = peer_initial_sequence;
+    close_incoming.flags = arwill_tcp_flag_syn;
+    arwill_tcp_listener_init(&close_listener, test_remote_console_port, UINT32_MAX);
+    if (!expect(arwill_tcp_listener_receive(
+            &close_listener, &close_incoming, &close_reply),
+            "close test SYN accepted")) {
+        return 1;
+    }
+    close_incoming.sequence++;
+    close_incoming.acknowledgement = 0U;
+    close_incoming.flags = arwill_tcp_flag_ack;
+    if (!expect(arwill_tcp_listener_receive(
+            &close_listener, &close_incoming, &close_reply),
+            "wraparound handshake ACK accepted")
+        || !expect(close_listener.state == arwill_tcp_state_established,
+            "wraparound listener established")
+        || !expect(close_listener.sequence == 0U,
+            "local sequence wrapped to zero")
+        || !expect(arwill_tcp_listener_begin_close(
+            &close_listener, &close_fin), "active close began")
+        || !expect(close_listener.state == arwill_tcp_state_fin_wait_1,
+            "active close entered fin-wait-1")) {
+        return 1;
+    }
+    close_incoming.acknowledgement = close_listener.sequence;
+    if (!expect(arwill_tcp_listener_receive(
+            &close_listener, &close_incoming, &close_reply),
+            "FIN acknowledgement accepted")
+        || !expect(close_listener.state == arwill_tcp_state_fin_wait_2,
+            "active close entered fin-wait-2")) {
+        return 1;
+    }
+    close_incoming.sequence = close_listener.acknowledgement;
+    close_incoming.flags = arwill_tcp_flag_fin | arwill_tcp_flag_ack;
+    if (!expect(arwill_tcp_listener_receive(
+            &close_listener, &close_incoming, &close_reply),
+            "peer FIN accepted after active close")
+        || !expect(close_listener.state == arwill_tcp_state_time_wait,
+            "active close entered time-wait")
+        || !expect(close_reply.flags == arwill_tcp_flag_ack,
+            "peer FIN acknowledged")) {
+        return 1;
+    }
+
+    arwill_tcp_listener_init(&close_listener, test_remote_console_port, 2000U);
+    close_incoming.sequence = peer_initial_sequence;
+    close_incoming.acknowledgement = 0U;
+    close_incoming.flags = arwill_tcp_flag_syn;
+    if (!expect(arwill_tcp_listener_receive(
+            &close_listener, &close_incoming, &close_reply),
+            "passive close test SYN accepted")) {
+        return 1;
+    }
+    close_incoming.sequence++;
+    close_incoming.acknowledgement = close_listener.sequence + 1U;
+    close_incoming.flags = arwill_tcp_flag_ack;
+    if (!expect(arwill_tcp_listener_receive(
+            &close_listener, &close_incoming, &close_reply),
+            "passive close handshake ACK accepted")) {
+        return 1;
+    }
+    close_incoming.acknowledgement = close_listener.sequence;
+    close_incoming.flags = arwill_tcp_flag_fin | arwill_tcp_flag_ack;
+    if (!expect(arwill_tcp_listener_receive(
+            &close_listener, &close_incoming, &close_reply),
+            "peer initiated FIN accepted")
+        || !expect(close_listener.state == arwill_tcp_state_close_wait,
+            "peer FIN entered close-wait")
+        || !expect(arwill_tcp_listener_begin_close(
+            &close_listener, &close_fin), "passive close FIN began")
+        || !expect(close_listener.state == arwill_tcp_state_last_ack,
+            "passive close entered last-ack")) {
+        return 1;
+    }
+    close_incoming.sequence = close_listener.acknowledgement;
+    close_incoming.acknowledgement = close_listener.sequence;
+    close_incoming.flags = arwill_tcp_flag_ack;
+    if (!expect(arwill_tcp_listener_receive(
+            &close_listener, &close_incoming, &close_reply),
+            "passive close final ACK accepted")
+        || !expect(close_listener.state == arwill_tcp_state_listen,
+            "passive close returned to listen")) {
         return 1;
     }
 

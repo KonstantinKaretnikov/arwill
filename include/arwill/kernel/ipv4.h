@@ -16,6 +16,8 @@ enum {
     arwill_tcp_pending_payload_capacity = 1024,
     arwill_tcp_retransmission_interval_ms = 250,
     arwill_tcp_max_retransmissions = 3,
+    arwill_tcp_time_wait_ms = 500,
+    arwill_tcp_close_timeout_ms = 2500,
 };
 
 struct arwill_tcp_pending_segment {
@@ -38,10 +40,13 @@ struct arwill_ipv4_stack {
     int gateway_resolved;
     uint16_t echo_identifier;
     uint16_t echo_sequence;
+    uint32_t icmp_echo_requests_received;
+    uint32_t icmp_echo_replies_sent;
+    uint32_t icmp_checksum_drops;
     struct arwill_tcp_listener tcp_listener;
     uint8_t tcp_peer_mac[arwill_network_mac_length];
-    uint8_t tcp_peer_address[4];
     struct arwill_tcp_pending_segment tcp_pending;
+    uint64_t tcp_time_wait_started_milliseconds;
     uint8_t remote_console_receive[arwill_remote_console_receive_capacity];
     size_t remote_console_receive_head;
     size_t remote_console_receive_count;
@@ -51,7 +56,16 @@ struct arwill_ipv4_stack {
     int remote_console_running;
     int remote_console_peer_closed;
     uint32_t tcp_frames_received;
+    uint32_t tcp_frames_sent;
+    uint32_t tcp_bytes_received;
+    uint32_t tcp_bytes_sent;
+    uint32_t tcp_syn_received;
     uint32_t tcp_syn_ack_sent;
+    uint32_t tcp_fin_received;
+    uint32_t tcp_rst_received;
+    uint32_t tcp_rst_sent;
+    uint32_t tcp_unknown_port_frames;
+    uint32_t tcp_tuple_mismatches;
     uint32_t tcp_checksum_drops;
     uint32_t tcp_duplicate_acks;
     uint32_t tcp_retransmissions;

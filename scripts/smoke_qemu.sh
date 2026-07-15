@@ -106,10 +106,10 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.20.3" 2
+    wait_for_primary_log_count "Arwill 0.21.0" 2
     sleep 0.1
     printf 'sys\t\r'
-    wait_for_primary_log "system: Arwill 0.20.3"
+    wait_for_primary_log "system: Arwill 0.21.0"
     wait_for_primary_log_count "uptime: " 1
     sleep 0.1
     printf 'devices p\t\r'
@@ -427,7 +427,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.20.3"
+    wait_for_primary_log "version: 0.21.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -515,7 +515,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.20.3"
+check_line "Arwill 0.21.0"
 check_line "system     show system state and subsystem details"
 check_line "devices    list devices or inspect pci/disk0/net0"
 check_line "network    show network state, ping, or TCP details"
@@ -548,13 +548,13 @@ check_line "remote console: plaintext, connections 0"
 check_line "remote bytes: received 0, sent 0, dropped 0, send failures 0"
 check_line "tcp integrity: checksum drops 0, duplicate acks 0"
 check_line "tcp reliability: retransmissions 0, timeouts 0, pending no"
-check_line "Arwill 0.20.3 ready"
+check_line "Arwill 0.21.0 ready"
 check_absent "ARCHITECTURE IS THE PRODUCT"
 check_absent "config: /owner/arwill.conf"
 check_absent "help: type 'help' or press Tab"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.20.3"
+check_line "Arwill 0.21.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -581,7 +581,7 @@ check_line "Up/Down    browse command history"
 check_absent "  dir [path]  list the current filesystem"
 check_absent "info [path]"
 check_absent "poweroff"
-check_line "system: Arwill 0.20.3"
+check_line "system: Arwill 0.21.0"
 check_line "processes: system 2, kernel 0, awp 0/4"
 check_line "PID KIND STATE RUNS EXIT NAME"
 check_line "1002 awp finished"
@@ -717,7 +717,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.20.3"
+check_line "version: 0.21.0"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
@@ -732,7 +732,7 @@ for expected in \
     "Access denied" \
     "Arwill remote console" \
     "warning: plaintext trusted-LAN access" \
-    "Arwill 0.20.3" \
+    "Arwill 0.21.0" \
     "^C" \
     "remote console: disconnected" \
     "uptime: " \
@@ -761,7 +761,7 @@ if ! tr -d '\r' < "$remote_console_log" | grep -x -q '/'; then
     exit 1
 fi
 
-remote_version_count=$(grep -F -c "Arwill 0.20.3" "$remote_console_log")
+remote_version_count=$(grep -F -c "Arwill 0.21.0" "$remote_console_log")
 if [ "$remote_version_count" -lt 2 ]; then
     echo "remote console Up history did not repeat the command" >&2
     cat "$remote_console_log" >&2

@@ -15,7 +15,7 @@ work, keep it absent or label the limitation explicitly.
 
 ## Completed Baseline
 
-Status: `0.20.3`.
+Status: `0.21.0`.
 
 Arwill already has:
 
@@ -709,3 +709,53 @@ driver work, not accidental default access for every ring 3 program.
    Verified by: the native IPv4 host test checks a valid echo reply including
    checksums, identifier, sequence, and payload, and rejects a request with a
    bad ICMP checksum. UTM remains a manual platform target.
+
+36. [x] Bounded TCP lifecycle v2
+
+   Status: implemented in `0.21.0` per ADR-0060.
+
+   Scope: separate transport and remote-console counters, retain the complete
+   connection tuple, use wrap-safe sequence comparisons, and implement bounded
+   FIN/RST close states while preserving the existing console protocol.
+
+   Verified by: native packet tests cover closed-port RST, tuple rejection,
+   sequence wraparound, active close, passive close, and retained reliability;
+   the full QEMU smoke retains authenticated console reuse and clean exit.
+
+37. [ ] Bounded TCP flow control and retransmission v2
+
+   Planned for `0.21.1` per ADR-0060.
+
+   Scope: advertise receive capacity, negotiate MSS, add adaptive bounded
+   retransmission timing, and retain a fixed multi-segment send queue without
+   dynamic allocation.
+
+38. [ ] Kernel TCP stream contract
+
+   Planned for `0.22.0` per ADR-0060.
+
+   Scope: separate IPv4/TCP framing from remote-console ownership through a
+   nonblocking architecture-independent kernel stream API.
+
+39. [ ] Fixed TCP endpoint table
+
+   Planned for `0.22.1` per ADR-0060.
+
+   Scope: bind and dispatch a fixed number of simultaneous ports and
+   connections by complete tuple, with per-endpoint queues and diagnostics.
+
+40. [ ] Bounded AWP networking ABI
+
+   Planned for `0.23.0` per ADR-0060.
+
+   Scope: give each fixed AWP slot a bounded handle table and nonblocking
+   network operations, with task-owned cleanup and one stored program as the
+   first real second consumer of the endpoint table.
+
+41. [ ] TCP v2 integration and fault-injection stabilization
+
+   Planned for `0.23.1` per ADR-0060.
+
+   Scope: complete loss, duplication, reordering, wraparound, queue-pressure,
+   multi-port, invalid-user-buffer, QEMU, and UTM verification while retaining
+   all established serial, filesystem, scheduler, and remote-console behavior.

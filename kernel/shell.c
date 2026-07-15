@@ -1042,12 +1042,50 @@ static void print_tcp_info(
     write_uint64_decimal(console, ipv4->tcp_listener.port);
     arwill_console_write(console, ", state ");
     arwill_console_write_line(console, arwill_tcp_state_name(ipv4->tcp_listener.state));
-    arwill_console_write(console, "tcp frames: ");
+    arwill_console_write(console, "tcp frames: received ");
     write_uint64_decimal(console, ipv4->tcp_frames_received);
-    arwill_console_write(console, ", syn-ack: ");
+    arwill_console_write(console, ", sent ");
+    write_uint64_decimal(console, ipv4->tcp_frames_sent);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "tcp bytes: received ");
+    write_uint64_decimal(console, ipv4->tcp_bytes_received);
+    arwill_console_write(console, ", sent ");
+    write_uint64_decimal(console, ipv4->tcp_bytes_sent);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "tcp control: syn ");
+    write_uint64_decimal(console, ipv4->tcp_syn_received);
+    arwill_console_write(console, ", syn-ack ");
     write_uint64_decimal(console, ipv4->tcp_syn_ack_sent);
+    arwill_console_write(console, ", fin ");
+    write_uint64_decimal(console, ipv4->tcp_fin_received);
+    arwill_console_write(console, ", rst received ");
+    write_uint64_decimal(console, ipv4->tcp_rst_received);
+    arwill_console_write(console, ", sent ");
+    write_uint64_decimal(console, ipv4->tcp_rst_sent);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "tcp dispatch: unknown port ");
+    write_uint64_decimal(console, ipv4->tcp_unknown_port_frames);
+    arwill_console_write(console, ", tuple mismatch ");
+    write_uint64_decimal(console, ipv4->tcp_tuple_mismatches);
     arwill_console_write_line(console, "");
     print_remote_console_info(console, ipv4);
+}
+
+static void print_icmp_info(
+    const struct arwill_console *console,
+    const struct arwill_ipv4_stack *ipv4
+) {
+    if (ipv4 == 0) {
+        arwill_console_write_line(console, "icmp: unavailable");
+        return;
+    }
+    arwill_console_write(console, "icmp echo: requests ");
+    write_uint64_decimal(console, ipv4->icmp_echo_requests_received);
+    arwill_console_write(console, ", replies ");
+    write_uint64_decimal(console, ipv4->icmp_echo_replies_sent);
+    arwill_console_write(console, ", checksum drops ");
+    write_uint64_decimal(console, ipv4->icmp_checksum_drops);
+    arwill_console_write_line(console, "");
 }
 
 static void ping_network(
@@ -2118,6 +2156,7 @@ static void run_network_command(
     if (argument[0] == '\0') {
         print_network_device_info(console, network);
         arwill_ipv4_print_config(ipv4, console);
+        print_icmp_info(console, ipv4);
         print_tcp_info(console, ipv4);
         return;
     }
@@ -3553,9 +3592,9 @@ static void run_command(
 
     if (string_equals(line, "tcpcheck")) {
         struct arwill_tcp_listener listener;
-        struct arwill_tcp_segment syn;
-        struct arwill_tcp_segment reply;
-        struct arwill_tcp_segment ack;
+        struct arwill_tcp_segment syn = { 0 };
+        struct arwill_tcp_segment reply = { 0 };
+        struct arwill_tcp_segment ack = { 0 };
         const uint16_t listener_port =
             ipv4 == 0 ? 23232U : ipv4->tcp_listener.port;
 
@@ -4026,10 +4065,10 @@ static uint64_t remote_peer_address(const struct arwill_ipv4_stack *ipv4) {
     if (ipv4 == 0) {
         return 0;
     }
-    return ((uint64_t)ipv4->tcp_peer_address[0] << 24U) |
-        ((uint64_t)ipv4->tcp_peer_address[1] << 16U) |
-        ((uint64_t)ipv4->tcp_peer_address[2] << 8U) |
-        (uint64_t)ipv4->tcp_peer_address[3];
+    return ((uint64_t)ipv4->tcp_listener.peer_address[0] << 24U) |
+        ((uint64_t)ipv4->tcp_listener.peer_address[1] << 16U) |
+        ((uint64_t)ipv4->tcp_listener.peer_address[2] << 8U) |
+        (uint64_t)ipv4->tcp_listener.peer_address[3];
 }
 
 static void record_remote_event(
