@@ -75,11 +75,10 @@ make utm-recreate
 
 The script immediately targets the fixed VM name `Arwill OS` without asking.
 It creates a replacement from `build/arwill.img` with one IDE drive, an e1000
-adapter, legacy BIOS boot (UEFI disabled), and one PTTY serial console. If the
-old VM exists, it is deleted only after the replacement is ready; if it does
-not exist, the same command creates it from scratch. The command attaches the
-current terminal to the serial console after startup. Use
-`scripts/recreate_utm.sh --no-attach` for unattended operation.
+adapter, legacy BIOS boot (UEFI disabled), and one built-in UTM serial console.
+If the old VM exists, it is deleted only after the replacement is ready; if it
+does not exist, the same command creates it from scratch. UTM opens the serial
+console window when the replacement starts.
 
 Boot output is intentionally minimal and identical on serial and framebuffer:
 

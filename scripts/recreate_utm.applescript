@@ -28,19 +28,6 @@ on waitForVMReady(vmName, attempts)
     return false
 end waitForVMReady
 
-on waitForSerialConsole(vmReference, attempts)
-    tell application "UTM"
-        repeat attempts times
-            try
-                set runtimePort to first serial port of vmReference
-                if interface of runtimePort is ptty then return true
-            end try
-            delay 0.25
-        end repeat
-    end tell
-    return false
-end waitForSerialConsole
-
 on run arguments
     if (count of arguments) is not 3 then error "expected VM name, image path, and replacement name"
 
@@ -118,15 +105,6 @@ on run arguments
         set name of finalConfig to vmName
         update configuration of virtual machine named replacementName with finalConfig
         set finalVM to virtual machine named vmName
-        start finalVM
-
-        if not my waitForStatus(finalVM, started, 80) then
-            error "replacement VM was created but did not reach started state: " & vmName
-        end if
-        if not my waitForSerialConsole(finalVM, 40) then
-            error "replacement VM started without a PTTY serial console: " & vmName
-        end if
-
         return id of finalVM
     end tell
 end run
