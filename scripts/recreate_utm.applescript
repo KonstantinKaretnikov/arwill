@@ -89,7 +89,7 @@ on run arguments
             end if
             set replacementNetwork to item 1 of replacementNetworks
             set hardware of replacementNetwork to "e1000"
-            set mode of replacementNetwork to emulated
+            set mode of replacementNetwork to shared
             set address of replacementNetwork to "52:54:00:12:34:56"
             update configuration of virtual machine named replacementName with replacementConfig
         on error errorMessage number errorNumber

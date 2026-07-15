@@ -94,6 +94,14 @@ vm_config="$HOME/Library/Containers/com.utmapp.UTM/Data/Documents/$vm_name.utm/c
 "$plist_buddy" -c 'Add :Serial:0:Terminal:Font string Menlo' "$vm_config"
 "$plist_buddy" -c 'Add :Serial:0:Terminal:FontSize integer 12' "$vm_config"
 "$plist_buddy" -c 'Add :Serial:0:Terminal:CursorBlink bool true' "$vm_config"
+"$plist_buddy" -c 'Set :Network:0:Mode Shared' "$vm_config"
+"$plist_buddy" -c 'Set :Network:0:IsolateFromHost false' "$vm_config"
+"$plist_buddy" -c 'Delete :Network:0:VlanGuestAddress' "$vm_config" >/dev/null 2>&1 || true
+"$plist_buddy" -c 'Delete :Network:0:VlanDhcpStartAddress' "$vm_config" >/dev/null 2>&1 || true
+"$plist_buddy" -c 'Delete :Network:0:VlanDhcpEndAddress' "$vm_config" >/dev/null 2>&1 || true
+"$plist_buddy" -c 'Add :Network:0:VlanGuestAddress string 10.0.2.0/24' "$vm_config"
+"$plist_buddy" -c 'Add :Network:0:VlanDhcpStartAddress string 10.0.2.2' "$vm_config"
+"$plist_buddy" -c 'Add :Network:0:VlanDhcpEndAddress string 10.0.2.14' "$vm_config"
 
 open -a /Applications/UTM.app
 attempt=0

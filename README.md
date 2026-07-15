@@ -52,8 +52,7 @@ secondary-master attachment.
 The e1000 driver uses the MAC configured by the VM, so UTM's generated address
 does not need to match the deterministic address used by `make run`.
 
-To ping Arwill from the Mac, configure the UTM network device as follows before
-starting the VM:
+To ping Arwill from the Mac, use the following UTM network configuration:
 
 - emulated network card: `Intel Gigabit Ethernet (e1000)`;
 - network mode: `macOS Shared`;
@@ -62,9 +61,9 @@ starting the VM:
 - isolate guest from host: disabled.
 
 Arwill has the fixed address `10.0.2.15/24`; it does not use DHCP. After the
-ready prompt appears, run `ping 10.0.2.15` in a macOS terminal. UTM's
-`Emulated VLAN` port forwarding supports only TCP and UDP, so it cannot expose
-ICMP ping. See the [UTM network settings documentation](https://docs.getutm.app/settings-qemu/devices/network/network/).
+ready prompt appears, run `ping 10.0.2.15` in a macOS terminal. The
+`make utm-recreate` workflow applies this configuration automatically. See the
+[UTM network settings documentation](https://docs.getutm.app/settings-qemu/devices/network/network/).
 
 After the VM has been configured once, replace it with a freshly built image
 and start it with:
