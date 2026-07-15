@@ -84,17 +84,10 @@ int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
     stack->icmp_echo_requests_received = 0;
     stack->icmp_echo_replies_sent = 0;
     stack->icmp_checksum_drops = 0;
-    arwill_tcp_listener_init(
-        &stack->tcp_listener,
-        remote_console_port,
-        0x41520000U
+    arwill_tcp_stream_init(&stack->stream);
+    (void)arwill_tcp_stream_listen(
+        &stack->stream, remote_console_port, 0x41520000U
     );
-    stack->remote_console_receive_head = 0;
-    stack->remote_console_receive_count = 0;
-    stack->remote_console_transmit_head = 0;
-    stack->remote_console_transmit_count = 0;
-    stack->remote_console_running = 1;
-    stack->remote_console_peer_closed = 0;
     for (size_t index = 0; index < arwill_tcp_pending_segment_capacity; index++) {
         stack->tcp_pending[index].active = 0;
         stack->tcp_pending[index].payload_length = 0;
@@ -106,11 +99,12 @@ int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
     }
     stack->tcp_pending_head = 0;
     stack->tcp_pending_count = 0;
+    stack->tcp_close_started_milliseconds = 0;
     stack->tcp_time_wait_started_milliseconds = 0;
     stack->tcp_smoothed_round_trip_ms = 0;
     stack->tcp_round_trip_variance_ms = 0;
     stack->tcp_retransmission_timeout_ms = arwill_tcp_retransmission_interval_ms;
-    stack->tcp_last_advertised_window = arwill_remote_console_receive_capacity;
+    stack->tcp_last_advertised_window = arwill_tcp_stream_receive_capacity;
     stack->tcp_window_update_pending = 0;
     stack->tcp_frames_received = 0;
     stack->tcp_frames_sent = 0;
@@ -130,12 +124,12 @@ int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
     stack->tcp_timeouts = 0;
     stack->tcp_receive_window_drops = 0;
     stack->tcp_window_updates = 0;
-    stack->remote_console_connections = 0;
-    stack->remote_console_disconnects = 0;
-    stack->remote_console_bytes_received = 0;
-    stack->remote_console_bytes_sent = 0;
-    stack->remote_console_bytes_dropped = 0;
-    stack->remote_console_send_failures = 0;
+    stack->stream.connections = 0;
+    stack->stream.disconnects = 0;
+    stack->stream.bytes_received = 0;
+    stack->stream.bytes_sent = 0;
+    stack->stream.bytes_dropped = 0;
+    stack->stream.send_failures = 0;
     return 1;
 }
 
@@ -367,8 +361,8 @@ static uint16_t tcp_checksum(const uint8_t *ip, const uint8_t *tcp, size_t lengt
 }
 
 static uint16_t advertised_receive_window(const struct arwill_ipv4_stack *stack) {
-    const size_t available = arwill_remote_console_receive_capacity -
-        stack->remote_console_receive_count;
+    const size_t available = arwill_tcp_stream_receive_capacity -
+        stack->stream.receive_count;
     return available > UINT16_MAX ? UINT16_MAX : (uint16_t)available;
 }
 
@@ -427,8 +421,8 @@ static int send_tcp_segment_to(struct arwill_ipv4_stack *stack,
     }
     stack->tcp_frames_sent++;
     stack->tcp_bytes_sent += (uint32_t)payload_length;
-    if (segment->source_port == stack->tcp_listener.port &&
-        segment->destination_port == stack->tcp_listener.peer_port) {
+    if (segment->source_port == stack->stream.listener.port &&
+        segment->destination_port == stack->stream.listener.peer_port) {
         stack->tcp_last_advertised_window = window;
     }
     return 1;
@@ -442,18 +436,20 @@ static int send_tcp_segment(struct arwill_ipv4_stack *stack,
     );
 }
 
-static void reset_remote_console(struct arwill_ipv4_stack *stack) {
-    stack->remote_console_bytes_dropped +=
-        (uint32_t)stack->remote_console_transmit_count;
+static void reset_tcp_stream(struct arwill_ipv4_stack *stack) {
+    stack->stream.bytes_dropped +=
+        (uint32_t)stack->stream.transmit_count;
     arwill_tcp_listener_reset(
-        &stack->tcp_listener,
-        0x41520000U + stack->remote_console_connections
+        &stack->stream.listener,
+        0x41520000U + stack->stream.connections
     );
-    stack->remote_console_receive_head = 0;
-    stack->remote_console_receive_count = 0;
-    stack->remote_console_transmit_head = 0;
-    stack->remote_console_transmit_count = 0;
-    stack->remote_console_peer_closed = 0;
+    stack->stream.receive_head = 0;
+    stack->stream.receive_count = 0;
+    stack->stream.transmit_head = 0;
+    stack->stream.transmit_count = 0;
+    stack->stream.peer_closed = 0;
+    stack->stream.close_requested = 0;
+    stack->stream.receive_window_changed = 0;
     for (size_t index = 0; index < arwill_tcp_pending_segment_capacity; index++) {
         stack->tcp_pending[index].active = 0;
         stack->tcp_pending[index].payload_length = 0;
@@ -461,48 +457,9 @@ static void reset_remote_console(struct arwill_ipv4_stack *stack) {
     }
     stack->tcp_pending_head = 0;
     stack->tcp_pending_count = 0;
+    stack->tcp_close_started_milliseconds = 0;
     stack->tcp_time_wait_started_milliseconds = 0;
     stack->tcp_window_update_pending = 0;
-}
-
-int arwill_ipv4_remote_console_running(const struct arwill_ipv4_stack *stack) {
-    return stack != 0 && stack->remote_console_running;
-}
-
-int arwill_ipv4_remote_console_start(struct arwill_ipv4_stack *stack,
-    uint16_t port) {
-    if (stack == 0 || stack->network == 0 || port == 0U) {
-        return 0;
-    }
-    if (arwill_ipv4_remote_console_connected(stack)) {
-        arwill_ipv4_remote_console_close(stack);
-    }
-    arwill_tcp_listener_init(
-        &stack->tcp_listener,
-        port,
-        0x41520000U + stack->remote_console_connections
-    );
-    stack->remote_console_receive_head = 0;
-    stack->remote_console_receive_count = 0;
-    stack->remote_console_transmit_head = 0;
-    stack->remote_console_transmit_count = 0;
-    stack->remote_console_peer_closed = 0;
-    stack->tcp_pending_head = 0;
-    stack->tcp_pending_count = 0;
-    stack->tcp_window_update_pending = 0;
-    stack->remote_console_running = 1;
-    return 1;
-}
-
-void arwill_ipv4_remote_console_stop(struct arwill_ipv4_stack *stack) {
-    if (stack == 0) {
-        return;
-    }
-    if (arwill_ipv4_remote_console_connected(stack)) {
-        arwill_ipv4_remote_console_close(stack);
-    }
-    reset_remote_console(stack);
-    stack->remote_console_running = 0;
 }
 
 static int remember_pending_segment(struct arwill_ipv4_stack *stack,
@@ -614,17 +571,17 @@ static void maintain_pending_segment(struct arwill_ipv4_stack *stack) {
             continue;
         }
         if (pending->retransmissions >= arwill_tcp_max_retransmissions) {
-            const int was_connected = arwill_ipv4_remote_console_connected(stack);
+            const int was_connected = arwill_tcp_stream_connected(&stack->stream);
             stack->tcp_timeouts++;
             if (was_connected) {
-                stack->remote_console_disconnects++;
+                stack->stream.disconnects++;
             }
-            reset_remote_console(stack);
+            reset_tcp_stream(stack);
             return;
         }
         if (!send_tcp_segment(stack, &pending->segment,
                 pending->payload, pending->payload_length)) {
-            stack->remote_console_send_failures++;
+            stack->stream.send_failures++;
         }
         pending->sent_at_milliseconds = now;
         pending->retransmissions++;
@@ -641,15 +598,32 @@ static void maintain_pending_segment(struct arwill_ipv4_stack *stack) {
 }
 
 static void maintain_tcp_close(struct arwill_ipv4_stack *stack) {
-    if (stack == 0 || stack->tcp_listener.state != arwill_tcp_state_time_wait) {
+    if (stack == 0) {
         return;
     }
     const uint64_t now = arwill_clock_monotonic_milliseconds(stack->clock);
+    if (stack->stream.listener.state != arwill_tcp_state_listen &&
+        stack->stream.listener.state != arwill_tcp_state_syn_received &&
+        stack->stream.listener.state != arwill_tcp_state_established &&
+        stack->stream.listener.state != arwill_tcp_state_close_wait &&
+        stack->stream.listener.state != arwill_tcp_state_time_wait) {
+        if (stack->tcp_close_started_milliseconds == 0U) {
+            stack->tcp_close_started_milliseconds = now;
+        }
+        if (now - stack->tcp_close_started_milliseconds >=
+            arwill_tcp_close_timeout_ms) {
+            reset_tcp_stream(stack);
+        }
+        return;
+    }
+    if (stack->stream.listener.state != arwill_tcp_state_time_wait) {
+        return;
+    }
     if (stack->tcp_time_wait_started_milliseconds == 0U) {
         stack->tcp_time_wait_started_milliseconds = now;
     }
     if (now - stack->tcp_time_wait_started_milliseconds >= arwill_tcp_time_wait_ms) {
-        reset_remote_console(stack);
+        reset_tcp_stream(stack);
     }
 }
 
@@ -659,20 +633,20 @@ static void remember_tcp_peer(struct arwill_ipv4_stack *stack, const uint8_t *fr
     }
 }
 
-static void enqueue_remote_console(struct arwill_ipv4_stack *stack,
+static void enqueue_stream_receive(struct arwill_ipv4_stack *stack,
     const uint8_t *payload, size_t payload_length) {
     for (size_t index = 0; index < payload_length; index++) {
-        if (stack->remote_console_receive_count
-            >= arwill_remote_console_receive_capacity) {
-            stack->remote_console_bytes_dropped++;
+        if (stack->stream.receive_count
+            >= arwill_tcp_stream_receive_capacity) {
+            stack->stream.bytes_dropped++;
             continue;
         }
-        const size_t tail = (stack->remote_console_receive_head
-            + stack->remote_console_receive_count)
-            % arwill_remote_console_receive_capacity;
-        stack->remote_console_receive[tail] = payload[index];
-        stack->remote_console_receive_count++;
-        stack->remote_console_bytes_received++;
+        const size_t tail = (stack->stream.receive_head
+            + stack->stream.receive_count)
+            % arwill_tcp_stream_receive_capacity;
+        stack->stream.receive[tail] = payload[index];
+        stack->stream.receive_count++;
+        stack->stream.bytes_received++;
     }
 }
 
@@ -680,14 +654,14 @@ static int send_current_ack(struct arwill_ipv4_stack *stack) {
     struct arwill_tcp_segment acknowledgement;
     for (size_t index = 0; index < 4U; index++) {
         acknowledgement.source_address[index] =
-            stack->tcp_listener.local_address[index];
+            stack->stream.listener.local_address[index];
         acknowledgement.destination_address[index] =
-            stack->tcp_listener.peer_address[index];
+            stack->stream.listener.peer_address[index];
     }
-    acknowledgement.source_port = stack->tcp_listener.port;
-    acknowledgement.destination_port = stack->tcp_listener.peer_port;
-    acknowledgement.sequence = stack->tcp_listener.sequence;
-    acknowledgement.acknowledgement = stack->tcp_listener.acknowledgement;
+    acknowledgement.source_port = stack->stream.listener.port;
+    acknowledgement.destination_port = stack->stream.listener.peer_port;
+    acknowledgement.sequence = stack->stream.listener.sequence;
+    acknowledgement.acknowledgement = stack->stream.listener.acknowledgement;
     acknowledgement.flags = arwill_tcp_flag_ack;
     acknowledgement.window = advertised_receive_window(stack);
     acknowledgement.maximum_segment_size = 0U;
@@ -696,8 +670,15 @@ static int send_current_ack(struct arwill_ipv4_stack *stack) {
 }
 
 static void maintain_window_update(struct arwill_ipv4_stack *stack) {
+    if (stack != 0 && stack->stream.receive_window_changed) {
+        if (stack->tcp_last_advertised_window == 0U &&
+            advertised_receive_window(stack) != 0U) {
+            stack->tcp_window_update_pending = 1;
+        }
+        stack->stream.receive_window_changed = 0;
+    }
     if (stack == 0 || !stack->tcp_window_update_pending ||
-        !arwill_ipv4_remote_console_connected(stack)) {
+        !arwill_tcp_stream_connected(&stack->stream)) {
         return;
     }
     if (send_current_ack(stack)) {
@@ -706,60 +687,103 @@ static void maintain_window_update(struct arwill_ipv4_stack *stack) {
     }
 }
 
-static int flush_remote_console_transmit(struct arwill_ipv4_stack *stack) {
-    if (!arwill_ipv4_remote_console_connected(stack)) {
+static void maintain_stream_close(struct arwill_ipv4_stack *stack) {
+    if (stack == 0) {
+        return;
+    }
+    if (!stack->stream.listening) {
+        if (stack->tcp_pending_count != 0U ||
+            stack->stream.listener.state != arwill_tcp_state_listen) {
+            reset_tcp_stream(stack);
+        }
+        return;
+    }
+    if (stack->stream.close_requested) {
+        const uint64_t now =
+            arwill_clock_monotonic_milliseconds(stack->clock);
+        if (stack->tcp_close_started_milliseconds == 0U) {
+            stack->tcp_close_started_milliseconds = now;
+        } else if (now - stack->tcp_close_started_milliseconds >=
+            arwill_tcp_close_timeout_ms) {
+            reset_tcp_stream(stack);
+            return;
+        }
+    }
+    if (!stack->stream.close_requested ||
+        !arwill_tcp_stream_connected(&stack->stream) ||
+        stack->stream.transmit_count != 0U || stack->tcp_pending_count != 0U) {
+        return;
+    }
+    struct arwill_tcp_segment segment;
+    if (!arwill_tcp_listener_begin_close(&stack->stream.listener, &segment) ||
+        !send_tcp_segment(stack, &segment, 0, 0U) ||
+        !remember_pending_segment(stack, &segment, 0, 0U)) {
+        stack->stream.send_failures++;
+        reset_tcp_stream(stack);
+        return;
+    }
+    stack->stream.close_requested = 0;
+    stack->stream.disconnects++;
+    if (stack->tcp_close_started_milliseconds == 0U) {
+        stack->tcp_close_started_milliseconds =
+            arwill_clock_monotonic_milliseconds(stack->clock);
+    }
+}
+
+static int flush_stream_transmit(struct arwill_ipv4_stack *stack) {
+    if (!arwill_tcp_stream_connected(&stack->stream)) {
         return 1;
     }
     while (stack->tcp_pending_count < arwill_tcp_pending_segment_capacity &&
-        stack->remote_console_transmit_count != 0U &&
-        stack->tcp_listener.peer_window != 0U) {
+        stack->stream.transmit_count != 0U &&
+        stack->stream.listener.peer_window != 0U) {
         uint8_t payload[arwill_tcp_pending_payload_capacity];
-        size_t length = stack->remote_console_transmit_count;
+        size_t length = stack->stream.transmit_count;
         if (length > sizeof(payload)) {
             length = sizeof(payload);
         }
-        if (length > stack->tcp_listener.peer_maximum_segment_size) {
-            length = stack->tcp_listener.peer_maximum_segment_size;
+        if (length > stack->stream.listener.peer_maximum_segment_size) {
+            length = stack->stream.listener.peer_maximum_segment_size;
         }
-        if (length > stack->tcp_listener.peer_window) {
-            length = stack->tcp_listener.peer_window;
+        if (length > stack->stream.listener.peer_window) {
+            length = stack->stream.listener.peer_window;
         }
         if (length == 0U) {
             break;
         }
         for (size_t index = 0; index < length; index++) {
-            payload[index] = stack->remote_console_transmit[
-                (stack->remote_console_transmit_head + index) %
-                    arwill_remote_console_transmit_capacity
+            payload[index] = stack->stream.transmit[
+                (stack->stream.transmit_head + index) %
+                    arwill_tcp_stream_transmit_capacity
             ];
         }
 
         struct arwill_tcp_segment segment;
         for (size_t index = 0; index < 4U; index++) {
-            segment.source_address[index] = stack->tcp_listener.local_address[index];
-            segment.destination_address[index] = stack->tcp_listener.peer_address[index];
+            segment.source_address[index] = stack->stream.listener.local_address[index];
+            segment.destination_address[index] = stack->stream.listener.peer_address[index];
         }
-        segment.source_port = stack->tcp_listener.port;
-        segment.destination_port = stack->tcp_listener.peer_port;
-        segment.sequence = stack->tcp_listener.sequence;
-        segment.acknowledgement = stack->tcp_listener.acknowledgement;
+        segment.source_port = stack->stream.listener.port;
+        segment.destination_port = stack->stream.listener.peer_port;
+        segment.sequence = stack->stream.listener.sequence;
+        segment.acknowledgement = stack->stream.listener.acknowledgement;
         segment.flags = arwill_tcp_flag_ack | arwill_tcp_flag_psh;
         segment.window = advertised_receive_window(stack);
         segment.maximum_segment_size = 0U;
         segment.payload_length = length;
         if (!send_tcp_segment(stack, &segment, payload, length) ||
             !remember_pending_segment(stack, &segment, payload, length)) {
-            stack->remote_console_send_failures++;
+            stack->stream.send_failures++;
             return 0;
         }
-        stack->tcp_listener.sequence += (uint32_t)length;
-        stack->tcp_listener.peer_window =
-            (uint16_t)(stack->tcp_listener.peer_window - length);
-        stack->remote_console_bytes_sent += (uint32_t)length;
-        stack->remote_console_transmit_head =
-            (stack->remote_console_transmit_head + length) %
-                arwill_remote_console_transmit_capacity;
-        stack->remote_console_transmit_count -= length;
+        stack->stream.listener.sequence += (uint32_t)length;
+        stack->stream.listener.peer_window =
+            (uint16_t)(stack->stream.listener.peer_window - length);
+        stack->stream.bytes_sent += (uint32_t)length;
+        stack->stream.transmit_head =
+            (stack->stream.transmit_head + length) %
+                arwill_tcp_stream_transmit_capacity;
+        stack->stream.transmit_count -= length;
     }
     return 1;
 }
@@ -836,11 +860,14 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
     if (stack == 0 || stack->network == 0) {
         return 0;
     }
-    if (stack->remote_console_running) {
+    if (stack->stream.listening) {
         maintain_pending_segment(stack);
         maintain_tcp_close(stack);
         maintain_window_update(stack);
-        (void)flush_remote_console_transmit(stack);
+        (void)flush_stream_transmit(stack);
+        maintain_stream_close(stack);
+    } else {
+        maintain_stream_close(stack);
     }
     if (!arwill_network_poll_frame(stack->network, frame, sizeof(frame), &length)) {
         return 0;
@@ -901,36 +928,49 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
         stack->tcp_rst_received++;
     }
 
-    if (!stack->remote_console_running ||
-        incoming.destination_port != stack->tcp_listener.port) {
+    if (!stack->stream.listening ||
+        incoming.destination_port != stack->stream.listener.port) {
         stack->tcp_unknown_port_frames++;
         return send_reset_for_segment(stack, &incoming, frame + 6U);
     }
-    if (!arwill_tcp_listener_matches(&stack->tcp_listener, &incoming)) {
+    const enum arwill_tcp_state dispatch_state = stack->stream.listener.state;
+    const int closing_listener =
+        dispatch_state == arwill_tcp_state_last_ack ||
+        dispatch_state == arwill_tcp_state_fin_wait_1 ||
+        dispatch_state == arwill_tcp_state_fin_wait_2 ||
+        dispatch_state == arwill_tcp_state_closing ||
+        dispatch_state == arwill_tcp_state_time_wait;
+    if ((closing_listener || stack->stream.close_requested) &&
+        (incoming.flags & arwill_tcp_flag_syn) != 0U &&
+        !arwill_tcp_listener_matches(&stack->stream.listener, &incoming)) {
+        reset_tcp_stream(stack);
+    }
+    if (!arwill_tcp_listener_matches(&stack->stream.listener, &incoming)) {
         stack->tcp_tuple_mismatches++;
         return 0;
     }
 
-    const size_t receive_available = arwill_remote_console_receive_capacity -
-        stack->remote_console_receive_count;
+    const size_t receive_available = arwill_tcp_stream_receive_capacity -
+        stack->stream.receive_count;
     if (payload_length > receive_available &&
-        incoming.sequence == stack->tcp_listener.acknowledgement) {
+        incoming.sequence == stack->stream.listener.acknowledgement) {
         stack->tcp_receive_window_drops++;
         return send_current_ack(stack);
     }
 
-    const enum arwill_tcp_state previous_state = stack->tcp_listener.state;
-    const uint32_t previous_acknowledgement = stack->tcp_listener.acknowledgement;
-    if (!arwill_tcp_listener_receive(&stack->tcp_listener, &incoming, &reply)) {
+    const enum arwill_tcp_state previous_state = stack->stream.listener.state;
+    const uint32_t previous_acknowledgement = stack->stream.listener.acknowledgement;
+    if (!arwill_tcp_listener_receive(&stack->stream.listener, &incoming, &reply)) {
         return 0;
     }
     acknowledge_pending_segment(stack, &incoming);
 
     if (previous_state != arwill_tcp_state_listen &&
-        stack->tcp_listener.state == arwill_tcp_state_listen &&
-        (incoming.flags & arwill_tcp_flag_rst) != 0U) {
-        stack->remote_console_disconnects++;
-        reset_remote_console(stack);
+        stack->stream.listener.state == arwill_tcp_state_listen) {
+        if ((incoming.flags & arwill_tcp_flag_rst) != 0U) {
+            stack->stream.disconnects++;
+        }
+        reset_tcp_stream(stack);
         return 1;
     }
 
@@ -940,8 +980,8 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
     }
 
     if (previous_state == arwill_tcp_state_syn_received
-        && stack->tcp_listener.state == arwill_tcp_state_established) {
-        stack->remote_console_connections++;
+        && stack->stream.listener.state == arwill_tcp_state_established) {
+        stack->stream.connections++;
     }
 
     if (previous_state == arwill_tcp_state_established
@@ -950,19 +990,19 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
         stack->tcp_duplicate_acks++;
     }
 
-    if ((stack->tcp_listener.state == arwill_tcp_state_established ||
-            stack->tcp_listener.state == arwill_tcp_state_close_wait)
+    if ((stack->stream.listener.state == arwill_tcp_state_established ||
+            stack->stream.listener.state == arwill_tcp_state_close_wait)
         && payload_length != 0U
-        && stack->tcp_listener.acknowledgement != previous_acknowledgement) {
-        enqueue_remote_console(stack, payload, payload_length);
+        && stack->stream.listener.acknowledgement != previous_acknowledgement) {
+        enqueue_stream_receive(stack, payload, payload_length);
     }
 
     if ((incoming.flags & arwill_tcp_flag_fin) != 0U
-        && stack->tcp_listener.acknowledgement != previous_acknowledgement) {
-        stack->remote_console_peer_closed = 1;
+        && stack->stream.listener.acknowledgement != previous_acknowledgement) {
+        stack->stream.peer_closed = 1;
     }
 
-    if (stack->tcp_listener.state == arwill_tcp_state_time_wait &&
+    if (stack->stream.listener.state == arwill_tcp_state_time_wait &&
         previous_state != arwill_tcp_state_time_wait) {
         stack->tcp_time_wait_started_milliseconds =
             arwill_clock_monotonic_milliseconds(stack->clock);
@@ -974,92 +1014,11 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
     if (reply.flags == (arwill_tcp_flag_syn | arwill_tcp_flag_ack) &&
         stack->tcp_pending_count == 0U &&
         !remember_pending_segment(stack, &reply, 0, 0U)) {
-        reset_remote_console(stack);
+        reset_tcp_stream(stack);
         return 0;
     }
-    (void)flush_remote_console_transmit(stack);
+    (void)flush_stream_transmit(stack);
     return 1;
-}
-
-int arwill_ipv4_remote_console_connected(const struct arwill_ipv4_stack *stack) {
-    return stack != 0 && stack->remote_console_running &&
-        arwill_tcp_listener_connected(&stack->tcp_listener);
-}
-
-int arwill_ipv4_remote_console_peer_closed(const struct arwill_ipv4_stack *stack) {
-    return stack != 0 && stack->remote_console_peer_closed;
-}
-
-int arwill_ipv4_remote_console_read_byte(struct arwill_ipv4_stack *stack, uint8_t *byte) {
-    if (stack == 0 || byte == 0 || stack->remote_console_receive_count == 0U) {
-        return 0;
-    }
-
-    *byte = stack->remote_console_receive[stack->remote_console_receive_head];
-    stack->remote_console_receive_head = (stack->remote_console_receive_head + 1U)
-        % arwill_remote_console_receive_capacity;
-    stack->remote_console_receive_count--;
-    if (stack->tcp_last_advertised_window == 0U) {
-        stack->tcp_window_update_pending = 1;
-    }
-    return 1;
-}
-
-int arwill_ipv4_remote_console_write(struct arwill_ipv4_stack *stack,
-    const uint8_t *data, size_t length) {
-    if (!arwill_ipv4_remote_console_connected(stack)
-        || (data == 0 && length != 0U)) {
-        return 0;
-    }
-    if (length > arwill_remote_console_transmit_capacity -
-            stack->remote_console_transmit_count) {
-        stack->remote_console_bytes_dropped += (uint32_t)length;
-        return 0;
-    }
-    for (size_t index = 0; index < length; index++) {
-        const size_t tail = (stack->remote_console_transmit_head +
-            stack->remote_console_transmit_count) %
-            arwill_remote_console_transmit_capacity;
-        stack->remote_console_transmit[tail] = data[index];
-        stack->remote_console_transmit_count++;
-    }
-    return flush_remote_console_transmit(stack);
-}
-
-void arwill_ipv4_remote_console_close(struct arwill_ipv4_stack *stack) {
-    if (!arwill_ipv4_remote_console_connected(stack)) {
-        return;
-    }
-
-    while ((stack->tcp_pending_count != 0U ||
-            stack->remote_console_transmit_count != 0U)
-        && arwill_ipv4_remote_console_connected(stack)) {
-        (void)arwill_ipv4_poll_tcp(stack);
-        if (stack->tcp_pending_count != 0U) {
-            arwill_cpu_wait_for_interrupt();
-        }
-    }
-    if (!arwill_ipv4_remote_console_connected(stack)) {
-        return;
-    }
-
-    struct arwill_tcp_segment segment;
-    if (!arwill_tcp_listener_begin_close(&stack->tcp_listener, &segment) ||
-        !send_tcp_segment(stack, &segment, 0, 0U) ||
-        !remember_pending_segment(stack, &segment, 0, 0U)) {
-        stack->remote_console_send_failures++;
-        reset_remote_console(stack);
-        return;
-    }
-    stack->remote_console_disconnects++;
-    const uint64_t started = arwill_clock_monotonic_milliseconds(stack->clock);
-    while (stack->tcp_listener.state != arwill_tcp_state_listen &&
-        arwill_clock_monotonic_milliseconds(stack->clock) - started <
-            arwill_tcp_close_timeout_ms) {
-        (void)arwill_ipv4_poll_tcp(stack);
-        arwill_cpu_wait_for_interrupt();
-    }
-    reset_remote_console(stack);
 }
 
 int arwill_ipv4_service_tcp(struct arwill_ipv4_stack *stack, size_t *frames_processed) {

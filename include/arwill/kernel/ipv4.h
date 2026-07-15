@@ -6,13 +6,12 @@
 
 #include <arwill/kernel/network.h>
 #include <arwill/kernel/tcp.h>
+#include <arwill/kernel/tcp_stream.h>
 
 struct arwill_clock;
 struct arwill_console;
 
 enum {
-    arwill_remote_console_receive_capacity = 512,
-    arwill_remote_console_transmit_capacity = 8192,
     arwill_tcp_pending_payload_capacity = 1024,
     arwill_tcp_pending_segment_capacity = 4,
     arwill_tcp_local_maximum_segment_size = 1024,
@@ -48,26 +47,19 @@ struct arwill_ipv4_stack {
     uint32_t icmp_echo_requests_received;
     uint32_t icmp_echo_replies_sent;
     uint32_t icmp_checksum_drops;
-    struct arwill_tcp_listener tcp_listener;
+    struct arwill_tcp_stream stream;
     uint8_t tcp_peer_mac[arwill_network_mac_length];
     struct arwill_tcp_pending_segment
         tcp_pending[arwill_tcp_pending_segment_capacity];
     size_t tcp_pending_head;
     size_t tcp_pending_count;
+    uint64_t tcp_close_started_milliseconds;
     uint64_t tcp_time_wait_started_milliseconds;
     uint64_t tcp_smoothed_round_trip_ms;
     uint64_t tcp_round_trip_variance_ms;
     uint64_t tcp_retransmission_timeout_ms;
     uint16_t tcp_last_advertised_window;
     int tcp_window_update_pending;
-    uint8_t remote_console_receive[arwill_remote_console_receive_capacity];
-    size_t remote_console_receive_head;
-    size_t remote_console_receive_count;
-    uint8_t remote_console_transmit[arwill_remote_console_transmit_capacity];
-    size_t remote_console_transmit_head;
-    size_t remote_console_transmit_count;
-    int remote_console_running;
-    int remote_console_peer_closed;
     uint32_t tcp_frames_received;
     uint32_t tcp_frames_sent;
     uint32_t tcp_bytes_received;
@@ -86,12 +78,6 @@ struct arwill_ipv4_stack {
     uint32_t tcp_timeouts;
     uint32_t tcp_receive_window_drops;
     uint32_t tcp_window_updates;
-    uint32_t remote_console_connections;
-    uint32_t remote_console_disconnects;
-    uint32_t remote_console_bytes_received;
-    uint32_t remote_console_bytes_sent;
-    uint32_t remote_console_bytes_dropped;
-    uint32_t remote_console_send_failures;
 };
 
 int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
@@ -106,17 +92,6 @@ int arwill_ipv4_ping_gateway(struct arwill_ipv4_stack *stack);
 
 int arwill_ipv4_service_tcp(struct arwill_ipv4_stack *stack, size_t *frames_processed);
 int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack);
-
-int arwill_ipv4_remote_console_connected(const struct arwill_ipv4_stack *stack);
-int arwill_ipv4_remote_console_running(const struct arwill_ipv4_stack *stack);
-int arwill_ipv4_remote_console_start(struct arwill_ipv4_stack *stack,
-    uint16_t port);
-void arwill_ipv4_remote_console_stop(struct arwill_ipv4_stack *stack);
-int arwill_ipv4_remote_console_peer_closed(const struct arwill_ipv4_stack *stack);
-int arwill_ipv4_remote_console_read_byte(struct arwill_ipv4_stack *stack, uint8_t *byte);
-int arwill_ipv4_remote_console_write(struct arwill_ipv4_stack *stack,
-    const uint8_t *data, size_t length);
-void arwill_ipv4_remote_console_close(struct arwill_ipv4_stack *stack);
 
 void arwill_ipv4_print_config(const struct arwill_ipv4_stack *stack,
     const struct arwill_console *console);

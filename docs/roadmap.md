@@ -736,12 +736,18 @@ driver work, not accidental default access for every ring 3 program.
    advertisement, and explicit window reopening. The full QEMU TCP smoke
    retains interactive `nc` behavior.
 
-38. [ ] Kernel TCP stream contract
+38. [x] Kernel TCP stream contract
 
-   Planned for `0.22.0` per ADR-0060.
+   Completed in `0.22.0` per ADR-0060.
 
    Scope: separate IPv4/TCP framing from remote-console ownership through a
    nonblocking architecture-independent kernel stream API.
+
+   Verified by: the remote-console service and shell consume `tcp_stream`
+   operations instead of IPv4 policy calls; native tests cover bounded queue
+   acceptance, oversized-write rejection, and nonblocking close requests; the
+   QEMU smoke retains authentication, interactive shell I/O, reconnect, and
+   service restart behavior.
 
 39. [ ] Fixed TCP endpoint table
 

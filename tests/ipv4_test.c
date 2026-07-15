@@ -279,7 +279,7 @@ int main(void) {
         return 1;
     }
 
-    arwill_ipv4_remote_console_stop(&stack);
+    arwill_tcp_stream_stop(&stack.stream);
     queue_echo_request(&fake);
     if (!expect(arwill_ipv4_poll_tcp(&stack), "ICMP echo request accepted")
         || !expect(fake.send_count == 1U, "ICMP echo reply sent")
@@ -319,8 +319,8 @@ int main(void) {
     }
     fake.send_count = 0U;
     fake.outgoing_length = 0U;
-    if (!expect(arwill_ipv4_remote_console_start(
-            &stack, test_remote_console_port
+    if (!expect(arwill_tcp_stream_listen(
+            &stack.stream, test_remote_console_port, 0x41520000U
         ), "remote console restarted after ICMP test")) {
         return 1;
     }
@@ -362,11 +362,11 @@ int main(void) {
         arwill_tcp_flag_syn, 0, 0U);
     add_queued_maximum_segment_size(&fake, 128U);
     if (!expect(arwill_ipv4_poll_tcp(&stack), "SYN accepted")
-        || !expect(stack.tcp_listener.state == arwill_tcp_state_syn_received,
+        || !expect(stack.stream.listener.state == arwill_tcp_state_syn_received,
             "listener entered syn-received")
         || !expect(stack.tcp_pending_count == 1U, "SYN-ACK retained")
         || !expect(fake.send_count == 1U, "SYN-ACK sent")
-        || !expect(stack.tcp_listener.peer_maximum_segment_size == 128U,
+        || !expect(stack.stream.listener.peer_maximum_segment_size == 128U,
             "peer MSS parsed")
         || !expect((fake.outgoing[46] >> 4U) == 6U,
             "SYN-ACK contains TCP options")
@@ -396,16 +396,16 @@ int main(void) {
     }
 
     queue_segment(&fake, peer_port, peer_initial_sequence + 1U,
-        stack.tcp_listener.sequence + 1U, arwill_tcp_flag_ack, 0, 0U);
+        stack.stream.listener.sequence + 1U, arwill_tcp_flag_ack, 0, 0U);
     if (!expect(arwill_ipv4_poll_tcp(&stack), "handshake ACK accepted")
-        || !expect(arwill_ipv4_remote_console_connected(&stack),
+        || !expect(arwill_tcp_stream_connected(&stack.stream),
             "listener established")
         || !expect(stack.tcp_pending_count == 0U, "SYN-ACK acknowledged")) {
         return 1;
     }
 
     queue_segment(&fake, peer_port, peer_initial_sequence + 1U,
-        stack.tcp_listener.sequence, arwill_tcp_flag_ack, 0, 0U);
+        stack.stream.listener.sequence, arwill_tcp_flag_ack, 0, 0U);
     change_queued_source_address(&fake, 3U);
     const unsigned sends_before_tuple_mismatch = fake.send_count;
     if (!expect(!arwill_ipv4_poll_tcp(&stack), "wrong peer tuple rejected")
@@ -413,39 +413,43 @@ int main(void) {
             "wrong peer tuple counted")
         || !expect(fake.send_count == sends_before_tuple_mismatch,
             "wrong peer tuple produced no reply")
-        || !expect(arwill_ipv4_remote_console_connected(&stack),
+        || !expect(arwill_tcp_stream_connected(&stack.stream),
             "wrong peer did not disturb connection")) {
         return 1;
     }
 
     const uint8_t input = (uint8_t)'x';
     queue_segment(&fake, peer_port, peer_initial_sequence + 1U,
-        stack.tcp_listener.sequence, arwill_tcp_flag_ack | arwill_tcp_flag_psh,
+        stack.stream.listener.sequence, arwill_tcp_flag_ack | arwill_tcp_flag_psh,
         &input, 1U);
     if (!expect(arwill_ipv4_poll_tcp(&stack), "payload accepted")) {
         return 1;
     }
     uint8_t received = 0;
-    if (!expect(arwill_ipv4_remote_console_read_byte(&stack, &received),
+    if (!expect(arwill_tcp_stream_read(&stack.stream, &received, 1U) == 1U,
             "payload queued")
         || !expect(received == input, "queued payload preserved")) {
         return 1;
     }
 
     queue_segment(&fake, peer_port, peer_initial_sequence + 1U,
-        stack.tcp_listener.sequence, arwill_tcp_flag_ack | arwill_tcp_flag_psh,
+        stack.stream.listener.sequence, arwill_tcp_flag_ack | arwill_tcp_flag_psh,
         &input, 1U);
     if (!expect(arwill_ipv4_poll_tcp(&stack), "duplicate payload acknowledged")
         || !expect(stack.tcp_duplicate_acks == 1U, "duplicate ACK counted")
-        || !expect(!arwill_ipv4_remote_console_read_byte(&stack, &received),
+        || !expect(!arwill_tcp_stream_read(&stack.stream, &received, 1U),
             "duplicate payload not queued")) {
         return 1;
     }
 
     const uint8_t output[2] = { (uint8_t)'o', (uint8_t)'k' };
-    if (!expect(arwill_ipv4_remote_console_write(&stack, output, sizeof(output)),
-            "console output sent")
-        || !expect(stack.tcp_pending_count == 1U, "console output retained")) {
+    if (!expect(arwill_tcp_stream_write(
+            &stack.stream, output, sizeof(output)) == sizeof(output),
+            "console output queued")) {
+        return 1;
+    }
+    (void)arwill_ipv4_poll_tcp(&stack);
+    if (!expect(stack.tcp_pending_count == 1U, "console output retained")) {
         return 1;
     }
     const unsigned sends_before_retry = fake.send_count;
@@ -455,8 +459,8 @@ int main(void) {
         return 1;
     }
 
-    queue_segment(&fake, peer_port, stack.tcp_listener.acknowledgement,
-        stack.tcp_listener.sequence, arwill_tcp_flag_ack, 0, 0U);
+    queue_segment(&fake, peer_port, stack.stream.listener.acknowledgement,
+        stack.stream.listener.sequence, arwill_tcp_flag_ack, 0, 0U);
     if (!expect(arwill_ipv4_poll_tcp(&stack), "output ACK accepted")
         || !expect(stack.tcp_pending_count == 0U,
             "output ACK cleared pending segment")) {
@@ -468,17 +472,21 @@ int main(void) {
         multi_output[index] = (uint8_t)('a' + index % 26U);
     }
     const unsigned sends_before_multi = fake.send_count;
-    if (!expect(arwill_ipv4_remote_console_write(
-            &stack, multi_output, sizeof(multi_output)),
-            "multi-segment output sent")
-        || !expect(stack.tcp_pending_count == 3U,
+    if (!expect(arwill_tcp_stream_write(
+            &stack.stream, multi_output, sizeof(multi_output)) ==
+                sizeof(multi_output),
+            "multi-segment output queued")) {
+        return 1;
+    }
+    (void)arwill_ipv4_poll_tcp(&stack);
+    if (!expect(stack.tcp_pending_count == 3U,
             "three output segments retained")
         || !expect(fake.send_count == sends_before_multi + 3U,
             "three output segments transmitted")) {
         return 1;
     }
-    queue_segment(&fake, peer_port, stack.tcp_listener.acknowledgement,
-        stack.tcp_listener.sequence, arwill_tcp_flag_ack, 0, 0U);
+    queue_segment(&fake, peer_port, stack.stream.listener.acknowledgement,
+        stack.stream.listener.sequence, arwill_tcp_flag_ack, 0, 0U);
     if (!expect(arwill_ipv4_poll_tcp(&stack), "cumulative ACK accepted")
         || !expect(stack.tcp_pending_count == 0U,
             "cumulative ACK cleared send flight")
@@ -491,35 +499,35 @@ int main(void) {
         return 1;
     }
 
-    uint8_t receive_fill[arwill_remote_console_receive_capacity];
+    uint8_t receive_fill[arwill_tcp_stream_receive_capacity];
     for (size_t index = 0; index < sizeof(receive_fill); index++) {
         receive_fill[index] = (uint8_t)'w';
     }
-    queue_segment(&fake, peer_port, stack.tcp_listener.acknowledgement,
-        stack.tcp_listener.sequence, arwill_tcp_flag_ack | arwill_tcp_flag_psh,
+    queue_segment(&fake, peer_port, stack.stream.listener.acknowledgement,
+        stack.stream.listener.sequence, arwill_tcp_flag_ack | arwill_tcp_flag_psh,
         receive_fill, sizeof(receive_fill));
     if (!expect(arwill_ipv4_poll_tcp(&stack), "receive window filled")
-        || !expect(stack.remote_console_receive_count ==
-            arwill_remote_console_receive_capacity, "receive ring is full")
+        || !expect(stack.stream.receive_count ==
+            arwill_tcp_stream_receive_capacity, "receive ring is full")
         || !expect(stack.tcp_last_advertised_window == 0U,
             "zero receive window advertised")) {
         return 1;
     }
     const uint32_t acknowledgement_before_window_drop =
-        stack.tcp_listener.acknowledgement;
-    queue_segment(&fake, peer_port, stack.tcp_listener.acknowledgement,
-        stack.tcp_listener.sequence, arwill_tcp_flag_ack | arwill_tcp_flag_psh,
+        stack.stream.listener.acknowledgement;
+    queue_segment(&fake, peer_port, stack.stream.listener.acknowledgement,
+        stack.stream.listener.sequence, arwill_tcp_flag_ack | arwill_tcp_flag_psh,
         &input, 1U);
     if (!expect(arwill_ipv4_poll_tcp(&stack), "closed receive window handled")
         || !expect(stack.tcp_receive_window_drops == 1U,
             "closed receive window drop counted")
-        || !expect(stack.tcp_listener.acknowledgement ==
+        || !expect(stack.stream.listener.acknowledgement ==
             acknowledgement_before_window_drop,
             "unretained byte was not acknowledged")) {
         return 1;
     }
     const unsigned sends_before_window_update = fake.send_count;
-    if (!expect(arwill_ipv4_remote_console_read_byte(&stack, &received),
+    if (!expect(arwill_tcp_stream_read(&stack.stream, &received, 1U) == 1U,
             "one byte freed from zero window")) {
         return 1;
     }
@@ -532,10 +540,11 @@ int main(void) {
         return 1;
     }
 
-    if (!expect(arwill_ipv4_remote_console_write(&stack, output, 1U),
-            "timeout probe sent")) {
+    if (!expect(arwill_tcp_stream_write(&stack.stream, output, 1U) == 1U,
+            "timeout probe queued")) {
         return 1;
     }
+    (void)arwill_ipv4_poll_tcp(&stack);
     for (unsigned attempt = 0; attempt <= arwill_tcp_max_retransmissions; attempt++) {
         const struct arwill_tcp_pending_segment *pending =
             &stack.tcp_pending[stack.tcp_pending_head];
@@ -543,10 +552,38 @@ int main(void) {
         (void)arwill_ipv4_poll_tcp(&stack);
     }
     if (!expect(stack.tcp_timeouts == 1U, "retry exhaustion counted")
-        || !expect(stack.tcp_listener.state == arwill_tcp_state_listen,
+        || !expect(stack.stream.listener.state == arwill_tcp_state_listen,
             "timeout returned listener to listen")
         || !expect(stack.tcp_pending_count == 0U,
             "timeout cleared pending segment")) {
+        return 1;
+    }
+
+    stack.stream.listener.state = arwill_tcp_state_established;
+    stack.stream.close_requested = 1;
+    stack.stream.listener.peer_port = (uint16_t)(peer_port - 1U);
+    for (size_t index = 0; index < 4U; index++) {
+        stack.stream.listener.local_address[index] = stack.address[index];
+    }
+    stack.stream.listener.peer_address[0] = 10U;
+    stack.stream.listener.peer_address[1] = 0U;
+    stack.stream.listener.peer_address[2] = 2U;
+    stack.stream.listener.peer_address[3] = 2U;
+    queue_segment(&fake, peer_port, peer_initial_sequence + 100U, 0U,
+        arwill_tcp_flag_syn, 0, 0U);
+    if (!expect(arwill_ipv4_poll_tcp(&stack),
+            "new tuple SYN replaces closing connection")
+        || !expect(stack.stream.listener.state == arwill_tcp_state_syn_received,
+            "listener accepts reconnect during old tuple close")) {
+        return 1;
+    }
+    stack.tcp_pending_count = 0;
+    stack.stream.listener.state = arwill_tcp_state_fin_wait_2;
+    stack.tcp_close_started_milliseconds = time.milliseconds;
+    time.milliseconds += arwill_tcp_close_timeout_ms;
+    (void)arwill_ipv4_poll_tcp(&stack);
+    if (!expect(stack.stream.listener.state == arwill_tcp_state_listen,
+            "nonblocking close timeout restores listener")) {
         return 1;
     }
 
@@ -651,6 +688,33 @@ int main(void) {
             "passive close final ACK accepted")
         || !expect(close_listener.state == arwill_tcp_state_listen,
             "passive close returned to listen")) {
+        return 1;
+    }
+
+    struct arwill_tcp_stream contract_stream;
+    arwill_tcp_stream_init(&contract_stream);
+    if (!expect(arwill_tcp_stream_listen(
+            &contract_stream, 24000U, 3000U), "stream contract listens")) {
+        return 1;
+    }
+    contract_stream.listener.state = arwill_tcp_state_established;
+    if (!expect(arwill_tcp_stream_write(
+            &contract_stream, output, sizeof(output)) == sizeof(output),
+            "stream write queues complete buffer")
+        || !expect(contract_stream.transmit_count == sizeof(output),
+            "stream write is nonblocking")
+        || !expect(arwill_tcp_stream_write(
+            &contract_stream, output,
+            arwill_tcp_stream_transmit_capacity + 1U) == 0U,
+            "stream rejects oversized write")
+        || !expect(contract_stream.bytes_dropped ==
+            arwill_tcp_stream_transmit_capacity + 1U,
+            "stream counts rejected bytes")) {
+        return 1;
+    }
+    arwill_tcp_stream_close(&contract_stream);
+    if (!expect(contract_stream.close_requested,
+            "stream close is a nonblocking request")) {
         return 1;
     }
 

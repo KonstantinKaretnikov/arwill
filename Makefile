@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.21.1
+PROJECT_VERSION := 0.22.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -17,10 +17,11 @@ HELLO_APP := $(BUILD_DIR)/apps/hello.awp
 CALC_APP := $(BUILD_DIR)/apps/calc.awp
 EDIT_APP := $(BUILD_DIR)/apps/edit.awp
 IPV4_HOST_TEST := $(BUILD_DIR)/tests/ipv4_test
-IPV4_HOST_TEST_SOURCES := tests/ipv4_test.c kernel/clock.c kernel/console.c kernel/ipv4.c kernel/network.c kernel/tcp.c
+IPV4_HOST_TEST_SOURCES := tests/ipv4_test.c kernel/clock.c kernel/console.c kernel/ipv4.c kernel/network.c kernel/tcp.c kernel/tcp_stream.c
 IPV4_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/console.h \
 	include/arwill/kernel/cpu.h include/arwill/kernel/ipv4.h \
-	include/arwill/kernel/network.h include/arwill/kernel/tcp.h
+	include/arwill/kernel/network.h include/arwill/kernel/tcp.h \
+	include/arwill/kernel/tcp_stream.h
 CONFIG_LOG_HOST_TEST := $(BUILD_DIR)/tests/config_log_test
 CONFIG_LOG_HOST_TEST_SOURCES := tests/config_log_test.c kernel/clock.c kernel/config.c kernel/filesystem.c kernel/log.c kernel/service.c
 CONFIG_LOG_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/config.h \
@@ -84,6 +85,7 @@ SOURCES := \
 	kernel/service.c \
 	kernel/shell.c \
 	kernel/tcp.c \
+	kernel/tcp_stream.c \
 	kernel/user.c \
 	arch/x86_64/boot/framebuffer_console.c \
 	arch/x86_64/boot/entry.c \

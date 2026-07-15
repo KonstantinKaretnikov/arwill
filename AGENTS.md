@@ -126,6 +126,10 @@ Rules for future work:
   Internet exposure. SSH-specific crypto and host-key storage remain absent.
   Use the documented raw-terminal `stty` invocation for interactive `nc`;
   plain canonical-mode `nc` cannot deliver arrows, Tab, or Ctrl+C key-by-key.
+- Keep TCP service consumers behind the architecture-independent `tcp_stream`
+  contract. IPv4 owns framing, ACK/RTO progress, and retransmission; stream
+  consumers use bounded nonblocking read/write/close requests and must not
+  poll the network or wait for peer acknowledgements themselves.
 - Initialize supervisor-only platform MMIO mappings before AWP address spaces
   copy kernel PML4 entries. Keep device MMIO in a dedicated high-half range,
   separate from Limine HHDM. See ADR-0047.
