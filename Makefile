@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.22.1
+PROJECT_VERSION := 0.23.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -16,12 +16,13 @@ ARFS_REGION_SECTORS := 2048
 HELLO_APP := $(BUILD_DIR)/apps/hello.awp
 CALC_APP := $(BUILD_DIR)/apps/calc.awp
 EDIT_APP := $(BUILD_DIR)/apps/edit.awp
+NETSERVE_APP := $(BUILD_DIR)/apps/netserve.awp
 IPV4_HOST_TEST := $(BUILD_DIR)/tests/ipv4_test
-IPV4_HOST_TEST_SOURCES := tests/ipv4_test.c kernel/clock.c kernel/console.c kernel/ipv4.c kernel/network.c kernel/tcp.c kernel/tcp_stream.c
+IPV4_HOST_TEST_SOURCES := tests/ipv4_test.c kernel/awp_network.c kernel/clock.c kernel/console.c kernel/ipv4.c kernel/network.c kernel/tcp.c kernel/tcp_stream.c
 IPV4_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/console.h \
 	include/arwill/kernel/cpu.h include/arwill/kernel/ipv4.h \
 	include/arwill/kernel/network.h include/arwill/kernel/tcp.h \
-	include/arwill/kernel/tcp_stream.h
+	include/arwill/kernel/tcp_stream.h include/arwill/kernel/awp_network.h
 CONFIG_LOG_HOST_TEST := $(BUILD_DIR)/tests/config_log_test
 CONFIG_LOG_HOST_TEST_SOURCES := tests/config_log_test.c kernel/clock.c kernel/config.c kernel/filesystem.c kernel/log.c kernel/service.c
 CONFIG_LOG_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/config.h \
@@ -64,6 +65,7 @@ LDFLAGS += -T arch/x86_64/linker.ld
 
 SOURCES := \
 	kernel/arfs.c \
+	kernel/awp_network.c \
 	kernel/boot_catalog.c \
 	kernel/block_device.c \
 	kernel/clock.c \
@@ -191,8 +193,8 @@ $(ISO): $(KERNEL) platform/qemu/limine.conf third_party/limine/limine
 		$(ISO_ROOT) -o $(ISO)
 	third_party/limine/limine bios-install $(ISO)
 
-$(ARFS_SEED): scripts/create_test_disk.sh $(HELLO_APP) $(CALC_APP) $(EDIT_APP) Makefile
-	@sh scripts/create_test_disk.sh "$@" "$(PROJECT_VERSION)" "$(HELLO_APP)" "$(CALC_APP)" "$(EDIT_APP)"
+$(ARFS_SEED): scripts/create_test_disk.sh $(HELLO_APP) $(CALC_APP) $(EDIT_APP) $(NETSERVE_APP) Makefile
+	@sh scripts/create_test_disk.sh "$@" "$(PROJECT_VERSION)" "$(HELLO_APP)" "$(CALC_APP)" "$(EDIT_APP)" "$(NETSERVE_APP)"
 
 $(DISK_IMAGE): $(ISO) $(ARFS_SEED) scripts/create_disk_image.sh Makefile
 	@sh scripts/create_disk_image.sh "$@" "$(ISO)" "$(ARFS_SEED)" \
@@ -208,6 +210,9 @@ $(CALC_APP): apps/calc/build.sh apps/calc/calc.c apps/calc/start.S apps/calc/lin
 
 $(EDIT_APP): apps/edit/build.sh apps/edit/edit.c apps/edit/start.S apps/edit/linker.ld Makefile
 	@sh apps/edit/build.sh "$@"
+
+$(NETSERVE_APP): apps/netserve/build.sh apps/netserve/netserve.c apps/netserve/start.S apps/netserve/linker.ld Makefile
+	@sh apps/netserve/build.sh "$@"
 
 third_party/limine/limine:
 	@scripts/setup_limine.sh

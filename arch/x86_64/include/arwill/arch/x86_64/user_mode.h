@@ -10,6 +10,8 @@
 #include <arwill/kernel/log.h>
 #include <arwill/kernel/user.h>
 
+struct arwill_ipv4_stack;
+
 struct arwill_x86_64_user_registers {
     uint64_t rax;
     uint64_t rbx;
@@ -47,6 +49,7 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     const struct arwill_input *input,
     const struct arwill_clock *clock,
     const struct arwill_filesystem *filesystem,
+    struct arwill_ipv4_stack *ipv4,
     struct arwill_event_log *log
 );
 

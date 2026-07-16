@@ -1,6 +1,6 @@
 # Arwill
 
-Arwill `0.22.1` is a small experimental x86-64 operating system for QEMU.
+Arwill `0.23.0` is a small experimental x86-64 operating system for QEMU.
 It is built around explicit, replaceable components and documented decisions.
 See [MANIFESTO.md](MANIFESTO.md).
 
@@ -13,8 +13,11 @@ Arwill is not a production OS.
 - Serial owner shell with framebuffer text output mirroring.
 - ATA PIO storage and mutable ARFS v2.
 - Small kernel heap, device registry, IDT/PIC/PIT, and monotonic uptime.
-- e1000, fixed IPv4, ARP/ICMP, and a bounded TCP remote console.
+- e1000, fixed IPv4, ARP/ICMP, a four-endpoint bounded TCP stack, and a TCP
+  remote console.
 - Four-slot ring 3 AWP runtime with PIT preemption and fault containment.
+- A bounded nonblocking AWP networking ABI and `/apps/netserve.awp`, a real
+  one-connection TCP service on guest port 23233.
 - Fixed-slot cooperative kernel tasks with saved x86-64 contexts and dedicated
   8 KiB stacks.
 - Long-lived `network-poll` and `remote-console` system tasks, distinct from
@@ -82,7 +85,7 @@ console window when the replacement starts.
 Boot output is intentionally minimal and identical on serial and framebuffer:
 
 ```text
-Arwill 0.22.1 ready
+Arwill 0.23.0 ready
 Arwill:/>
 ```
 

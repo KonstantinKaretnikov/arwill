@@ -55,6 +55,7 @@ struct arwill_tcp_endpoint {
     uint8_t connect_next_hop[4];
     uint16_t connect_peer_port;
     uint16_t connect_local_port;
+    uint16_t bound_port;
     uint64_t connect_arp_sent_milliseconds;
     unsigned connect_arp_attempts;
     int connect_pending;
@@ -111,6 +112,8 @@ int arwill_ipv4_service_tcp(struct arwill_ipv4_stack *stack, size_t *frames_proc
 int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack);
 
 struct arwill_tcp_stream *arwill_ipv4_tcp_open(struct arwill_ipv4_stack *stack);
+int arwill_ipv4_tcp_bind(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_stream *stream, uint16_t port);
 int arwill_ipv4_tcp_listen(struct arwill_ipv4_stack *stack,
     struct arwill_tcp_stream *stream, uint16_t port);
 int arwill_ipv4_tcp_connect(struct arwill_ipv4_stack *stack,

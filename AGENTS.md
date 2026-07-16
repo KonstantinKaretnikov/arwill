@@ -50,6 +50,12 @@ Rules for future work:
 - The AWP syscall ABI also includes bounded whole-text-file `read_file` and
   `write_file` operations for current consumers such as `/apps/edit.awp`.
   These are not file descriptors, streams, append, seek, or a POSIX file API.
+- Treat AWP networking syscalls `8` through `15` as the bounded nonblocking
+  contract in ADR-0061. Each AWP slot owns two handles; endpoint 0 remains the
+  remote console, retry yields to the system progress pass, and exit, cancel,
+  fault, and slot reuse force-release owned endpoints. `/apps/netserve.awp` is
+  the first real consumer on guest port 23233. Do not describe this ABI as
+  POSIX sockets or file descriptors.
 - Treat Arwill as a single-owner OS. Do not introduce login accounts, groups,
   roles, or multi-user permission checks unless a later ADR explicitly changes
   this direction. The owner has full system control; ring 3 is an engineering

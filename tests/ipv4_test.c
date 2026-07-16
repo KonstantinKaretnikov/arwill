@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include <arwill/kernel/awp_network.h>
 #include <arwill/kernel/clock.h>
 #include <arwill/kernel/cpu.h>
 #include <arwill/kernel/ipv4.h>
@@ -821,6 +822,8 @@ int main(void) {
     const uint8_t active_peer_address[4] = { 10U, 0U, 2U, 2U };
     struct arwill_tcp_stream *active = arwill_ipv4_tcp_open(&stack);
     if (!expect(active != 0, "active endpoint allocated")
+        || !expect(arwill_ipv4_tcp_bind(&stack, active, 26000U),
+            "active endpoint binds local port")
         || !expect(arwill_ipv4_tcp_connect(&stack, active,
             active_peer_address, 26000U, 27000U) == 0,
             "active connect begins asynchronously")) {
@@ -866,6 +869,7 @@ int main(void) {
     struct arwill_tcp_stream *unresolved = arwill_ipv4_tcp_open(&stack);
     const uint8_t missing_peer_address[4] = { 10U, 0U, 2U, 99U };
     if (!expect(unresolved != 0 &&
+            arwill_ipv4_tcp_bind(&stack, unresolved, 26001U) &&
             arwill_ipv4_tcp_connect(&stack, unresolved,
                 missing_peer_address, 26001U, 27001U) == 0,
             "unresolved active connect begins")) {
@@ -881,6 +885,48 @@ int main(void) {
         return 1;
     }
     arwill_ipv4_tcp_release(&stack, unresolved);
+
+    struct arwill_awp_network_owner first_owner;
+    struct arwill_awp_network_owner second_owner;
+    arwill_awp_network_owner_init(&first_owner);
+    arwill_awp_network_owner_init(&second_owner);
+    if (!expect(arwill_awp_network_open(&stack, &first_owner) == 0L &&
+            arwill_awp_network_open(&stack, &first_owner) == 1L,
+            "AWP owner receives two bounded handles")
+        || !expect(arwill_awp_network_open(&stack, &first_owner) ==
+            arwill_awp_network_unavailable,
+            "AWP handle table is bounded")
+        || !expect(arwill_awp_network_open(&stack, &second_owner) == 0L,
+            "second AWP owner receives remaining endpoint")
+        || !expect(arwill_awp_network_open(&stack, &second_owner) ==
+            arwill_awp_network_unavailable,
+            "application endpoint table is globally bounded")
+        || !expect(arwill_awp_network_bind(&stack, &first_owner,
+            0U, 28000U) == 0L, "AWP handle binds")
+        || !expect(arwill_awp_network_bind(&stack, &second_owner,
+            0U, 28000U) == arwill_awp_network_address_in_use,
+            "AWP duplicate bind reports address in use")
+        || !expect(arwill_awp_network_bind(&stack, &first_owner,
+            1U, 28001U) == 0L &&
+            arwill_awp_network_listen(&stack, &first_owner, 1U) == 0L,
+            "AWP bound handle listens")
+        || !expect(arwill_awp_network_accept(&first_owner, 1U) ==
+            arwill_awp_network_retry,
+            "AWP accept is nonblocking")
+        || !expect(arwill_awp_network_write(&first_owner, 1U,
+            output, arwill_awp_network_io_capacity + 1U) ==
+            arwill_awp_network_invalid,
+            "AWP write enforces syscall bound")) {
+        return 1;
+    }
+    arwill_awp_network_cleanup(&stack, &first_owner);
+    arwill_awp_network_cleanup(&stack, &second_owner);
+    if (!expect(stack.endpoints[1].allocated == 0 &&
+            stack.endpoints[2].allocated == 0 &&
+            stack.endpoints[3].allocated == 0,
+            "AWP cleanup releases every owned endpoint")) {
+        return 1;
+    }
 
     puts("IPv4/ICMP/TCP host test passed");
     return 0;

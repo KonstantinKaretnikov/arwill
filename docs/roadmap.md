@@ -762,13 +762,19 @@ driver work, not accidental default access for every ring 3 program.
    The QEMU smoke retains the endpoint-0 remote console and reports fixed-table
    allocation diagnostics.
 
-40. [ ] Bounded AWP networking ABI
+40. [x] Bounded AWP networking ABI
 
-   Planned for `0.23.0` per ADR-0060.
+   Completed in `0.23.0` per ADR-0060 and ADR-0061.
 
    Scope: give each fixed AWP slot a bounded handle table and nonblocking
    network operations, with task-owned cleanup and one stored program as the
    first real second consumer of the endpoint table.
+
+   Verified by: native tests cover per-owner handle exhaustion, global
+   endpoint exhaustion, duplicate bind, bounded I/O, retry, active open, and
+   forced owner cleanup. QEMU runs `/apps/netserve.awp` on guest port 23233
+   while the serial and authenticated remote shells remain active, exchanges
+   payload bytes, closes the stream, and observes a clean AWP exit.
 
 41. [ ] TCP v2 integration and fault-injection stabilization
 

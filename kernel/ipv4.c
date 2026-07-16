@@ -89,6 +89,7 @@ static void initialize_tcp_endpoint(struct arwill_tcp_endpoint *endpoint) {
     }
     endpoint->connect_peer_port = 0U;
     endpoint->connect_local_port = 0U;
+    endpoint->bound_port = 0U;
     endpoint->connect_arp_sent_milliseconds = 0U;
     endpoint->connect_arp_attempts = 0U;
     endpoint->connect_pending = 0;
@@ -126,6 +127,7 @@ int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
         initialize_tcp_endpoint(&stack->endpoints[index]);
     }
     stack->endpoints[0].allocated = 1;
+    stack->endpoints[0].bound_port = remote_console_port;
     (void)arwill_tcp_stream_listen(
         &stack->endpoints[0].stream, remote_console_port, 0x41520000U
     );
@@ -188,37 +190,47 @@ static struct arwill_tcp_endpoint *endpoint_for_stream(
     return 0;
 }
 
-int arwill_ipv4_tcp_listen(struct arwill_ipv4_stack *stack,
-    struct arwill_tcp_stream *stream, uint16_t port) {
-    struct arwill_tcp_endpoint *endpoint = endpoint_for_stream(stack, stream);
-    if (endpoint == 0 || port == 0U) {
-        return 0;
-    }
-    for (size_t index = 0; index < arwill_tcp_endpoint_capacity; index++) {
-        const struct arwill_tcp_endpoint *candidate = &stack->endpoints[index];
-        if (candidate != endpoint && candidate->allocated &&
-            candidate->stream.listening &&
-            candidate->stream.listener.port == port) {
-            return 0;
-        }
-    }
-    reset_tcp_stream(endpoint);
-    return arwill_tcp_stream_listen(
-        stream, port, 0x41520000U + stream->connections
-    );
-}
-
 static int local_port_available(const struct arwill_ipv4_stack *stack,
     const struct arwill_tcp_endpoint *endpoint, uint16_t port) {
     for (size_t index = 0; index < arwill_tcp_endpoint_capacity; index++) {
         const struct arwill_tcp_endpoint *candidate = &stack->endpoints[index];
         if (candidate != endpoint && candidate->allocated &&
-            candidate->stream.listening &&
-            candidate->stream.listener.port == port) {
+            candidate->bound_port == port) {
             return 0;
         }
     }
     return 1;
+}
+
+int arwill_ipv4_tcp_bind(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_stream *stream, uint16_t port) {
+    struct arwill_tcp_endpoint *endpoint = endpoint_for_stream(stack, stream);
+    if (endpoint == 0 || port == 0U || endpoint->bound_port != 0U ||
+        !local_port_available(stack, endpoint, port)) {
+        return 0;
+    }
+    endpoint->bound_port = port;
+    return 1;
+}
+
+int arwill_ipv4_tcp_listen(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_stream *stream, uint16_t port) {
+    struct arwill_tcp_endpoint *endpoint = endpoint_for_stream(stack, stream);
+    if (endpoint == 0 || port == 0U ||
+        (endpoint->bound_port != 0U && endpoint->bound_port != port)) {
+        return 0;
+    }
+    if (endpoint->bound_port == 0U &&
+        !arwill_ipv4_tcp_bind(stack, stream, port)) {
+        return 0;
+    }
+    reset_tcp_stream(endpoint);
+    endpoint->bound_port = port;
+    endpoint->connect_failed = 0;
+    endpoint->active_open = 0;
+    return arwill_tcp_stream_listen(
+        stream, port, 0x41520000U + stream->connections
+    );
 }
 
 int arwill_ipv4_tcp_connect(struct arwill_ipv4_stack *stack,
@@ -226,7 +238,7 @@ int arwill_ipv4_tcp_connect(struct arwill_ipv4_stack *stack,
     uint16_t local_port, uint16_t peer_port) {
     struct arwill_tcp_endpoint *endpoint = endpoint_for_stream(stack, stream);
     if (endpoint == 0 || peer_address == 0 || local_port == 0U ||
-        peer_port == 0U || !local_port_available(stack, endpoint, local_port)) {
+        peer_port == 0U || endpoint->bound_port != local_port) {
         return -1;
     }
     if (arwill_tcp_stream_connected(stream)) {
@@ -241,6 +253,7 @@ int arwill_ipv4_tcp_connect(struct arwill_ipv4_stack *stack,
     }
 
     reset_tcp_stream(endpoint);
+    endpoint->bound_port = local_port;
     stream->listening = 1;
     stream->listener.port = local_port;
     endpoint->connect_local_port = local_port;

@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.22.1 has one executable path:
+Arwill 0.23.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -227,6 +227,10 @@ User runtime:
   returns monotonic milliseconds, and syscalls `5` and `6` perform bounded
   whole-text-file reads and writes. Syscall `7` copies the task's one bounded,
   shell-resolved launch file path to a user buffer.
+- Syscalls `8` through `15` expose the bounded nonblocking AWP TCP operations
+  `open`, `bind`, `listen`, `connect`, `accept`, `read`, `write`, and `close`.
+  Each AWP slot owns two handles; retry results yield progress to the system
+  task pass before the AWP resumes.
 - `run userhello` executes a tiny generated user program that writes
   `user hello: hello from ring 3` through syscall `write` and exits with code
   `7`.

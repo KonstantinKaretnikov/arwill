@@ -16,15 +16,19 @@ qemu_status_log=$serial_log.status
 reboot_serial_log=$serial_log.reboot
 reboot_status_log=$serial_log.reboot.status
 remote_console_log=$serial_log.remote
+awp_service_log=$serial_log.awp-network
 remote_console_port=$((30000 + $$ % 20000))
+awp_service_port=$((remote_console_port + 1))
 guest_mac=52:54:00:ab:cd:ef
 
 port_attempts=0
-while nc -z 127.0.0.1 "$remote_console_port" >/dev/null 2>&1; do
-    remote_console_port=$((remote_console_port + 1))
-    if [ "$remote_console_port" -gt 49999 ]; then
+while nc -z 127.0.0.1 "$remote_console_port" >/dev/null 2>&1 ||
+      nc -z 127.0.0.1 "$awp_service_port" >/dev/null 2>&1; do
+    remote_console_port=$((remote_console_port + 2))
+    if [ "$remote_console_port" -gt 49998 ]; then
         remote_console_port=30000
     fi
+    awp_service_port=$((remote_console_port + 1))
     port_attempts=$((port_attempts + 1))
     if [ "$port_attempts" -ge 20000 ]; then
         echo "no free localhost port for QEMU remote-console smoke" >&2
@@ -32,7 +36,7 @@ while nc -z 127.0.0.1 "$remote_console_port" >/dev/null 2>&1; do
     fi
 done
 
-rm -f "$serial_log" "$qemu_status_log" "$reboot_serial_log" "$reboot_status_log" "$remote_console_log"
+rm -f "$serial_log" "$qemu_status_log" "$reboot_serial_log" "$reboot_status_log" "$remote_console_log" "$awp_service_log"
 
 wait_for_log_file() {
     log_file=$1
@@ -91,7 +95,7 @@ run_qemu_to_log() {
         -serial stdio -monitor none -display none -no-reboot \
         -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
         -drive file="$disk_image",format=raw,if=ide,index=0,media=disk \
-        -netdev user,id=net0,hostfwd=tcp:127.0.0.1:"$remote_console_port"-:23232 \
+        -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$remote_console_port-:23232,hostfwd=tcp:127.0.0.1:$awp_service_port-:23233" \
         -device e1000,netdev=net0,mac="$guest_mac" \
         > "$log_file" 2>&1
 }
@@ -106,10 +110,10 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.22.1" 2
+    wait_for_primary_log_count "Arwill 0.23.0" 2
     sleep 0.1
     printf 'sys\t\r'
-    wait_for_primary_log "system: Arwill 0.22.1"
+    wait_for_primary_log "system: Arwill 0.23.0"
     wait_for_primary_log_count "uptime: " 1
     sleep 0.1
     printf 'devices p\t\r'
@@ -211,7 +215,7 @@ run_qemu_to_log() {
     sleep 0.1
     printf 'system st\t\r'
     wait_for_primary_log "storage: arfs mutable"
-    wait_for_primary_log "entries: 15/24 used"
+    wait_for_primary_log "entries: 16/24 used"
     wait_for_primary_log "manifest: 2 sectors"
     wait_for_primary_log "limits: path 63 bytes, file 8192 bytes"
     sleep 0.1
@@ -273,6 +277,23 @@ run_qemu_to_log() {
     wait_for_primary_log "runs: 3"
     wait_for_primary_log "bytes written: 53"
     wait_for_primary_log "bad syscalls: 1"
+    sleep 0.1
+    (
+        printf 'arwill\r'
+        printf 'version\n'
+        printf 'exec netserve\n'
+        sleep 5
+        printf 'exit\n'
+    ) | nc -w 5 127.0.0.1 "$remote_console_port" >> "$remote_console_log" &
+    concurrent_remote_pid=$!
+    wait_for_log_count_file "$remote_console_log" "Arwill remote console" 3
+    wait_for_log_file "$remote_console_log" "netserve: listening on 23233"
+    printf 'network tcp\r'
+    wait_for_primary_log "tcp endpoints: allocated 2/4, listening 2, connected 1"
+    printf 'network smoke\n' | nc -w 5 127.0.0.1 "$awp_service_port" > "$awp_service_log"
+    wait_for_log_file "$awp_service_log" "Arwill AWP TCP service"
+    wait_for_log_file "$remote_console_log" "netserve: served one connection"
+    wait "$concurrent_remote_pid"
     sleep 0.1
     printf 'system o\t\r'
     wait_for_primary_log "owner model: single-owner"
@@ -391,7 +412,7 @@ run_qemu_to_log() {
     wait_for_primary_log "writehex: wrote 7 bytes to /scratch/data.bin"
     sleep 0.1
     printf 'system storage\r'
-    wait_for_primary_log "entries: 18/24 used"
+    wait_for_primary_log "entries: 19/24 used"
     sleep 0.1
     printf 'write /owner/note owner note persisted across reboot\r'
     wait_for_primary_log "write: wrote 34 bytes to /owner/note"
@@ -427,7 +448,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.22.1"
+    wait_for_primary_log "version: 0.23.0"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -515,7 +536,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.22.1"
+check_line "Arwill 0.23.0"
 check_line "system     show system state and subsystem details"
 check_line "devices    list devices or inspect pci/disk0/net0"
 check_line "network    show network state, ping, or TCP details"
@@ -548,13 +569,13 @@ check_line "remote console: plaintext, connections 0"
 check_line "remote bytes: received 0, sent 0, dropped 0, send failures 0"
 check_line "tcp integrity: checksum drops 0, duplicate acks 0"
 check_line "tcp reliability: retransmissions 0, timeouts 0, pending no"
-check_line "Arwill 0.22.1 ready"
+check_line "Arwill 0.23.0 ready"
 check_absent "ARCHITECTURE IS THE PRODUCT"
 check_absent "config: /owner/arwill.conf"
 check_absent "help: type 'help' or press Tab"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.22.1"
+check_line "Arwill 0.23.0"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -581,7 +602,7 @@ check_line "Up/Down    browse command history"
 check_absent "  dir [path]  list the current filesystem"
 check_absent "info [path]"
 check_absent "poweroff"
-check_line "system: Arwill 0.22.1"
+check_line "system: Arwill 0.23.0"
 check_line "processes: system 2, kernel 0, awp 0/4"
 check_line "PID KIND STATE RUNS EXIT NAME"
 check_line "1002 awp finished"
@@ -595,12 +616,12 @@ check_line "kernel heap:"
 check_line "initialized: yes"
 check_line "size: 16384 bytes"
 check_line "storage: arfs mutable"
-check_line "entries: 15/24 used"
+check_line "entries: 16/24 used"
 check_line "data sectors: "
 check_line "largest free run: "
 check_line "manifest: 2 sectors"
 check_line "limits: path 63 bytes, file 8192 bytes"
-check_line "entries: 18/24 used"
+check_line "entries: 19/24 used"
 check_line "heaptest: allocated and freed 2 blocks"
 check_line "heaptest: allocations 2, frees 2"
 check_line "name kind driver status"
@@ -717,7 +738,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.22.1"
+check_line "version: 0.23.0"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
@@ -727,12 +748,21 @@ check_line "Arwill:/boot/limine> "
 check_line "Arwill:/boot> exit"
 check_line "status: powering off"
 
+if ! grep -F -q "Arwill AWP TCP service" "$awp_service_log"; then
+    echo "missing AWP network service response" >&2
+    exit 1
+fi
+if ! grep -F -q "netserve: served one connection" "$remote_console_log"; then
+    echo "missing completed AWP network service run" >&2
+    exit 1
+fi
+
 for expected in \
     "Access key: " \
     "Access denied" \
     "Arwill remote console" \
     "warning: plaintext trusted-LAN access" \
-    "Arwill 0.22.1" \
+    "Arwill 0.23.0" \
     "^C" \
     "remote console: disconnected" \
     "uptime: " \
@@ -761,7 +791,7 @@ if ! tr -d '\r' < "$remote_console_log" | grep -x -q '/'; then
     exit 1
 fi
 
-remote_version_count=$(grep -F -c "Arwill 0.22.1" "$remote_console_log")
+remote_version_count=$(grep -F -c "Arwill 0.23.0" "$remote_console_log")
 if [ "$remote_version_count" -lt 2 ]; then
     echo "remote console Up history did not repeat the command" >&2
     cat "$remote_console_log" >&2
@@ -792,7 +822,7 @@ fi
     wait_for_reboot_log "size: 7 bytes"
     sleep 0.1
     printf 'system storage\r'
-    wait_for_reboot_log "entries: 18/24 used"
+    wait_for_reboot_log "entries: 19/24 used"
     sleep 0.1
     printf 'cat /scratch/data.bin\r'
     wait_for_reboot_log "cat: cannot display binary file: /scratch/data.bin"
@@ -832,7 +862,7 @@ fi
     wait_for_reboot_log "rm: removed /scratch"
     sleep 0.1
     printf 'system storage\r'
-    wait_for_reboot_log "entries: 15/24 used"
+    wait_for_reboot_log "entries: 16/24 used"
     sleep 0.1
     printf 'ls /scratch\r'
     wait_for_reboot_log "ls: no such directory: /scratch"

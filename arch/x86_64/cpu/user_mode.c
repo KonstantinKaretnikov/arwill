@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include <arwill/arch/x86_64/user_mode.h>
+#include <arwill/kernel/awp_network.h>
 #include <arwill/kernel/clock.h>
 #include <arwill/kernel/console.h>
 #include <arwill/kernel/filesystem.h>
@@ -32,6 +33,14 @@ enum {
     syscall_read_file = 5,
     syscall_write_file = 6,
     syscall_argument = 7,
+    syscall_net_open = 8,
+    syscall_net_bind = 9,
+    syscall_net_listen = 10,
+    syscall_net_connect = 11,
+    syscall_net_accept = 12,
+    syscall_net_read = 13,
+    syscall_net_write = 14,
+    syscall_net_close = 15,
     user_code_message_offset = 0x100,
     user_write_limit = 256,
     user_input_capacity = 128,
@@ -126,6 +135,7 @@ struct x86_64_user_task {
     size_t input_count;
     uint64_t pending_read_pointer;
     uint64_t pending_read_length;
+    struct arwill_awp_network_owner network;
 };
 
 struct x86_64_user_context {
@@ -147,6 +157,7 @@ struct x86_64_user_context {
     const struct arwill_input *legacy_input;
     const struct arwill_clock *clock;
     const struct arwill_filesystem *filesystem;
+    struct arwill_ipv4_stack *ipv4;
     struct arwill_event_log *log;
     uint8_t filesystem_buffer[user_file_limit];
     char path_buffer[user_path_limit + 1];
@@ -161,6 +172,11 @@ static struct gdt_table gdt;
 static struct task_state_segment tss;
 static uint8_t tss_stack[16384] __attribute__((aligned(16)));
 static struct x86_64_user_context user_context;
+
+static void cleanup_task_network(struct x86_64_user_context *context,
+    struct x86_64_user_task *task) {
+    arwill_awp_network_cleanup(context->ipv4, &task->network);
+}
 
 static uint64_t make_descriptor(uint8_t access, uint8_t flags) {
     uint64_t descriptor = 0;
@@ -410,6 +426,7 @@ static void reset_task_runtime(
     task->input_count = 0;
     task->pending_read_pointer = 0;
     task->pending_read_length = 0;
+    arwill_awp_network_owner_init(&task->network);
 }
 
 static int copy_name(char *destination, size_t capacity, const char *source) {
@@ -607,6 +624,7 @@ static int prepare_task(
     const char *argument,
     const struct arwill_console *console
 ) {
+    cleanup_task_network(context, task);
     reset_task_runtime(context, task);
     if (!copy_name(task->name, sizeof(task->name), name) ||
         !copy_name(task->argument, sizeof(task->argument), argument)) {
@@ -739,6 +757,7 @@ static size_t complete_pending_read(
             context, task, task->pending_read_pointer + index
         );
         if (destination == 0) {
+            cleanup_task_network(context, task);
             task->state = arwill_user_task_faulted;
             task->exit_code = bad_syscall_exit_code;
             task->fault_vector = 0;
@@ -757,6 +776,20 @@ static size_t complete_pending_read(
         task->status = "ready";
     }
     return count;
+}
+
+static int return_network_result(struct x86_64_user_task *task,
+    struct arwill_x86_64_user_registers *registers,
+    const struct arwill_x86_64_user_frame *frame, long result) {
+    registers->rax = (uint64_t)result;
+    if (result != arwill_awp_network_retry) {
+        return 0;
+    }
+    copy_active_context(task, registers, frame);
+    task->state = arwill_user_task_ready;
+    task->status = "network retry";
+    user_context.active_task = 0;
+    return 1;
 }
 
 __attribute__((used))
@@ -779,6 +812,7 @@ static int arwill_x86_64_user_handle_syscall(
         }
         if (task->console == 0 || !user_range_readable(registers->rdi, length)) {
             copy_active_context(task, registers, frame);
+            cleanup_task_network(&user_context, task);
             task->state = arwill_user_task_faulted;
             task->exit_code = bad_syscall_exit_code;
             task->status = "bad user pointer";
@@ -795,6 +829,7 @@ static int arwill_x86_64_user_handle_syscall(
 
     if (registers->rax == syscall_exit) {
         copy_active_context(task, registers, frame);
+        cleanup_task_network(&user_context, task);
         task->exit_code = (uint32_t)(registers->rdi & 0xffffffffU);
         task->state = arwill_user_task_finished;
         task->status = "exited";
@@ -809,6 +844,7 @@ static int arwill_x86_64_user_handle_syscall(
         }
         if (!user_range_writable(registers->rdi, length)) {
             copy_active_context(task, registers, frame);
+            cleanup_task_network(&user_context, task);
             task->state = arwill_user_task_faulted;
             task->exit_code = bad_syscall_exit_code;
             task->status = "bad user pointer";
@@ -910,8 +946,77 @@ static int arwill_x86_64_user_handle_syscall(
         return 0;
     }
 
+    if (registers->rax == syscall_net_open) {
+        registers->rax = (uint64_t)arwill_awp_network_open(
+            user_context.ipv4, &task->network);
+        return 0;
+    }
+
+    if (registers->rax == syscall_net_bind) {
+        registers->rax = (uint64_t)arwill_awp_network_bind(
+            user_context.ipv4, &task->network, registers->rdi,
+            registers->rsi);
+        return 0;
+    }
+
+    if (registers->rax == syscall_net_listen) {
+        registers->rax = (uint64_t)arwill_awp_network_listen(
+            user_context.ipv4, &task->network, registers->rdi);
+        return 0;
+    }
+
+    if (registers->rax == syscall_net_connect) {
+        const long result = arwill_awp_network_connect(
+            user_context.ipv4, &task->network, registers->rdi,
+            (uint32_t)registers->rsi, registers->rdx);
+        return return_network_result(task, registers, frame, result);
+    }
+
+    if (registers->rax == syscall_net_accept) {
+        const long result = arwill_awp_network_accept(
+            &task->network, registers->rdi);
+        return return_network_result(task, registers, frame, result);
+    }
+
+    if (registers->rax == syscall_net_read) {
+        const uint64_t capacity = registers->rdx;
+        if (capacity == 0U || capacity > arwill_awp_network_io_capacity ||
+            !user_range_writable(registers->rsi, capacity)) {
+            registers->rax = (uint64_t)arwill_awp_network_invalid;
+            return 0;
+        }
+        const long result = arwill_awp_network_read(&task->network,
+            registers->rdi, user_context.filesystem_buffer, (size_t)capacity);
+        if (result > 0 && !copy_to_task(&user_context, task, registers->rsi,
+                user_context.filesystem_buffer, (size_t)result)) {
+            registers->rax = (uint64_t)arwill_awp_network_invalid;
+            return 0;
+        }
+        return return_network_result(task, registers, frame, result);
+    }
+
+    if (registers->rax == syscall_net_write) {
+        const uint64_t length = registers->rdx;
+        if (length == 0U || length > arwill_awp_network_io_capacity ||
+            !user_range_readable(registers->rsi, length)) {
+            registers->rax = (uint64_t)arwill_awp_network_invalid;
+            return 0;
+        }
+        const long result = arwill_awp_network_write(&task->network,
+            registers->rdi, (const uint8_t *)(uintptr_t)registers->rsi,
+            (size_t)length);
+        return return_network_result(task, registers, frame, result);
+    }
+
+    if (registers->rax == syscall_net_close) {
+        const long result = arwill_awp_network_close(
+            user_context.ipv4, &task->network, registers->rdi);
+        return return_network_result(task, registers, frame, result);
+    }
+
     user_context.bad_syscalls++;
     copy_active_context(task, registers, frame);
+    cleanup_task_network(&user_context, task);
     task->exit_code = bad_syscall_exit_code;
     task->state = arwill_user_task_finished;
     task->status = "bad syscall";
@@ -953,6 +1058,7 @@ int arwill_x86_64_user_handle_fault(
         return 0;
     }
     copy_active_context(task, registers, frame);
+    cleanup_task_network(&user_context, task);
     task->state = arwill_user_task_faulted;
     task->fault_vector = vector;
     task->exit_code = 128U + vector;
@@ -1232,6 +1338,7 @@ static int x86_64_user_cancel(void *opaque, uint32_t pid, uint32_t exit_code) {
         return 0;
     }
     task->state = arwill_user_task_finished;
+    cleanup_task_network(context, task);
     task->exit_code = exit_code == 0U ? canceled_exit_code : exit_code;
     task->status = "canceled";
     return 1;
@@ -1322,6 +1429,7 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     const struct arwill_input *input,
     const struct arwill_clock *clock,
     const struct arwill_filesystem *filesystem,
+    struct arwill_ipv4_stack *ipv4,
     struct arwill_event_log *log
 ) {
     user_context.memory = memory;
@@ -1342,6 +1450,7 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     user_context.legacy_input = input;
     user_context.clock = clock;
     user_context.filesystem = filesystem;
+    user_context.ipv4 = ipv4;
     user_context.log = log;
     user_context.active_task = 0;
     user_context.next_pid = 1000U;
