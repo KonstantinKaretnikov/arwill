@@ -2817,46 +2817,66 @@ static enum shell_completion_kind command_completion(const char *command) {
     return shell_completion_none;
 }
 
-static void show_command_candidates(
-    const struct arwill_console *console,
-    const char *current_directory,
-    const char *line,
-    const char *prefix,
-    size_t prefix_length
-) {
-    const size_t command_count = sizeof(shell_commands) / sizeof(shell_commands[0]);
+typedef const char *(*shell_candidate_name)(const void *context, size_t index);
+typedef int (*shell_candidate_add_space)(const void *context, size_t index);
 
-    arwill_console_write_line(console, "");
-
-    for (size_t index = 0; index < command_count; index++) {
-        if (starts_with_sized(shell_commands[index].name, prefix, prefix_length)) {
-            arwill_console_write_line(console, shell_commands[index].name);
-        }
-    }
-
-    redraw_line(console, current_directory, line);
+static const char *command_candidate_name(const void *context, size_t index) {
+    const struct shell_command *commands =
+        (const struct shell_command *)context;
+    return commands[index].name;
 }
 
-static void complete_command(
+static int command_candidate_add_space(const void *context, size_t index) {
+    const struct shell_command *commands =
+        (const struct shell_command *)context;
+    return commands[index].completion != shell_completion_none;
+}
+
+static const char *process_candidate_name(const void *context, size_t index) {
+    const struct shell_builtin_process *processes =
+        (const struct shell_builtin_process *)context;
+    return processes[index].name;
+}
+
+static const char *fixed_candidate_name(const void *context, size_t index) {
+    const char *const *candidates = (const char *const *)context;
+    return candidates[index];
+}
+
+static int always_add_space(const void *context, size_t index) {
+    (void)context;
+    (void)index;
+    return 1;
+}
+
+static void complete_text_candidates(
     const struct arwill_console *console,
     const char *current_directory,
     char *line,
-    size_t *length
+    size_t *length,
+    size_t prefix_start,
+    const void *context,
+    size_t candidate_count,
+    shell_candidate_name candidate_name,
+    shell_candidate_add_space add_space
 ) {
-    const size_t command_count = sizeof(shell_commands) / sizeof(shell_commands[0]);
+    const char *prefix = &line[prefix_start];
+    const size_t prefix_length = string_length(prefix);
     const char *single_match = 0;
+    size_t single_index = 0;
     size_t match_count = 0;
     size_t shared_length = 0;
 
-    for (size_t index = 0; index < command_count; index++) {
-        const char *candidate = shell_commands[index].name;
+    for (size_t index = 0; index < candidate_count; index++) {
+        const char *candidate = candidate_name(context, index);
 
-        if (!starts_with_sized(candidate, line, *length)) {
+        if (!starts_with_sized(candidate, prefix, prefix_length)) {
             continue;
         }
 
         if (match_count == 0U) {
             single_match = candidate;
+            single_index = index;
             shared_length = string_length(candidate);
         } else {
             shared_length = common_prefix_length(single_match, candidate, shared_length);
@@ -2872,21 +2892,21 @@ static void complete_command(
     if (match_count == 1U && single_match != 0) {
         const size_t candidate_length = string_length(single_match);
 
-        for (size_t index = *length; index < candidate_length; index++) {
+        for (size_t index = prefix_length; index < candidate_length; index++) {
             if (!append_char_to_line(console, line, length, single_match[index])) {
                 return;
             }
         }
 
-        if (command_completion(single_match) != shell_completion_none) {
+        if (add_space(context, single_index)) {
             (void)append_char_to_line(console, line, length, ' ');
         }
 
         return;
     }
 
-    if (shared_length > *length) {
-        for (size_t index = *length; index < shared_length; index++) {
+    if (shared_length > prefix_length) {
+        for (size_t index = prefix_length; index < shared_length; index++) {
             if (!append_char_to_line(console, line, length, single_match[index])) {
                 return;
             }
@@ -2896,7 +2916,75 @@ static void complete_command(
     }
 
     line[*length] = '\0';
-    show_command_candidates(console, current_directory, line, line, *length);
+    arwill_console_write_line(console, "");
+    for (size_t index = 0; index < candidate_count; index++) {
+        const char *candidate = candidate_name(context, index);
+        if (starts_with_sized(candidate, prefix, prefix_length)) {
+            arwill_console_write_line(console, candidate);
+        }
+    }
+    redraw_line(console, current_directory, line);
+}
+
+static void complete_command(
+    const struct arwill_console *console,
+    const char *current_directory,
+    char *line,
+    size_t *length
+) {
+    complete_text_candidates(
+        console,
+        current_directory,
+        line,
+        length,
+        0U,
+        shell_commands,
+        sizeof(shell_commands) / sizeof(shell_commands[0]),
+        command_candidate_name,
+        command_candidate_add_space
+    );
+}
+
+static void complete_process_name(
+    const struct arwill_console *console,
+    const char *current_directory,
+    char *line,
+    size_t *length,
+    size_t argument_start
+) {
+    complete_text_candidates(
+        console,
+        current_directory,
+        line,
+        length,
+        argument_start,
+        shell_builtin_processes,
+        sizeof(shell_builtin_processes) / sizeof(shell_builtin_processes[0]),
+        process_candidate_name,
+        always_add_space
+    );
+}
+
+static void complete_fixed_argument(
+    const struct arwill_console *console,
+    const char *current_directory,
+    char *line,
+    size_t *length,
+    size_t argument_start,
+    const char *const *candidates,
+    size_t candidate_count
+) {
+    complete_text_candidates(
+        console,
+        current_directory,
+        line,
+        length,
+        argument_start,
+        candidates,
+        candidate_count,
+        fixed_candidate_name,
+        always_add_space
+    );
 }
 
 static int split_command(
@@ -3250,178 +3338,6 @@ static void complete_program_name(
         line,
         &listing,
         prefix
-    );
-}
-
-static void show_process_candidates(
-    const struct arwill_console *console,
-    const char *current_directory,
-    const char *line,
-    const char *prefix
-) {
-    const size_t process_count =
-        sizeof(shell_builtin_processes) / sizeof(shell_builtin_processes[0]);
-    const size_t prefix_length = string_length(prefix);
-
-    arwill_console_write_line(console, "");
-
-    for (size_t index = 0; index < process_count; index++) {
-        if (starts_with_sized(shell_builtin_processes[index].name, prefix, prefix_length)) {
-            arwill_console_write_line(console, shell_builtin_processes[index].name);
-        }
-    }
-
-    redraw_line(console, current_directory, line);
-}
-
-static void complete_process_name(
-    const struct arwill_console *console,
-    const char *current_directory,
-    char *line,
-    size_t *length,
-    size_t argument_start
-) {
-    char process_prefix[shell_line_capacity];
-    const char *single_match = 0;
-    size_t match_count = 0;
-    size_t shared_length = 0;
-    const size_t process_count =
-        sizeof(shell_builtin_processes) / sizeof(shell_builtin_processes[0]);
-
-    if (!copy_string(process_prefix, sizeof(process_prefix), &line[argument_start])) {
-        return;
-    }
-
-    const size_t prefix_length = string_length(process_prefix);
-
-    for (size_t index = 0; index < process_count; index++) {
-        const char *candidate = shell_builtin_processes[index].name;
-
-        if (!starts_with_sized(candidate, process_prefix, prefix_length)) {
-            continue;
-        }
-
-        if (match_count == 0U) {
-            single_match = candidate;
-            shared_length = string_length(candidate);
-        } else {
-            shared_length = common_prefix_length(single_match, candidate, shared_length);
-        }
-
-        match_count++;
-    }
-
-    if (match_count == 0U) {
-        return;
-    }
-
-    if (match_count == 1U && single_match != 0) {
-        const size_t candidate_length = string_length(single_match);
-
-        for (size_t index = prefix_length; index < candidate_length; index++) {
-            if (!append_char_to_line(console, line, length, single_match[index])) {
-                return;
-            }
-        }
-
-        (void)append_char_to_line(console, line, length, ' ');
-        return;
-    }
-
-    if (shared_length > prefix_length && single_match != 0) {
-        for (size_t index = prefix_length; index < shared_length; index++) {
-            if (!append_char_to_line(console, line, length, single_match[index])) {
-                return;
-            }
-        }
-
-        return;
-    }
-
-    line[*length] = '\0';
-    show_process_candidates(console, current_directory, line, process_prefix);
-}
-
-static void show_fixed_candidates(
-    const struct arwill_console *console,
-    const char *current_directory,
-    const char *line,
-    const char *prefix,
-    const char *const *candidates,
-    size_t candidate_count
-) {
-    const size_t prefix_length = string_length(prefix);
-
-    arwill_console_write_line(console, "");
-    for (size_t index = 0; index < candidate_count; index++) {
-        if (starts_with_sized(candidates[index], prefix, prefix_length)) {
-            arwill_console_write_line(console, candidates[index]);
-        }
-    }
-    redraw_line(console, current_directory, line);
-}
-
-static void complete_fixed_argument(
-    const struct arwill_console *console,
-    const char *current_directory,
-    char *line,
-    size_t *length,
-    size_t argument_start,
-    const char *const *candidates,
-    size_t candidate_count
-) {
-    char prefix[shell_line_capacity];
-    const char *single_match = 0;
-    size_t match_count = 0;
-    size_t shared_length = 0;
-
-    if (!copy_string(prefix, sizeof(prefix), &line[argument_start])) {
-        return;
-    }
-    const size_t prefix_length = string_length(prefix);
-    for (size_t index = 0; index < candidate_count; index++) {
-        if (!starts_with_sized(candidates[index], prefix, prefix_length)) {
-            continue;
-        }
-        if (match_count == 0U) {
-            single_match = candidates[index];
-            shared_length = string_length(single_match);
-        } else {
-            shared_length = common_prefix_length(
-                single_match, candidates[index], shared_length
-            );
-        }
-        match_count++;
-    }
-    if (match_count == 0U) {
-        return;
-    }
-    if (match_count == 1U && single_match != 0) {
-        const size_t candidate_length = string_length(single_match);
-        for (size_t index = prefix_length; index < candidate_length; index++) {
-            if (!append_char_to_line(console, line, length, single_match[index])) {
-                return;
-            }
-        }
-        (void)append_char_to_line(console, line, length, ' ');
-        return;
-    }
-    if (shared_length > prefix_length && single_match != 0) {
-        for (size_t index = prefix_length; index < shared_length; index++) {
-            if (!append_char_to_line(console, line, length, single_match[index])) {
-                return;
-            }
-        }
-        return;
-    }
-    line[*length] = '\0';
-    show_fixed_candidates(
-        console,
-        current_directory,
-        line,
-        prefix,
-        candidates,
-        candidate_count
     );
 }
 

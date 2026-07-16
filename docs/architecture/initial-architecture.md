@@ -89,7 +89,9 @@ Shell:
 - Holds the current working directory as local shell state.
 - Owns Tab completion for command names, filesystem paths, short `/apps`
   program names, both `exec` positions, built-in process names, and fixed
-  subsystem arguments.
+  subsystem arguments. Command, process, and fixed-argument candidates share
+  one bounded prefix-matching mechanism; filesystem and AWP image completion
+  retain their specialized filtering.
 - Keeps `top` as nonblocking per-session shell state. The main service loop
   refreshes it once per second while system-task and AWP dispatch continue.
 - Starts `network-poll` and `remote-console` as automatic system tasks. The
