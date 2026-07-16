@@ -3,7 +3,6 @@
 
 #include <arwill/kernel/awp_network.h>
 #include <arwill/kernel/ipv4.h>
-#include <arwill/kernel/tcp.h>
 #include <arwill/kernel/tcp_stream.h>
 
 static struct arwill_awp_network_handle *network_handle(
@@ -156,7 +155,7 @@ long arwill_awp_network_read(struct arwill_awp_network_owner *owner,
         return (long)read;
     }
     if (!arwill_tcp_stream_connected(handle->stream) &&
-        handle->stream->connections != 0U) {
+        arwill_tcp_stream_connection_seen(handle->stream)) {
         return arwill_awp_network_closed;
     }
     return arwill_awp_network_retry;
@@ -173,8 +172,8 @@ long arwill_awp_network_write(struct arwill_awp_network_owner *owner,
         return arwill_awp_network_invalid;
     }
     if (!arwill_tcp_stream_connected(handle->stream)) {
-        return handle->stream->connections == 0U ? arwill_awp_network_retry :
-            arwill_awp_network_closed;
+        return arwill_tcp_stream_connection_seen(handle->stream)
+            ? arwill_awp_network_closed : arwill_awp_network_retry;
     }
     const size_t written = arwill_tcp_stream_write(handle->stream, buffer, length);
     return written == 0U ? arwill_awp_network_retry : (long)written;
@@ -189,8 +188,7 @@ long arwill_awp_network_close(struct arwill_ipv4_stack *stack,
         return arwill_awp_network_invalid;
     }
     if (handle->state == arwill_awp_network_handle_closing) {
-        if (handle->stream->listener.state != arwill_tcp_state_listen ||
-            handle->stream->close_requested) {
+        if (!arwill_tcp_stream_close_complete(handle->stream)) {
             return arwill_awp_network_retry;
         }
         arwill_ipv4_tcp_release(stack, handle->stream);

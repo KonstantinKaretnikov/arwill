@@ -59,12 +59,22 @@ int arwill_tcp_stream_connected(const struct arwill_tcp_stream *stream) {
         arwill_tcp_listener_connected(&stream->listener);
 }
 
+int arwill_tcp_stream_connection_seen(const struct arwill_tcp_stream *stream) {
+    return stream != 0 && stream->connections != 0U;
+}
+
 int arwill_tcp_stream_peer_closed(const struct arwill_tcp_stream *stream) {
     return stream != 0 && stream->peer_closed;
 }
 
 int arwill_tcp_stream_close_requested(const struct arwill_tcp_stream *stream) {
     return stream != 0 && stream->close_requested;
+}
+
+int arwill_tcp_stream_close_complete(const struct arwill_tcp_stream *stream) {
+    return stream != 0 && stream->listening &&
+        stream->listener.state == arwill_tcp_state_listen &&
+        !stream->close_requested;
 }
 
 size_t arwill_tcp_stream_read(struct arwill_tcp_stream *stream,

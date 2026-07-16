@@ -385,7 +385,8 @@ QEMU e1000 and remote output:
   before AWP address spaces inherit kernel mappings.
 - IPv4 owns TCP framing, acknowledgements, and retransmission. The reusable
   `tcp_stream` contract owns fixed receive/transmit rings and exposes
-  nonblocking queue, read, and close-request operations to services.
+  nonblocking queue, read, connection-history, and close-progress operations
+  to services and AWP networking.
 - IPv4 owns a four-entry endpoint table. Each allocated endpoint has its own
   listener tuple, peer MAC, rings, four-segment send flight, adaptive RTO, and
   close timers; endpoint 0 is reserved for the remote console. Services receive

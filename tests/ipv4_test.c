@@ -796,9 +796,12 @@ int main(void) {
         return 1;
     }
     contract_stream.listener.state = arwill_tcp_state_established;
+    contract_stream.connections = 1U;
     if (!expect(arwill_tcp_stream_write(
             &contract_stream, output, sizeof(output)) == sizeof(output),
             "stream write queues complete buffer")
+        || !expect(arwill_tcp_stream_connection_seen(&contract_stream),
+            "stream reports prior connection")
         || !expect(contract_stream.transmit_count == sizeof(output),
             "stream write is nonblocking")
         || !expect(arwill_tcp_stream_write(
@@ -813,6 +816,12 @@ int main(void) {
     arwill_tcp_stream_close(&contract_stream);
     if (!expect(contract_stream.close_requested,
             "stream close is a nonblocking request")) {
+        return 1;
+    }
+    contract_stream.listener.state = arwill_tcp_state_listen;
+    contract_stream.close_requested = 0;
+    if (!expect(arwill_tcp_stream_close_complete(&contract_stream),
+            "stream reports listener close baseline")) {
         return 1;
     }
 
