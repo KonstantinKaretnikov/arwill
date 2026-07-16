@@ -83,8 +83,9 @@ Shell:
 - Owns the canonical user command table, including filesystem, diagnostic,
   process, network, `config`, `logs`, and `service` operations.
 - Retains exact-match internal smoke commands outside `help` and Tab completion.
-- Keeps one canonical public command name per operation; retired exact-match
-  diagnostics are transitional internal inputs, not public aliases.
+- Keeps one canonical public command name per operation. The transitional
+  pre-0.17 diagnostic entry points have been removed rather than retained as
+  aliases for the grouped inspection surface.
 - Holds the current working directory as local shell state.
 - Owns Tab completion for command names, filesystem paths, short `/apps`
   program names, both `exec` positions, built-in process names, and fixed

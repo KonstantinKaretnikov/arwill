@@ -3615,21 +3615,6 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "uptime")) {
-        print_uptime(console, clock);
-        return;
-    }
-
-    if (string_equals(line, "pciinfo")) {
-        print_pci_info(console, pci);
-        return;
-    }
-
-    if (string_equals(line, "netinfo")) {
-        print_network_device_info(console, network);
-        return;
-    }
-
     if (string_equals(line, "netprobe")) {
         uint8_t mac[arwill_network_mac_length];
         uint8_t frame[60];
@@ -3662,22 +3647,12 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "netcfg")) {
-        arwill_ipv4_print_config(ipv4, console);
-        return;
-    }
-
     if (string_equals(line, "arping")) {
         if (ipv4 == 0 || !arwill_ipv4_send_arp_request(ipv4, ipv4->gateway)) {
             arwill_console_write_line(console, "arping: transmit failed");
             return;
         }
         arwill_console_write_line(console, "arping: request transmitted to 10.0.2.2");
-        return;
-    }
-
-    if (string_equals(line, "ping")) {
-        ping_network(console, ipv4);
         return;
     }
 
@@ -3738,11 +3713,6 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "tcpinfo")) {
-        print_tcp_info(console, ipv4);
-        return;
-    }
-
     if (string_equals(line, "pwd")) {
         arwill_console_write_line(console, current_directory);
         return;
@@ -3753,43 +3723,13 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "meminfo")) {
-        print_meminfo(console, memory);
-        return;
-    }
-
     if (string_equals(line, "heaptest")) {
         run_heap_test(console, memory);
         return;
     }
 
-    if (string_equals(line, "blkinfo")) {
-        print_block_info(console, block_device);
-        return;
-    }
-
-    if (string_equals(line, "irqinfo")) {
-        print_irqinfo(console, interrupts);
-        return;
-    }
-
     if (string_equals(line, "irqprobe")) {
         probe_interrupts(console, interrupts);
-        return;
-    }
-
-    if (string_equals(line, "schedinfo")) {
-        print_scheduler_info(console, interrupts);
-        return;
-    }
-
-    if (string_equals(line, "userinfo")) {
-        print_user_info(console, user_runtime);
-        return;
-    }
-
-    if (string_equals(line, "ownerinfo")) {
-        print_owner_info(console);
         return;
     }
 

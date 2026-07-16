@@ -83,11 +83,10 @@ Rules for future work:
   `step`, `write`, and `writehex` available only as exact-match internal smoke
   commands. Do not list them in `help`, include them in Tab completion, or
   document them as user commands unless a later ADR changes this decision.
-- Keep the retired `uptime`, `pciinfo`, `netinfo`, `netcfg`, `ping`, `tcpinfo`,
-  `meminfo`, `blkinfo`, `irqinfo`, `schedinfo`, `userinfo`, and `ownerinfo`
-  entry points hidden from `help`, Tab completion, and user documentation.
-  They are temporary exact-match diagnostic inputs during the `0.17.0`
-  transition; do not build new consumers on them.
+- Do not restore the retired `uptime`, `pciinfo`, `netinfo`, `netcfg`, `ping`,
+  `tcpinfo`, `meminfo`, `blkinfo`, `irqinfo`, `schedinfo`, `userinfo`, or
+  `ownerinfo` entry points. The grouped `system`, `devices`, and `network`
+  inspection surface replaced them; they are not aliases or smoke contracts.
 - Treat the current kernel heap as a small HHDM-backed free-list allocator. It
   is useful for small kernel objects, but it is not a slab allocator, virtual
   memory subsystem, userspace heap, or physical page release mechanism.
