@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include <arwill/kernel/console.h>
+struct arwill_console;
 
 enum arwill_user_program {
     arwill_user_program_hello,

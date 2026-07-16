@@ -5,6 +5,7 @@
 #include <arwill/kernel/clock.h>
 #include <arwill/kernel/config.h>
 #include <arwill/kernel/filesystem.h>
+#include <arwill/kernel/ipv4.h>
 #include <arwill/kernel/log.h>
 #include <arwill/kernel/service.h>
 

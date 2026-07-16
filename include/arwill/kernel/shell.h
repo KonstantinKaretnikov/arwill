@@ -1,23 +1,23 @@
 #ifndef ARWILL_KERNEL_SHELL_H
 #define ARWILL_KERNEL_SHELL_H
 
-#include <arwill/kernel/block_device.h>
-#include <arwill/kernel/console.h>
-#include <arwill/kernel/clock.h>
-#include <arwill/kernel/config.h>
-#include <arwill/kernel/device.h>
-#include <arwill/kernel/filesystem.h>
-#include <arwill/kernel/input.h>
-#include <arwill/kernel/interrupts.h>
-#include <arwill/kernel/memory.h>
-#include <arwill/kernel/power.h>
-#include <arwill/kernel/process.h>
-#include <arwill/kernel/pci.h>
-#include <arwill/kernel/network.h>
-#include <arwill/kernel/ipv4.h>
-#include <arwill/kernel/log.h>
-#include <arwill/kernel/service.h>
-#include <arwill/kernel/user.h>
+struct arwill_block_device;
+struct arwill_clock;
+struct arwill_config;
+struct arwill_console;
+struct arwill_device_registry;
+struct arwill_event_log;
+struct arwill_filesystem;
+struct arwill_input;
+struct arwill_interrupts;
+struct arwill_ipv4_stack;
+struct arwill_memory;
+struct arwill_network_device;
+struct arwill_pci_bus;
+struct arwill_power;
+struct arwill_process_manager;
+struct arwill_service_manager;
+struct arwill_user_runtime;
 
 void arwill_shell_run(
     const struct arwill_console *console,

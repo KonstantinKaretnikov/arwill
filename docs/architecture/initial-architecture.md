@@ -427,6 +427,11 @@ Boot infrastructure:
 Architecture-independent kernel code depends on public contracts in
 `include/arwill/kernel/`.
 
+Pointer-only contract boundaries use forward declarations so including a
+facade such as `kernel.h`, `shell.h`, or `service.h` does not import unrelated
+subsystem definitions. Implementations include every concrete contract they
+inspect directly.
+
 The x86-64 entry point wires the current platform implementation into the
 kernel. Platform-specific code may use x86-64 primitives. Kernel orchestration
 must not depend on QEMU or UART register details.

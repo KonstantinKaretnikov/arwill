@@ -1,9 +1,10 @@
 #ifndef ARWILL_KERNEL_SERVICE_H
 #define ARWILL_KERNEL_SERVICE_H
 
-#include <arwill/kernel/config.h>
-#include <arwill/kernel/ipv4.h>
-#include <arwill/kernel/log.h>
+struct arwill_config;
+struct arwill_event_log;
+struct arwill_ipv4_stack;
+struct arwill_tcp_stream;
 
 enum arwill_service_state {
     arwill_service_stopped,

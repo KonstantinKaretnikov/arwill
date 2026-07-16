@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <arwill/kernel/filesystem.h>
+struct arwill_filesystem;
 
 enum {
     arwill_config_remote_key_capacity = 65

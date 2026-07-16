@@ -11,15 +11,18 @@
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/interrupts.h>
+#include <arwill/kernel/ipv4.h>
 #include <arwill/kernel/log.h>
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/network.h>
 #include <arwill/kernel/power.h>
+#include <arwill/kernel/pci.h>
 #include <arwill/kernel/process.h>
 #include <arwill/kernel/scheduler.h>
 #include <arwill/kernel/service.h>
 #include <arwill/kernel/shell.h>
 #include <arwill/kernel/tcp.h>
+#include <arwill/kernel/tcp_stream.h>
 #include <arwill/kernel/user.h>
 
 enum {

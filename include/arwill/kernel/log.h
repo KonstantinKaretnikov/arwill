@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <arwill/kernel/clock.h>
+struct arwill_clock;
 
 enum {
     arwill_event_log_capacity = 64

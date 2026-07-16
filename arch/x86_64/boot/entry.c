@@ -13,6 +13,7 @@
 #include <arwill/kernel/boot_catalog.h>
 #include <arwill/kernel/cpu.h>
 #include <arwill/kernel/config.h>
+#include <arwill/kernel/device.h>
 #include <arwill/kernel/kernel.h>
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/ipv4.h>
