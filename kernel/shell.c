@@ -191,19 +191,6 @@ static int string_equals(const char *left, const char *right) {
 
     return left[index] == right[index];
 }
-static int starts_with(const char *text, const char *prefix) {
-    size_t index = 0;
-
-    while (prefix[index] != '\0') {
-        if (text[index] != prefix[index]) {
-            return 0;
-        }
-
-        index++;
-    }
-
-    return 1;
-}
 
 static int starts_with_sized(const char *text, const char *prefix, size_t prefix_length) {
     for (size_t index = 0; index < prefix_length; index++) {
@@ -3540,34 +3527,40 @@ static void complete_line(
 }
 
 static void run_command(
-    const struct arwill_console *console,
-    const struct arwill_filesystem *filesystem,
-    struct arwill_memory *memory,
-    const struct arwill_power *power,
-    struct arwill_process_manager *processes,
-    const struct arwill_pci_bus *pci,
-    const struct arwill_network_device *network,
-    struct arwill_ipv4_stack *ipv4,
-    const struct arwill_block_device *block_device,
-    const struct arwill_interrupts *interrupts,
-    const struct arwill_clock *clock,
-    const struct arwill_user_runtime *user_runtime,
-    const struct arwill_device_registry *devices,
-    struct arwill_config *config,
-    struct arwill_event_log *log,
-    struct arwill_service_manager *services,
-    struct shell_process_context *process_context,
-    char *current_directory,
+    struct shell_session *session,
+    const struct shell_environment *environment,
     const char *line,
-    int remote_session,
-    uint32_t *foreground_pid,
-    int *config_key_requested,
     int *top_requested,
     int *close_requested
 ) {
-    if (string_equals(line, "")) {
+    const struct arwill_console *console = session->console;
+    const struct arwill_filesystem *filesystem = environment->filesystem;
+    struct arwill_memory *memory = environment->memory;
+    const struct arwill_power *power = environment->power;
+    struct arwill_process_manager *processes = environment->processes;
+    const struct arwill_pci_bus *pci = environment->pci;
+    const struct arwill_network_device *network = environment->network;
+    struct arwill_ipv4_stack *ipv4 = environment->ipv4;
+    const struct arwill_block_device *block_device = environment->block_device;
+    const struct arwill_interrupts *interrupts = environment->interrupts;
+    const struct arwill_clock *clock = environment->clock;
+    const struct arwill_user_runtime *user_runtime = environment->user_runtime;
+    const struct arwill_device_registry *devices = environment->devices;
+    struct arwill_config *config = environment->config;
+    struct arwill_event_log *log = environment->log;
+    struct arwill_service_manager *services = environment->services;
+    struct shell_process_context *process_context = &session->process_context;
+    char *current_directory = session->current_directory;
+    const int remote_session = session->remote;
+    uint32_t *foreground_pid = &session->foreground_pid;
+    int *config_key_requested = &session->config_key_pending;
+    char command[shell_line_capacity];
+    size_t argument_start = 0;
+    if (!split_command(line, command, sizeof(command), &argument_start) ||
+        command[0] == '\0') {
         return;
     }
+    const char *argument = &line[argument_start];
 
     if (string_equals(line, "help")) {
         print_help(console, remote_session);
@@ -3579,10 +3572,10 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "system") || starts_with(line, "system ")) {
+    if (string_equals(command, "system")) {
         run_system_command(
             console,
-            argument_after_command(line),
+            argument,
             clock,
             filesystem,
             memory,
@@ -3594,10 +3587,10 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "devices") || starts_with(line, "devices ")) {
+    if (string_equals(command, "devices")) {
         run_devices_command(
             console,
-            argument_after_command(line),
+            argument,
             devices,
             pci,
             block_device,
@@ -3606,10 +3599,8 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "network") || starts_with(line, "network ")) {
-        run_network_command(
-            console, argument_after_command(line), network, ipv4
-        );
+    if (string_equals(command, "network")) {
+        run_network_command(console, argument, network, ipv4);
         return;
     }
 
@@ -3736,9 +3727,9 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "config") || starts_with(line, "config ")) {
+    if (string_equals(command, "config")) {
         configure_value(
-            console, config, log, argument_after_command(line), config_key_requested
+            console, config, log, argument, config_key_requested
         );
         return;
     }
@@ -3748,10 +3739,8 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "service") || starts_with(line, "service ")) {
-        control_service(
-            console, services, argument_after_command(line), remote_session
-        );
+    if (string_equals(command, "service")) {
+        control_service(console, services, argument, remote_session);
         return;
     }
 
@@ -3760,18 +3749,18 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "run") || starts_with(line, "run ")) {
-        run_process(console, processes, process_context, argument_after_command(line));
+    if (string_equals(command, "run")) {
+        run_process(console, processes, process_context, argument);
         return;
     }
 
-    if (string_equals(line, "exec") || starts_with(line, "exec ")) {
+    if (string_equals(command, "exec")) {
         *foreground_pid = exec_program_image(
             console,
             filesystem,
             user_runtime,
             current_directory,
-            argument_after_command(line)
+            argument
         );
         if (*foreground_pid != 0U) {
             arwill_event_log_record(
@@ -3797,8 +3786,8 @@ static void run_command(
         arwill_poweroff(power);
     }
 
-    if (string_equals(line, "cd") || starts_with(line, "cd ")) {
-        change_directory(console, filesystem, current_directory, argument_after_command(line));
+    if (string_equals(command, "cd")) {
+        change_directory(console, filesystem, current_directory, argument);
         return;
     }
 
@@ -3807,44 +3796,44 @@ static void run_command(
         arwill_cpu_idle_forever();
     }
 
-    if (string_equals(line, "ls") || starts_with(line, "ls ")) {
-        print_listing(console, filesystem, current_directory, argument_after_command(line));
+    if (string_equals(command, "ls")) {
+        print_listing(console, filesystem, current_directory, argument);
         return;
     }
 
-    if (string_equals(line, "cat") || starts_with(line, "cat ")) {
-        print_file(console, filesystem, current_directory, argument_after_command(line));
+    if (string_equals(command, "cat")) {
+        print_file(console, filesystem, current_directory, argument);
         return;
     }
 
-    if (string_equals(line, "mkdir") || starts_with(line, "mkdir ")) {
+    if (string_equals(command, "mkdir")) {
         mutate_path(console, filesystem, current_directory,
-            argument_after_command(line), "mkdir", 1);
+            argument, "mkdir", 1);
         return;
     }
 
-    if (string_equals(line, "write") || starts_with(line, "write ")) {
-        write_file(console, filesystem, current_directory, argument_after_command(line));
+    if (string_equals(command, "write")) {
+        write_file(console, filesystem, current_directory, argument);
         return;
     }
 
-    if (string_equals(line, "writehex") || starts_with(line, "writehex ")) {
-        write_hex_file(console, filesystem, current_directory, argument_after_command(line));
+    if (string_equals(command, "writehex")) {
+        write_hex_file(console, filesystem, current_directory, argument);
         return;
     }
 
-    if (string_equals(line, "rm") || starts_with(line, "rm ")) {
+    if (string_equals(command, "rm")) {
         mutate_path(console, filesystem, current_directory,
-            argument_after_command(line), "rm", 0);
+            argument, "rm", 0);
         return;
     }
 
-    if (string_equals(line, "stat") || starts_with(line, "stat ")) {
+    if (string_equals(command, "stat")) {
         print_stat(
             console,
             filesystem,
             current_directory,
-            argument_after_command(line),
+            argument,
             "stat"
         );
         return;
@@ -4023,28 +4012,9 @@ static int handle_shell_byte(
         int close_requested = 0;
         int top_requested = 0;
         run_command(
-            console,
-            environment->filesystem,
-            environment->memory,
-            environment->power,
-            environment->processes,
-            environment->pci,
-            environment->network,
-            environment->ipv4,
-            environment->block_device,
-            environment->interrupts,
-            environment->clock,
-            environment->user_runtime,
-            environment->devices,
-            environment->config,
-            environment->log,
-            environment->services,
-            &session->process_context,
-            session->current_directory,
+            session,
+            environment,
             session->line,
-            session->remote,
-            &session->foreground_pid,
-            &session->config_key_pending,
             &top_requested,
             &close_requested
         );

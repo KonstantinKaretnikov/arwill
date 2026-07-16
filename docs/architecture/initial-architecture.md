@@ -97,6 +97,9 @@ Shell:
   authentication, remote input, and remote shell-session progress.
 - Owns a small in-memory command history navigated by Up and Down escape
   sequences.
+- Dispatch receives the current shell session and its dependency environment;
+  it parses the command token once while preserving exact-match internal smoke
+  inputs.
 - Normalizes standard Russian-layout UTF-8 input back to ASCII key positions;
   it does not support Cyrillic text entry yet.
 - Depends on block device, console, input, filesystem, memory, process, power,
