@@ -110,10 +110,10 @@ run_qemu_to_log() {
     wait_for_primary_log "Tab        complete"
     sleep 0.1
     printf 'ver\t\r'
-    wait_for_primary_log_count "Arwill 0.23.0" 2
+    wait_for_primary_log_count "Arwill 0.23.1" 2
     sleep 0.1
     printf 'sys\t\r'
-    wait_for_primary_log "system: Arwill 0.23.0"
+    wait_for_primary_log "system: Arwill 0.23.1"
     wait_for_primary_log_count "uptime: " 1
     sleep 0.1
     printf 'devices p\t\r'
@@ -282,7 +282,7 @@ run_qemu_to_log() {
         printf 'arwill\r'
         printf 'version\n'
         printf 'exec netserve\n'
-        sleep 5
+        sleep 2
         printf 'exit\n'
     ) | nc -w 5 127.0.0.1 "$remote_console_port" >> "$remote_console_log" &
     concurrent_remote_pid=$!
@@ -294,6 +294,37 @@ run_qemu_to_log() {
     wait_for_log_file "$awp_service_log" "Arwill AWP TCP service"
     wait_for_log_file "$remote_console_log" "netserve: served one connection"
     wait "$concurrent_remote_pid"
+    sleep 0.1
+    printf 'exec netserve\r'
+    wait_for_primary_log "netserve: listening on 23233"
+    printf '\003'
+    wait_for_primary_log "exec: exited 130"
+    printf 'network tcp\r'
+    wait_for_primary_log_count \
+        "tcp endpoints: allocated 1/4, listening 1, connected 0" 3
+    sleep 0.1
+    printf 'writehex /r 415750311000000019000000000000006a0d5831ff6a015e6a015acd804883c0024889c76a0258cd80\r'
+    wait_for_primary_log "writehex: wrote 41 bytes to /r"
+    printf 'exec /r\r'
+    wait_for_primary_log "exec: exited 0"
+    printf 'rm /r\r'
+    wait_for_primary_log "rm: removed /r"
+    printf 'writehex /w 415750311000000019000000000000006a0e5831ff6a015e6a015acd804883c0024889c76a0258cd80\r'
+    wait_for_primary_log "writehex: wrote 41 bytes to /w"
+    printf 'exec /w\r'
+    wait_for_primary_log_count "exec: exited 0" 2
+    printf 'rm /w\r'
+    wait_for_primary_log "rm: removed /w"
+    printf 'writehex /f 415750311000000014000000000000006a0858cd804889c7bec25a00006a0958cd800f0b\r'
+    wait_for_primary_log "writehex: wrote 36 bytes to /f"
+    printf 'exec /f\r'
+    wait_for_primary_log_count "exec: fault 6" 1
+    wait_for_primary_log_count "exec: exited 134" 1
+    printf 'network tcp\r'
+    wait_for_primary_log_count \
+        "tcp endpoints: allocated 1/4, listening 1, connected 0" 4
+    printf 'rm /f\r'
+    wait_for_primary_log "rm: removed /f"
     sleep 0.1
     printf 'system o\t\r'
     wait_for_primary_log "owner model: single-owner"
@@ -448,7 +479,7 @@ run_qemu_to_log() {
     wait_for_primary_log "cat: cannot display binary file: /boot/kernel.elf"
     sleep 0.1
     printf 'cat /system/i\t\r'
-    wait_for_primary_log "version: 0.23.0"
+    wait_for_primary_log "version: 0.23.1"
     sleep 0.1
     printf 'stat /system/i\t\r'
     wait_for_primary_log "type: text file"
@@ -476,7 +507,7 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-deadline=150
+deadline=200
 count=0
 
 while [ "$count" -lt "$deadline" ]; do
@@ -536,7 +567,7 @@ check_absent() {
     fi
 }
 
-check_line "Arwill 0.23.0"
+check_line "Arwill 0.23.1"
 check_line "system     show system state and subsystem details"
 check_line "devices    list devices or inspect pci/disk0/net0"
 check_line "network    show network state, ping, or TCP details"
@@ -569,13 +600,13 @@ check_line "remote console: plaintext, connections 0"
 check_line "remote bytes: received 0, sent 0, dropped 0, send failures 0"
 check_line "tcp integrity: checksum drops 0, duplicate acks 0"
 check_line "tcp reliability: retransmissions 0, timeouts 0, pending no"
-check_line "Arwill 0.23.0 ready"
+check_line "Arwill 0.23.1 ready"
 check_absent "ARCHITECTURE IS THE PRODUCT"
 check_absent "config: /owner/arwill.conf"
 check_absent "help: type 'help' or press Tab"
 check_line "commands:"
 check_line "Arwill:/> help"
-check_line "Arwill 0.23.0"
+check_line "Arwill 0.23.1"
 check_line "Tab        complete"
 check_line "clear      clear the terminal screen"
 check_line "ls [path]  list the current filesystem"
@@ -602,10 +633,10 @@ check_line "Up/Down    browse command history"
 check_absent "  dir [path]  list the current filesystem"
 check_absent "info [path]"
 check_absent "poweroff"
-check_line "system: Arwill 0.23.0"
+check_line "system: Arwill 0.23.1"
 check_line "processes: system 2, kernel 0, awp 0/4"
 check_line "PID KIND STATE RUNS EXIT NAME"
-check_line "1002 awp finished"
+check_line "1004 awp finished"
 check_line "SYSTEM 2 tasks  KERNEL 4 tasks"
 check_line "q/Ctrl+C exit"
 check_line "memory map:"
@@ -674,6 +705,12 @@ check_line "syscall gate: loaded"
 check_line "runs: 3"
 check_line "bytes written: 53"
 check_line "bad syscalls: 1"
+check_line "writehex: wrote 41 bytes to /r"
+check_line "rm: removed /r"
+check_line "writehex: wrote 41 bytes to /w"
+check_line "rm: removed /w"
+check_line "writehex: wrote 36 bytes to /f"
+check_line "rm: removed /f"
 check_line "owner model: single-owner"
 check_line "accounts: none"
 check_line "owner access: full system control"
@@ -738,7 +775,7 @@ check_line "limine.conf"
 check_line "protocol: limine"
 check_line "cat: cannot display binary file: /boot/kernel.elf"
 check_line "name: Arwill"
-check_line "version: 0.23.0"
+check_line "version: 0.23.1"
 check_line "filesystem: arfs"
 check_line "type: text file"
 check_line "Arwill storage-backed filesystem"
@@ -762,7 +799,7 @@ for expected in \
     "Access denied" \
     "Arwill remote console" \
     "warning: plaintext trusted-LAN access" \
-    "Arwill 0.23.0" \
+    "Arwill 0.23.1" \
     "^C" \
     "remote console: disconnected" \
     "uptime: " \
@@ -791,7 +828,7 @@ if ! tr -d '\r' < "$remote_console_log" | grep -x -q '/'; then
     exit 1
 fi
 
-remote_version_count=$(grep -F -c "Arwill 0.23.0" "$remote_console_log")
+remote_version_count=$(grep -F -c "Arwill 0.23.1" "$remote_console_log")
 if [ "$remote_version_count" -lt 2 ]; then
     echo "remote console Up history did not repeat the command" >&2
     cat "$remote_console_log" >&2

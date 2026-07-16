@@ -776,10 +776,19 @@ driver work, not accidental default access for every ring 3 program.
    while the serial and authenticated remote shells remain active, exchanges
    payload bytes, closes the stream, and observes a clean AWP exit.
 
-41. [ ] TCP v2 integration and fault-injection stabilization
+41. [x] TCP v2 integration and fault-injection stabilization
 
-   Planned for `0.23.1` per ADR-0060.
+   Completed in `0.23.1` per ADR-0060.
 
    Scope: complete loss, duplication, reordering, wraparound, queue-pressure,
    multi-port, invalid-user-buffer, QEMU, and UTM verification while retaining
    all established serial, filesystem, scheduler, and remote-console behavior.
+
+   Verified by: native packet tests cover checksum corruption, closed ports,
+   SYN and data retransmission, retry exhaustion, duplicate and reordered
+   payloads, sequence wraparound, RST recovery, FIN close timeout, zero-window
+   recovery, queue pressure, simultaneous ports, active ARP failure, and owner
+   cleanup. QEMU additionally checks invalid AWP read/write pointers, cleanup
+   after AWP fault and cancellation, the stored network service, persistence,
+   and secondary-master IDE discovery. UTM Shared networking was verified with
+   host ICMP plus authenticated remote-console and AWP-service TCP traffic.

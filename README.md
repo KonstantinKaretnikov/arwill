@@ -1,6 +1,6 @@
 # Arwill
 
-Arwill `0.23.0` is a small experimental x86-64 operating system for QEMU.
+Arwill `0.23.1` is a small experimental x86-64 operating system for QEMU.
 It is built around explicit, replaceable components and documented decisions.
 See [MANIFESTO.md](MANIFESTO.md).
 
@@ -85,7 +85,7 @@ console window when the replacement starts.
 Boot output is intentionally minimal and identical on serial and framebuffer:
 
 ```text
-Arwill 0.23.0 ready
+Arwill 0.23.1 ready
 Arwill:/>
 ```
 

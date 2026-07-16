@@ -473,6 +473,22 @@ int main(void) {
         return 1;
     }
 
+    const uint32_t expected_peer_sequence =
+        stack.endpoints[0].stream.listener.acknowledgement;
+    queue_segment(&fake, peer_port, expected_peer_sequence + 1U,
+        stack.endpoints[0].stream.listener.sequence,
+        arwill_tcp_flag_ack | arwill_tcp_flag_psh, &input, 1U);
+    if (!expect(arwill_ipv4_poll_tcp(&stack),
+            "reordered payload acknowledged without acceptance")
+        || !expect(stack.endpoints[0].stream.listener.acknowledgement ==
+            expected_peer_sequence,
+            "reordered payload did not advance receive sequence")
+        || !expect(!arwill_tcp_stream_read(
+            &stack.endpoints[0].stream, &received, 1U),
+            "reordered payload was not queued")) {
+        return 1;
+    }
+
     const uint8_t output[2] = { (uint8_t)'o', (uint8_t)'k' };
     if (!expect(arwill_tcp_stream_write(
             &stack.endpoints[0].stream, output, sizeof(output)) == sizeof(output),
@@ -719,6 +735,33 @@ int main(void) {
             "passive close final ACK accepted")
         || !expect(close_listener.state == arwill_tcp_state_listen,
             "passive close returned to listen")) {
+        return 1;
+    }
+
+    arwill_tcp_listener_init(&close_listener, test_remote_console_port, 4000U);
+    close_incoming.sequence = peer_initial_sequence;
+    close_incoming.acknowledgement = 0U;
+    close_incoming.flags = arwill_tcp_flag_syn;
+    if (!expect(arwill_tcp_listener_receive(
+            &close_listener, &close_incoming, &close_reply),
+            "RST test SYN accepted")) {
+        return 1;
+    }
+    close_incoming.sequence++;
+    close_incoming.acknowledgement = close_listener.sequence + 1U;
+    close_incoming.flags = arwill_tcp_flag_ack;
+    if (!expect(arwill_tcp_listener_receive(
+            &close_listener, &close_incoming, &close_reply),
+            "RST test connection established")) {
+        return 1;
+    }
+    close_incoming.acknowledgement = close_listener.sequence;
+    close_incoming.flags = arwill_tcp_flag_rst | arwill_tcp_flag_ack;
+    if (!expect(arwill_tcp_listener_receive(
+            &close_listener, &close_incoming, &close_reply),
+            "matching RST accepted")
+        || !expect(close_listener.state == arwill_tcp_state_listen,
+            "matching RST restores listener")) {
         return 1;
     }
 
