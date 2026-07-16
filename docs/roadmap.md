@@ -792,3 +792,19 @@ driver work, not accidental default access for every ring 3 program.
    after AWP fault and cancellation, the stored network service, persistence,
    and secondary-master IDE discovery. UTM Shared networking was verified with
    host ICMP plus authenticated remote-console and AWP-service TCP traffic.
+
+42. [x] Structural cleanup after TCP v2
+
+   Completed in `0.23.1`; removal of the transitional diagnostic inputs is
+   recorded by ADR-0062, while the remaining work preserves existing public
+   behavior and accepted subsystem boundaries.
+
+   Scope: remove unused contracts and implementations, keep AWP networking
+   behind `tcp_stream`, reduce public-header coupling, simplify shell dispatch
+   and completion, and consolidate only the repeated bounded text primitives
+   that have current consumers.
+
+   Verified by: all public kernel symbols retain a source consumer, production
+   endpoint-0 indexing remains owned by IPv4, `make check` passes the native,
+   QEMU, persistence, networking, and secondary-master IDE suites, and tracked
+   C/header source decreases from 17,110 to 16,776 physical lines.
