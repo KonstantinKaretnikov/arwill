@@ -6,6 +6,7 @@
 
 enum arwill_tcp_state {
     arwill_tcp_state_listen,
+    arwill_tcp_state_syn_sent,
     arwill_tcp_state_syn_received,
     arwill_tcp_state_established,
     arwill_tcp_state_close_wait,
@@ -54,6 +55,11 @@ void arwill_tcp_listener_init(struct arwill_tcp_listener *listener, uint16_t por
 
 void arwill_tcp_listener_reset(struct arwill_tcp_listener *listener,
     uint32_t initial_sequence);
+
+int arwill_tcp_listener_connect(struct arwill_tcp_listener *listener,
+    const uint8_t local_address[4], uint16_t local_port,
+    const uint8_t peer_address[4], uint16_t peer_port,
+    uint32_t initial_sequence, struct arwill_tcp_segment *syn);
 
 int arwill_tcp_listener_receive(struct arwill_tcp_listener *listener,
     const struct arwill_tcp_segment *incoming, struct arwill_tcp_segment *reply);

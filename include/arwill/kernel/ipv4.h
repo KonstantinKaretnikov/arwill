@@ -22,6 +22,8 @@ enum {
     arwill_tcp_time_wait_ms = 500,
     arwill_tcp_close_timeout_ms = 2500,
     arwill_tcp_endpoint_capacity = 4,
+    arwill_tcp_arp_retry_ms = 250,
+    arwill_tcp_arp_max_attempts = 3,
 };
 
 struct arwill_tcp_pending_segment {
@@ -49,6 +51,15 @@ struct arwill_tcp_endpoint {
     uint64_t tcp_retransmission_timeout_ms;
     uint16_t tcp_last_advertised_window;
     int tcp_window_update_pending;
+    uint8_t connect_peer_address[4];
+    uint8_t connect_next_hop[4];
+    uint16_t connect_peer_port;
+    uint16_t connect_local_port;
+    uint64_t connect_arp_sent_milliseconds;
+    unsigned connect_arp_attempts;
+    int connect_pending;
+    int connect_failed;
+    int active_open;
     int allocated;
 };
 
@@ -102,6 +113,11 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack);
 struct arwill_tcp_stream *arwill_ipv4_tcp_open(struct arwill_ipv4_stack *stack);
 int arwill_ipv4_tcp_listen(struct arwill_ipv4_stack *stack,
     struct arwill_tcp_stream *stream, uint16_t port);
+int arwill_ipv4_tcp_connect(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_stream *stream, const uint8_t peer_address[4],
+    uint16_t local_port, uint16_t peer_port);
+int arwill_ipv4_tcp_connect_status(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_stream *stream);
 void arwill_ipv4_tcp_release(struct arwill_ipv4_stack *stack,
     struct arwill_tcp_stream *stream);
 struct arwill_tcp_stream *arwill_ipv4_remote_stream(

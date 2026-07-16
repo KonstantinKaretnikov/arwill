@@ -165,6 +165,36 @@ static void queue_echo_request(struct fake_network *network) {
     network->incoming_ready = 1;
 }
 
+static void queue_arp_reply(struct fake_network *network,
+    const uint8_t sender_address[4]) {
+    uint8_t *frame = network->incoming;
+
+    for (size_t index = 0; index < sizeof(network->incoming); index++) {
+        frame[index] = 0U;
+    }
+    for (size_t index = 0; index < arwill_network_mac_length; index++) {
+        frame[index] = guest_mac[index];
+        frame[6U + index] = peer_mac[index];
+        frame[22U + index] = peer_mac[index];
+        frame[32U + index] = guest_mac[index];
+    }
+    put16(frame, 12U, 0x0806U);
+    put16(frame, 14U, 1U);
+    put16(frame, 16U, 0x0800U);
+    frame[18] = 6U;
+    frame[19] = 4U;
+    put16(frame, 20U, 2U);
+    for (size_t index = 0; index < 4U; index++) {
+        frame[28U + index] = sender_address[index];
+    }
+    frame[38] = 10U;
+    frame[39] = 0U;
+    frame[40] = 2U;
+    frame[41] = 15U;
+    network->incoming_length = 60U;
+    network->incoming_ready = 1;
+}
+
 static void queue_segment_for_port(struct fake_network *network,
     uint16_t source_port, uint16_t destination_port,
     uint32_t sequence, uint32_t acknowledgement, uint8_t flags,
@@ -787,6 +817,70 @@ int main(void) {
     arwill_ipv4_tcp_release(&stack, first);
     arwill_ipv4_tcp_release(&stack, second);
     arwill_ipv4_tcp_release(&stack, third);
+
+    const uint8_t active_peer_address[4] = { 10U, 0U, 2U, 2U };
+    struct arwill_tcp_stream *active = arwill_ipv4_tcp_open(&stack);
+    if (!expect(active != 0, "active endpoint allocated")
+        || !expect(arwill_ipv4_tcp_connect(&stack, active,
+            active_peer_address, 26000U, 27000U) == 0,
+            "active connect begins asynchronously")) {
+        return 1;
+    }
+    const unsigned sends_before_arp = fake.send_count;
+    (void)arwill_ipv4_poll_tcp(&stack);
+    if (!expect(fake.send_count == sends_before_arp + 1U,
+            "active connect sends ARP request")
+        || !expect(get16(fake.outgoing, 12U) == 0x0806U &&
+            get16(fake.outgoing, 20U) == 1U,
+            "active connect emits an ARP request frame")) {
+        return 1;
+    }
+    queue_arp_reply(&fake, active_peer_address);
+    if (!expect(arwill_ipv4_poll_tcp(&stack),
+            "active connect accepts ARP reply")
+        || !expect(active->listener.state == arwill_tcp_state_syn_sent,
+            "active connect enters SYN-SENT")
+        || !expect(get16(fake.outgoing, 12U) == 0x0800U &&
+            get16(fake.outgoing, 34U) == 26000U &&
+            get16(fake.outgoing, 36U) == 27000U &&
+            (fake.outgoing[47] & arwill_tcp_flag_syn) != 0U,
+            "active connect emits SYN with requested tuple")) {
+        return 1;
+    }
+    queue_segment_for_port(&fake, 27000U, 26000U, 9000U,
+        active->listener.sequence + 1U,
+        arwill_tcp_flag_syn | arwill_tcp_flag_ack, 0, 0U);
+    if (!expect(arwill_ipv4_poll_tcp(&stack),
+            "active connect accepts SYN-ACK")
+        || !expect(arwill_ipv4_tcp_connect_status(&stack, active) == 1,
+            "active connect reports established")
+        || !expect(active->listener.state == arwill_tcp_state_established,
+            "active endpoint enters established state")
+        || !expect((fake.outgoing[47] & arwill_tcp_flag_ack) != 0U &&
+            (fake.outgoing[47] & arwill_tcp_flag_syn) == 0U,
+            "active connect completes with ACK")) {
+        return 1;
+    }
+    arwill_ipv4_tcp_release(&stack, active);
+
+    struct arwill_tcp_stream *unresolved = arwill_ipv4_tcp_open(&stack);
+    const uint8_t missing_peer_address[4] = { 10U, 0U, 2U, 99U };
+    if (!expect(unresolved != 0 &&
+            arwill_ipv4_tcp_connect(&stack, unresolved,
+                missing_peer_address, 26001U, 27001U) == 0,
+            "unresolved active connect begins")) {
+        return 1;
+    }
+    for (unsigned attempt = 0; attempt <= arwill_tcp_arp_max_attempts;
+        attempt++) {
+        (void)arwill_ipv4_poll_tcp(&stack);
+        time.milliseconds += arwill_tcp_arp_retry_ms;
+    }
+    if (!expect(arwill_ipv4_tcp_connect_status(&stack, unresolved) == -1,
+            "active connect reports bounded ARP failure")) {
+        return 1;
+    }
+    arwill_ipv4_tcp_release(&stack, unresolved);
 
     puts("IPv4/ICMP/TCP host test passed");
     return 0;

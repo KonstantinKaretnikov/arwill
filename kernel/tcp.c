@@ -90,6 +90,33 @@ void arwill_tcp_listener_reset(struct arwill_tcp_listener *listener,
     arwill_tcp_listener_init(listener, listener->port, initial_sequence);
 }
 
+int arwill_tcp_listener_connect(struct arwill_tcp_listener *listener,
+    const uint8_t local_address[4], uint16_t local_port,
+    const uint8_t peer_address[4], uint16_t peer_port,
+    uint32_t initial_sequence, struct arwill_tcp_segment *syn) {
+    if (listener == 0 || local_address == 0 || peer_address == 0 || syn == 0 ||
+        local_port == 0U || peer_port == 0U) {
+        return 0;
+    }
+    arwill_tcp_listener_init(listener, local_port, initial_sequence);
+    copy_address(listener->local_address, local_address);
+    copy_address(listener->peer_address, peer_address);
+    listener->peer_port = peer_port;
+    listener->state = arwill_tcp_state_syn_sent;
+
+    copy_address(syn->source_address, local_address);
+    copy_address(syn->destination_address, peer_address);
+    syn->source_port = local_port;
+    syn->destination_port = peer_port;
+    syn->sequence = initial_sequence;
+    syn->acknowledgement = 0U;
+    syn->flags = arwill_tcp_flag_syn;
+    syn->window = 0U;
+    syn->maximum_segment_size = 0U;
+    syn->payload_length = 0U;
+    return 1;
+}
+
 int arwill_tcp_listener_receive(struct arwill_tcp_listener *listener,
     const struct arwill_tcp_segment *incoming, struct arwill_tcp_segment *reply) {
     if (listener == 0 || incoming == 0 || reply == 0 ||
@@ -107,6 +134,23 @@ int arwill_tcp_listener_receive(struct arwill_tcp_listener *listener,
             return 1;
         }
         return 0;
+    }
+
+    if (listener->state == arwill_tcp_state_syn_sent &&
+        (incoming->flags & (arwill_tcp_flag_syn | arwill_tcp_flag_ack)) ==
+            (arwill_tcp_flag_syn | arwill_tcp_flag_ack) &&
+        incoming->acknowledgement == listener->sequence + 1U) {
+        listener->sequence++;
+        listener->acknowledgement = incoming->sequence + 1U;
+        listener->peer_window = incoming->window;
+        if (incoming->maximum_segment_size != 0U) {
+            listener->peer_maximum_segment_size = incoming->maximum_segment_size;
+        }
+        reply->sequence = listener->sequence;
+        reply->acknowledgement = listener->acknowledgement;
+        reply->flags = arwill_tcp_flag_ack;
+        listener->state = arwill_tcp_state_established;
+        return 1;
     }
 
     if (listener->state == arwill_tcp_state_listen &&
@@ -268,6 +312,8 @@ const char *arwill_tcp_state_name(enum arwill_tcp_state state) {
     switch (state) {
         case arwill_tcp_state_listen:
             return "listen";
+        case arwill_tcp_state_syn_sent:
+            return "syn-sent";
         case arwill_tcp_state_syn_received:
             return "syn-received";
         case arwill_tcp_state_established:
