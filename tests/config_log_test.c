@@ -91,6 +91,12 @@ void arwill_tcp_stream_stop(struct arwill_tcp_stream *stream) {
     }
 }
 
+int arwill_ipv4_tcp_listen(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_stream *stream, uint16_t port) {
+    (void)stack;
+    return arwill_tcp_stream_listen(stream, port, 0x41520000U);
+}
+
 static int expect(int condition, const char *message) {
     if (condition) {
         return 1;
@@ -166,7 +172,7 @@ int main(void) {
     );
     if (!expect(services.remote_console_state == arwill_service_running,
             "enabled service starts") ||
-        !expect(ipv4.stream.listener.port == 23232U, "service uses config port") ||
+        !expect(ipv4.endpoints[0].stream.listener.port == 23232U, "service uses config port") ||
         !expect(arwill_service_remote_console_stop(&services), "service stops") ||
         !expect(services.remote_console_state == arwill_service_stopped,
             "stopped state")) {
@@ -182,7 +188,7 @@ int main(void) {
         !expect(arwill_service_remote_console_restart(&services),
             "restart reloads configuration") ||
         !expect(config.remote_port == 24001U &&
-            ipv4.stream.listener.port == 24001U,
+            ipv4.endpoints[0].stream.listener.port == 24001U,
             "restarted service applies new port")) {
         return 1;
     }

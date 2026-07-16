@@ -130,6 +130,11 @@ Rules for future work:
   contract. IPv4 owns framing, ACK/RTO progress, and retransmission; stream
   consumers use bounded nonblocking read/write/close requests and must not
   poll the network or wait for peer acknowledgements themselves.
+- Treat the TCP endpoint table as four fixed, boot-allocated slots. Endpoint 0
+  belongs to the remote console; the remaining slots are allocatable consumers.
+  Each endpoint owns its tuple, rings, send flight, peer MAC, RTO, and close
+  timers. Reject duplicate local-port binds and never share connection state
+  between endpoints.
 - Initialize supervisor-only platform MMIO mappings before AWP address spaces
   copy kernel PML4 entries. Keep device MMIO in a dedicated high-half range,
   separate from Limine HHDM. See ADR-0047.

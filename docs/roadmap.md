@@ -749,12 +749,18 @@ driver work, not accidental default access for every ring 3 program.
    QEMU smoke retains authentication, interactive shell I/O, reconnect, and
    service restart behavior.
 
-39. [ ] Fixed TCP endpoint table
+39. [x] Fixed TCP endpoint table
 
-   Planned for `0.22.1` per ADR-0060.
+   Completed in `0.22.1` per ADR-0060.
 
    Scope: bind and dispatch a fixed number of simultaneous ports and
    connections by complete tuple, with per-endpoint queues and diagnostics.
+
+   Verified by: native packet tests allocate the three application slots,
+   reject table overflow and duplicate binds, establish two ports at once,
+   transmit independent send flights, and retain distinct pending-ACK state.
+   The QEMU smoke retains the endpoint-0 remote console and reports fixed-table
+   allocation diagnostics.
 
 40. [ ] Bounded AWP networking ABI
 

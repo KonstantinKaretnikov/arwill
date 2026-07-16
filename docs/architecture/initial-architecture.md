@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.22.0 has one executable path:
+Arwill 0.22.1 has one executable path:
 
 ```text
 Limine bootloader
@@ -378,6 +378,9 @@ QEMU e1000 and remote output:
 - IPv4 owns TCP framing, acknowledgements, and retransmission. The reusable
   `tcp_stream` contract owns fixed receive/transmit rings and exposes
   nonblocking queue, read, and close-request operations to services.
+- IPv4 owns a four-entry endpoint table. Each allocated endpoint has its own
+  listener tuple, peer MAC, rings, four-segment send flight, adaptive RTO, and
+  close timers; endpoint 0 is reserved for the remote console.
 - TCP retains a fixed four-segment send flight. A fixed transmit byte ring
   prevents service or future AWP writes from waiting for a peer ACK.
 - The path remains one polling connection, not a socket API or general TCP

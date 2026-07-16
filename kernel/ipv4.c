@@ -61,6 +61,33 @@ static void write_char(const struct arwill_console *console, char value) {
     arwill_console_write(console, text);
 }
 
+static void initialize_tcp_endpoint(struct arwill_tcp_endpoint *endpoint) {
+    arwill_tcp_stream_init(&endpoint->stream);
+    for (size_t index = 0; index < arwill_tcp_pending_segment_capacity; index++) {
+        endpoint->tcp_pending[index].active = 0;
+        endpoint->tcp_pending[index].payload_length = 0;
+        endpoint->tcp_pending[index].expected_acknowledgement = 0;
+        endpoint->tcp_pending[index].sent_at_milliseconds = 0;
+        endpoint->tcp_pending[index].retransmission_timeout_ms =
+            arwill_tcp_retransmission_interval_ms;
+        endpoint->tcp_pending[index].retransmissions = 0;
+    }
+    endpoint->tcp_pending_head = 0;
+    endpoint->tcp_pending_count = 0;
+    endpoint->tcp_close_started_milliseconds = 0;
+    endpoint->tcp_time_wait_started_milliseconds = 0;
+    endpoint->tcp_smoothed_round_trip_ms = 0;
+    endpoint->tcp_round_trip_variance_ms = 0;
+    endpoint->tcp_retransmission_timeout_ms =
+        arwill_tcp_retransmission_interval_ms;
+    endpoint->tcp_last_advertised_window =
+        arwill_tcp_stream_receive_capacity;
+    endpoint->tcp_window_update_pending = 0;
+    endpoint->allocated = 0;
+}
+
+static void reset_tcp_stream(struct arwill_tcp_endpoint *endpoint);
+
 int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
     const struct arwill_network_device *network,
     const struct arwill_clock *clock,
@@ -84,28 +111,13 @@ int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
     stack->icmp_echo_requests_received = 0;
     stack->icmp_echo_replies_sent = 0;
     stack->icmp_checksum_drops = 0;
-    arwill_tcp_stream_init(&stack->stream);
-    (void)arwill_tcp_stream_listen(
-        &stack->stream, remote_console_port, 0x41520000U
-    );
-    for (size_t index = 0; index < arwill_tcp_pending_segment_capacity; index++) {
-        stack->tcp_pending[index].active = 0;
-        stack->tcp_pending[index].payload_length = 0;
-        stack->tcp_pending[index].expected_acknowledgement = 0;
-        stack->tcp_pending[index].sent_at_milliseconds = 0;
-        stack->tcp_pending[index].retransmission_timeout_ms =
-            arwill_tcp_retransmission_interval_ms;
-        stack->tcp_pending[index].retransmissions = 0;
+    for (size_t index = 0; index < arwill_tcp_endpoint_capacity; index++) {
+        initialize_tcp_endpoint(&stack->endpoints[index]);
     }
-    stack->tcp_pending_head = 0;
-    stack->tcp_pending_count = 0;
-    stack->tcp_close_started_milliseconds = 0;
-    stack->tcp_time_wait_started_milliseconds = 0;
-    stack->tcp_smoothed_round_trip_ms = 0;
-    stack->tcp_round_trip_variance_ms = 0;
-    stack->tcp_retransmission_timeout_ms = arwill_tcp_retransmission_interval_ms;
-    stack->tcp_last_advertised_window = arwill_tcp_stream_receive_capacity;
-    stack->tcp_window_update_pending = 0;
+    stack->endpoints[0].allocated = 1;
+    (void)arwill_tcp_stream_listen(
+        &stack->endpoints[0].stream, remote_console_port, 0x41520000U
+    );
     stack->tcp_frames_received = 0;
     stack->tcp_frames_sent = 0;
     stack->tcp_bytes_received = 0;
@@ -124,13 +136,75 @@ int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
     stack->tcp_timeouts = 0;
     stack->tcp_receive_window_drops = 0;
     stack->tcp_window_updates = 0;
-    stack->stream.connections = 0;
-    stack->stream.disconnects = 0;
-    stack->stream.bytes_received = 0;
-    stack->stream.bytes_sent = 0;
-    stack->stream.bytes_dropped = 0;
-    stack->stream.send_failures = 0;
     return 1;
+}
+
+struct arwill_tcp_stream *arwill_ipv4_remote_stream(
+    struct arwill_ipv4_stack *stack) {
+    return stack == 0 ? 0 : &stack->endpoints[0].stream;
+}
+
+const struct arwill_tcp_stream *arwill_ipv4_remote_stream_const(
+    const struct arwill_ipv4_stack *stack) {
+    return stack == 0 ? 0 : &stack->endpoints[0].stream;
+}
+
+struct arwill_tcp_stream *arwill_ipv4_tcp_open(struct arwill_ipv4_stack *stack) {
+    if (stack == 0) {
+        return 0;
+    }
+    for (size_t index = 1U; index < arwill_tcp_endpoint_capacity; index++) {
+        if (!stack->endpoints[index].allocated) {
+            initialize_tcp_endpoint(&stack->endpoints[index]);
+            stack->endpoints[index].allocated = 1;
+            return &stack->endpoints[index].stream;
+        }
+    }
+    return 0;
+}
+
+static struct arwill_tcp_endpoint *endpoint_for_stream(
+    struct arwill_ipv4_stack *stack, struct arwill_tcp_stream *stream) {
+    if (stack == 0 || stream == 0) {
+        return 0;
+    }
+    for (size_t index = 0; index < arwill_tcp_endpoint_capacity; index++) {
+        if (&stack->endpoints[index].stream == stream &&
+            stack->endpoints[index].allocated) {
+            return &stack->endpoints[index];
+        }
+    }
+    return 0;
+}
+
+int arwill_ipv4_tcp_listen(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_stream *stream, uint16_t port) {
+    struct arwill_tcp_endpoint *endpoint = endpoint_for_stream(stack, stream);
+    if (endpoint == 0 || port == 0U) {
+        return 0;
+    }
+    for (size_t index = 0; index < arwill_tcp_endpoint_capacity; index++) {
+        const struct arwill_tcp_endpoint *candidate = &stack->endpoints[index];
+        if (candidate != endpoint && candidate->allocated &&
+            candidate->stream.listening &&
+            candidate->stream.listener.port == port) {
+            return 0;
+        }
+    }
+    reset_tcp_stream(endpoint);
+    return arwill_tcp_stream_listen(
+        stream, port, 0x41520000U + stream->connections
+    );
+}
+
+void arwill_ipv4_tcp_release(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_stream *stream) {
+    struct arwill_tcp_endpoint *endpoint = endpoint_for_stream(stack, stream);
+    if (endpoint == 0 || endpoint == &stack->endpoints[0]) {
+        return;
+    }
+    arwill_tcp_stream_stop(&endpoint->stream);
+    initialize_tcp_endpoint(endpoint);
 }
 
 int arwill_ipv4_send_arp_request(const struct arwill_ipv4_stack *stack,
@@ -360,13 +434,15 @@ static uint16_t tcp_checksum(const uint8_t *ip, const uint8_t *tcp, size_t lengt
     return (uint16_t)~sum;
 }
 
-static uint16_t advertised_receive_window(const struct arwill_ipv4_stack *stack) {
+static uint16_t advertised_receive_window(
+    const struct arwill_tcp_endpoint *endpoint) {
     const size_t available = arwill_tcp_stream_receive_capacity -
-        stack->stream.receive_count;
+        endpoint->stream.receive_count;
     return available > UINT16_MAX ? UINT16_MAX : (uint16_t)available;
 }
 
 static int send_tcp_segment_to(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_endpoint *endpoint,
     const struct arwill_tcp_segment *segment, const uint8_t *payload,
     size_t payload_length, const uint8_t destination_mac[arwill_network_mac_length]) {
     uint8_t frame[arwill_network_frame_capacity];
@@ -403,7 +479,8 @@ static int send_tcp_segment_to(struct arwill_ipv4_stack *stack,
     put32(tcp, 8U, segment->acknowledgement);
     tcp[12] = (uint8_t)((tcp_header_length / 4U) << 4U);
     tcp[13] = segment->flags;
-    const uint16_t window = advertised_receive_window(stack);
+    const uint16_t window = endpoint == 0 ? 0U :
+        advertised_receive_window(endpoint);
     put16(tcp, 14U, window);
     if (tcp_header_length == 24U) {
         tcp[20] = 2U;
@@ -421,60 +498,63 @@ static int send_tcp_segment_to(struct arwill_ipv4_stack *stack,
     }
     stack->tcp_frames_sent++;
     stack->tcp_bytes_sent += (uint32_t)payload_length;
-    if (segment->source_port == stack->stream.listener.port &&
-        segment->destination_port == stack->stream.listener.peer_port) {
-        stack->tcp_last_advertised_window = window;
+    if (endpoint != 0 &&
+        segment->source_port == endpoint->stream.listener.port &&
+        segment->destination_port == endpoint->stream.listener.peer_port) {
+        endpoint->tcp_last_advertised_window = window;
     }
     return 1;
 }
 
 static int send_tcp_segment(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_endpoint *endpoint,
     const struct arwill_tcp_segment *segment, const uint8_t *payload,
     size_t payload_length) {
     return send_tcp_segment_to(
-        stack, segment, payload, payload_length, stack->tcp_peer_mac
+        stack, endpoint, segment, payload, payload_length, endpoint->tcp_peer_mac
     );
 }
 
-static void reset_tcp_stream(struct arwill_ipv4_stack *stack) {
-    stack->stream.bytes_dropped +=
-        (uint32_t)stack->stream.transmit_count;
+static void reset_tcp_stream(struct arwill_tcp_endpoint *endpoint) {
+    endpoint->stream.bytes_dropped +=
+        (uint32_t)endpoint->stream.transmit_count;
     arwill_tcp_listener_reset(
-        &stack->stream.listener,
-        0x41520000U + stack->stream.connections
+        &endpoint->stream.listener,
+        0x41520000U + endpoint->stream.connections
     );
-    stack->stream.receive_head = 0;
-    stack->stream.receive_count = 0;
-    stack->stream.transmit_head = 0;
-    stack->stream.transmit_count = 0;
-    stack->stream.peer_closed = 0;
-    stack->stream.close_requested = 0;
-    stack->stream.receive_window_changed = 0;
+    endpoint->stream.receive_head = 0;
+    endpoint->stream.receive_count = 0;
+    endpoint->stream.transmit_head = 0;
+    endpoint->stream.transmit_count = 0;
+    endpoint->stream.peer_closed = 0;
+    endpoint->stream.close_requested = 0;
+    endpoint->stream.receive_window_changed = 0;
     for (size_t index = 0; index < arwill_tcp_pending_segment_capacity; index++) {
-        stack->tcp_pending[index].active = 0;
-        stack->tcp_pending[index].payload_length = 0;
-        stack->tcp_pending[index].retransmissions = 0;
+        endpoint->tcp_pending[index].active = 0;
+        endpoint->tcp_pending[index].payload_length = 0;
+        endpoint->tcp_pending[index].retransmissions = 0;
     }
-    stack->tcp_pending_head = 0;
-    stack->tcp_pending_count = 0;
-    stack->tcp_close_started_milliseconds = 0;
-    stack->tcp_time_wait_started_milliseconds = 0;
-    stack->tcp_window_update_pending = 0;
+    endpoint->tcp_pending_head = 0;
+    endpoint->tcp_pending_count = 0;
+    endpoint->tcp_close_started_milliseconds = 0;
+    endpoint->tcp_time_wait_started_milliseconds = 0;
+    endpoint->tcp_window_update_pending = 0;
 }
 
 static int remember_pending_segment(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_endpoint *endpoint,
     const struct arwill_tcp_segment *segment, const uint8_t *payload,
     size_t payload_length) {
     if (stack == 0 || segment == 0
         || payload_length > arwill_tcp_pending_payload_capacity
-        || stack->tcp_pending_count >= arwill_tcp_pending_segment_capacity
+        || endpoint->tcp_pending_count >= arwill_tcp_pending_segment_capacity
         || (payload == 0 && payload_length != 0U)) {
         return 0;
     }
 
-    const size_t pending_index = (stack->tcp_pending_head +
-        stack->tcp_pending_count) % arwill_tcp_pending_segment_capacity;
-    struct arwill_tcp_pending_segment *pending = &stack->tcp_pending[pending_index];
+    const size_t pending_index = (endpoint->tcp_pending_head +
+        endpoint->tcp_pending_count) % arwill_tcp_pending_segment_capacity;
+    struct arwill_tcp_pending_segment *pending = &endpoint->tcp_pending[pending_index];
     pending->segment = *segment;
     for (size_t index = 0; index < payload_length; index++) {
         pending->payload[index] = payload[index];
@@ -488,53 +568,54 @@ static int remember_pending_segment(struct arwill_ipv4_stack *stack,
     }
     pending->sent_at_milliseconds =
         arwill_clock_monotonic_milliseconds(stack->clock);
-    pending->retransmission_timeout_ms = stack->tcp_retransmission_timeout_ms;
+    pending->retransmission_timeout_ms = endpoint->tcp_retransmission_timeout_ms;
     pending->retransmissions = 0;
     pending->active = 1;
-    stack->tcp_pending_count++;
+    endpoint->tcp_pending_count++;
     return 1;
 }
 
-static void update_retransmission_timeout(struct arwill_ipv4_stack *stack,
+static void update_retransmission_timeout(struct arwill_tcp_endpoint *endpoint,
     uint64_t sample) {
     if (sample == 0U) {
         sample = 1U;
     }
-    if (stack->tcp_smoothed_round_trip_ms == 0U) {
-        stack->tcp_smoothed_round_trip_ms = sample;
-        stack->tcp_round_trip_variance_ms = sample / 2U;
+    if (endpoint->tcp_smoothed_round_trip_ms == 0U) {
+        endpoint->tcp_smoothed_round_trip_ms = sample;
+        endpoint->tcp_round_trip_variance_ms = sample / 2U;
     } else {
-        const uint64_t difference = stack->tcp_smoothed_round_trip_ms > sample
-            ? stack->tcp_smoothed_round_trip_ms - sample
-            : sample - stack->tcp_smoothed_round_trip_ms;
-        stack->tcp_round_trip_variance_ms =
-            (3U * stack->tcp_round_trip_variance_ms + difference) / 4U;
-        stack->tcp_smoothed_round_trip_ms =
-            (7U * stack->tcp_smoothed_round_trip_ms + sample) / 8U;
+        const uint64_t difference = endpoint->tcp_smoothed_round_trip_ms > sample
+            ? endpoint->tcp_smoothed_round_trip_ms - sample
+            : sample - endpoint->tcp_smoothed_round_trip_ms;
+        endpoint->tcp_round_trip_variance_ms =
+            (3U * endpoint->tcp_round_trip_variance_ms + difference) / 4U;
+        endpoint->tcp_smoothed_round_trip_ms =
+            (7U * endpoint->tcp_smoothed_round_trip_ms + sample) / 8U;
     }
-    uint64_t variance = 4U * stack->tcp_round_trip_variance_ms;
+    uint64_t variance = 4U * endpoint->tcp_round_trip_variance_ms;
     if (variance < 10U) {
         variance = 10U;
     }
-    uint64_t timeout = stack->tcp_smoothed_round_trip_ms + variance;
+    uint64_t timeout = endpoint->tcp_smoothed_round_trip_ms + variance;
     if (timeout < arwill_tcp_retransmission_minimum_ms) {
         timeout = arwill_tcp_retransmission_minimum_ms;
     }
     if (timeout > arwill_tcp_retransmission_maximum_ms) {
         timeout = arwill_tcp_retransmission_maximum_ms;
     }
-    stack->tcp_retransmission_timeout_ms = timeout;
+    endpoint->tcp_retransmission_timeout_ms = timeout;
 }
 
 static void acknowledge_pending_segment(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_endpoint *endpoint,
     const struct arwill_tcp_segment *incoming) {
     if ((incoming->flags & arwill_tcp_flag_ack) == 0U) {
         return;
     }
     const uint64_t now = arwill_clock_monotonic_milliseconds(stack->clock);
-    while (stack->tcp_pending_count != 0U) {
+    while (endpoint->tcp_pending_count != 0U) {
         struct arwill_tcp_pending_segment *pending =
-            &stack->tcp_pending[stack->tcp_pending_head];
+            &endpoint->tcp_pending[endpoint->tcp_pending_head];
         if (incoming->acknowledgement != pending->expected_acknowledgement &&
             !arwill_tcp_sequence_after(
                 incoming->acknowledgement, pending->expected_acknowledgement)) {
@@ -543,45 +624,46 @@ static void acknowledge_pending_segment(struct arwill_ipv4_stack *stack,
         if (pending->retransmissions == 0U &&
             now >= pending->sent_at_milliseconds) {
             update_retransmission_timeout(
-                stack, now - pending->sent_at_milliseconds
+                endpoint, now - pending->sent_at_milliseconds
             );
         }
         pending->active = 0;
         pending->payload_length = 0;
         pending->retransmissions = 0;
-        stack->tcp_pending_head = (stack->tcp_pending_head + 1U) %
+        endpoint->tcp_pending_head = (endpoint->tcp_pending_head + 1U) %
             arwill_tcp_pending_segment_capacity;
-        stack->tcp_pending_count--;
+        endpoint->tcp_pending_count--;
     }
 }
 
-static void maintain_pending_segment(struct arwill_ipv4_stack *stack) {
-    if (stack == 0 || stack->tcp_pending_count == 0U) {
+static void maintain_pending_segment(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_endpoint *endpoint) {
+    if (stack == 0 || endpoint->tcp_pending_count == 0U) {
         return;
     }
 
     const uint64_t now = arwill_clock_monotonic_milliseconds(stack->clock);
-    for (size_t offset = 0; offset < stack->tcp_pending_count; offset++) {
-        const size_t pending_index = (stack->tcp_pending_head + offset) %
+    for (size_t offset = 0; offset < endpoint->tcp_pending_count; offset++) {
+        const size_t pending_index = (endpoint->tcp_pending_head + offset) %
             arwill_tcp_pending_segment_capacity;
         struct arwill_tcp_pending_segment *pending =
-            &stack->tcp_pending[pending_index];
+            &endpoint->tcp_pending[pending_index];
         if (now - pending->sent_at_milliseconds <
             pending->retransmission_timeout_ms) {
             continue;
         }
         if (pending->retransmissions >= arwill_tcp_max_retransmissions) {
-            const int was_connected = arwill_tcp_stream_connected(&stack->stream);
+            const int was_connected = arwill_tcp_stream_connected(&endpoint->stream);
             stack->tcp_timeouts++;
             if (was_connected) {
-                stack->stream.disconnects++;
+                endpoint->stream.disconnects++;
             }
-            reset_tcp_stream(stack);
+            reset_tcp_stream(endpoint);
             return;
         }
-        if (!send_tcp_segment(stack, &pending->segment,
+        if (!send_tcp_segment(stack, endpoint, &pending->segment,
                 pending->payload, pending->payload_length)) {
-            stack->stream.send_failures++;
+            endpoint->stream.send_failures++;
         }
         pending->sent_at_milliseconds = now;
         pending->retransmissions++;
@@ -597,193 +679,200 @@ static void maintain_pending_segment(struct arwill_ipv4_stack *stack) {
     }
 }
 
-static void maintain_tcp_close(struct arwill_ipv4_stack *stack) {
+static void maintain_tcp_close(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_endpoint *endpoint) {
     if (stack == 0) {
         return;
     }
     const uint64_t now = arwill_clock_monotonic_milliseconds(stack->clock);
-    if (stack->stream.listener.state != arwill_tcp_state_listen &&
-        stack->stream.listener.state != arwill_tcp_state_syn_received &&
-        stack->stream.listener.state != arwill_tcp_state_established &&
-        stack->stream.listener.state != arwill_tcp_state_close_wait &&
-        stack->stream.listener.state != arwill_tcp_state_time_wait) {
-        if (stack->tcp_close_started_milliseconds == 0U) {
-            stack->tcp_close_started_milliseconds = now;
+    if (endpoint->stream.listener.state != arwill_tcp_state_listen &&
+        endpoint->stream.listener.state != arwill_tcp_state_syn_received &&
+        endpoint->stream.listener.state != arwill_tcp_state_established &&
+        endpoint->stream.listener.state != arwill_tcp_state_close_wait &&
+        endpoint->stream.listener.state != arwill_tcp_state_time_wait) {
+        if (endpoint->tcp_close_started_milliseconds == 0U) {
+            endpoint->tcp_close_started_milliseconds = now;
         }
-        if (now - stack->tcp_close_started_milliseconds >=
+        if (now - endpoint->tcp_close_started_milliseconds >=
             arwill_tcp_close_timeout_ms) {
-            reset_tcp_stream(stack);
+            reset_tcp_stream(endpoint);
         }
         return;
     }
-    if (stack->stream.listener.state != arwill_tcp_state_time_wait) {
+    if (endpoint->stream.listener.state != arwill_tcp_state_time_wait) {
         return;
     }
-    if (stack->tcp_time_wait_started_milliseconds == 0U) {
-        stack->tcp_time_wait_started_milliseconds = now;
+    if (endpoint->tcp_time_wait_started_milliseconds == 0U) {
+        endpoint->tcp_time_wait_started_milliseconds = now;
     }
-    if (now - stack->tcp_time_wait_started_milliseconds >= arwill_tcp_time_wait_ms) {
-        reset_tcp_stream(stack);
+    if (now - endpoint->tcp_time_wait_started_milliseconds >= arwill_tcp_time_wait_ms) {
+        reset_tcp_stream(endpoint);
     }
 }
 
-static void remember_tcp_peer(struct arwill_ipv4_stack *stack, const uint8_t *frame) {
+static void remember_tcp_peer(struct arwill_tcp_endpoint *endpoint,
+    const uint8_t *frame) {
     for (size_t index = 0; index < arwill_network_mac_length; index++) {
-        stack->tcp_peer_mac[index] = frame[6U + index];
+        endpoint->tcp_peer_mac[index] = frame[6U + index];
     }
 }
 
-static void enqueue_stream_receive(struct arwill_ipv4_stack *stack,
+static void enqueue_stream_receive(struct arwill_tcp_endpoint *endpoint,
     const uint8_t *payload, size_t payload_length) {
     for (size_t index = 0; index < payload_length; index++) {
-        if (stack->stream.receive_count
+        if (endpoint->stream.receive_count
             >= arwill_tcp_stream_receive_capacity) {
-            stack->stream.bytes_dropped++;
+            endpoint->stream.bytes_dropped++;
             continue;
         }
-        const size_t tail = (stack->stream.receive_head
-            + stack->stream.receive_count)
+        const size_t tail = (endpoint->stream.receive_head
+            + endpoint->stream.receive_count)
             % arwill_tcp_stream_receive_capacity;
-        stack->stream.receive[tail] = payload[index];
-        stack->stream.receive_count++;
-        stack->stream.bytes_received++;
+        endpoint->stream.receive[tail] = payload[index];
+        endpoint->stream.receive_count++;
+        endpoint->stream.bytes_received++;
     }
 }
 
-static int send_current_ack(struct arwill_ipv4_stack *stack) {
+static int send_current_ack(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_endpoint *endpoint) {
     struct arwill_tcp_segment acknowledgement;
     for (size_t index = 0; index < 4U; index++) {
         acknowledgement.source_address[index] =
-            stack->stream.listener.local_address[index];
+            endpoint->stream.listener.local_address[index];
         acknowledgement.destination_address[index] =
-            stack->stream.listener.peer_address[index];
+            endpoint->stream.listener.peer_address[index];
     }
-    acknowledgement.source_port = stack->stream.listener.port;
-    acknowledgement.destination_port = stack->stream.listener.peer_port;
-    acknowledgement.sequence = stack->stream.listener.sequence;
-    acknowledgement.acknowledgement = stack->stream.listener.acknowledgement;
+    acknowledgement.source_port = endpoint->stream.listener.port;
+    acknowledgement.destination_port = endpoint->stream.listener.peer_port;
+    acknowledgement.sequence = endpoint->stream.listener.sequence;
+    acknowledgement.acknowledgement = endpoint->stream.listener.acknowledgement;
     acknowledgement.flags = arwill_tcp_flag_ack;
-    acknowledgement.window = advertised_receive_window(stack);
+    acknowledgement.window = advertised_receive_window(endpoint);
     acknowledgement.maximum_segment_size = 0U;
     acknowledgement.payload_length = 0U;
-    return send_tcp_segment(stack, &acknowledgement, 0, 0U);
+    return send_tcp_segment(stack, endpoint, &acknowledgement, 0, 0U);
 }
 
-static void maintain_window_update(struct arwill_ipv4_stack *stack) {
-    if (stack != 0 && stack->stream.receive_window_changed) {
-        if (stack->tcp_last_advertised_window == 0U &&
-            advertised_receive_window(stack) != 0U) {
-            stack->tcp_window_update_pending = 1;
+static void maintain_window_update(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_endpoint *endpoint) {
+    if (stack != 0 && endpoint->stream.receive_window_changed) {
+        if (endpoint->tcp_last_advertised_window == 0U &&
+            advertised_receive_window(endpoint) != 0U) {
+            endpoint->tcp_window_update_pending = 1;
         }
-        stack->stream.receive_window_changed = 0;
+        endpoint->stream.receive_window_changed = 0;
     }
-    if (stack == 0 || !stack->tcp_window_update_pending ||
-        !arwill_tcp_stream_connected(&stack->stream)) {
+    if (stack == 0 || !endpoint->tcp_window_update_pending ||
+        !arwill_tcp_stream_connected(&endpoint->stream)) {
         return;
     }
-    if (send_current_ack(stack)) {
-        stack->tcp_window_update_pending = 0;
+    if (send_current_ack(stack, endpoint)) {
+        endpoint->tcp_window_update_pending = 0;
         stack->tcp_window_updates++;
     }
 }
 
-static void maintain_stream_close(struct arwill_ipv4_stack *stack) {
+static void maintain_stream_close(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_endpoint *endpoint) {
     if (stack == 0) {
         return;
     }
-    if (!stack->stream.listening) {
-        if (stack->tcp_pending_count != 0U ||
-            stack->stream.listener.state != arwill_tcp_state_listen) {
-            reset_tcp_stream(stack);
+    if (!endpoint->stream.listening) {
+        if (endpoint->tcp_pending_count != 0U ||
+            endpoint->stream.listener.state != arwill_tcp_state_listen) {
+            reset_tcp_stream(endpoint);
         }
         return;
     }
-    if (stack->stream.close_requested) {
+    if (endpoint->stream.close_requested) {
         const uint64_t now =
             arwill_clock_monotonic_milliseconds(stack->clock);
-        if (stack->tcp_close_started_milliseconds == 0U) {
-            stack->tcp_close_started_milliseconds = now;
-        } else if (now - stack->tcp_close_started_milliseconds >=
+        if (endpoint->tcp_close_started_milliseconds == 0U) {
+            endpoint->tcp_close_started_milliseconds = now;
+        } else if (now - endpoint->tcp_close_started_milliseconds >=
             arwill_tcp_close_timeout_ms) {
-            reset_tcp_stream(stack);
+            reset_tcp_stream(endpoint);
             return;
         }
     }
-    if (!stack->stream.close_requested ||
-        !arwill_tcp_stream_connected(&stack->stream) ||
-        stack->stream.transmit_count != 0U || stack->tcp_pending_count != 0U) {
+    if (!endpoint->stream.close_requested ||
+        !arwill_tcp_stream_connected(&endpoint->stream) ||
+        endpoint->stream.transmit_count != 0U || endpoint->tcp_pending_count != 0U) {
         return;
     }
     struct arwill_tcp_segment segment;
-    if (!arwill_tcp_listener_begin_close(&stack->stream.listener, &segment) ||
-        !send_tcp_segment(stack, &segment, 0, 0U) ||
-        !remember_pending_segment(stack, &segment, 0, 0U)) {
-        stack->stream.send_failures++;
-        reset_tcp_stream(stack);
+    if (!arwill_tcp_listener_begin_close(&endpoint->stream.listener, &segment) ||
+        !send_tcp_segment(stack, endpoint, &segment, 0, 0U) ||
+        !remember_pending_segment(stack, endpoint, &segment, 0, 0U)) {
+        endpoint->stream.send_failures++;
+        reset_tcp_stream(endpoint);
         return;
     }
-    stack->stream.close_requested = 0;
-    stack->stream.disconnects++;
-    if (stack->tcp_close_started_milliseconds == 0U) {
-        stack->tcp_close_started_milliseconds =
+    endpoint->stream.close_requested = 0;
+    endpoint->stream.disconnects++;
+    if (endpoint->tcp_close_started_milliseconds == 0U) {
+        endpoint->tcp_close_started_milliseconds =
             arwill_clock_monotonic_milliseconds(stack->clock);
     }
 }
 
-static int flush_stream_transmit(struct arwill_ipv4_stack *stack) {
-    if (!arwill_tcp_stream_connected(&stack->stream)) {
+static int flush_stream_transmit(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_endpoint *endpoint) {
+    if (!arwill_tcp_stream_connected(&endpoint->stream)) {
         return 1;
     }
-    while (stack->tcp_pending_count < arwill_tcp_pending_segment_capacity &&
-        stack->stream.transmit_count != 0U &&
-        stack->stream.listener.peer_window != 0U) {
+    while (endpoint->tcp_pending_count < arwill_tcp_pending_segment_capacity &&
+        endpoint->stream.transmit_count != 0U &&
+        endpoint->stream.listener.peer_window != 0U) {
         uint8_t payload[arwill_tcp_pending_payload_capacity];
-        size_t length = stack->stream.transmit_count;
+        size_t length = endpoint->stream.transmit_count;
         if (length > sizeof(payload)) {
             length = sizeof(payload);
         }
-        if (length > stack->stream.listener.peer_maximum_segment_size) {
-            length = stack->stream.listener.peer_maximum_segment_size;
+        if (length > endpoint->stream.listener.peer_maximum_segment_size) {
+            length = endpoint->stream.listener.peer_maximum_segment_size;
         }
-        if (length > stack->stream.listener.peer_window) {
-            length = stack->stream.listener.peer_window;
+        if (length > endpoint->stream.listener.peer_window) {
+            length = endpoint->stream.listener.peer_window;
         }
         if (length == 0U) {
             break;
         }
         for (size_t index = 0; index < length; index++) {
-            payload[index] = stack->stream.transmit[
-                (stack->stream.transmit_head + index) %
+            payload[index] = endpoint->stream.transmit[
+                (endpoint->stream.transmit_head + index) %
                     arwill_tcp_stream_transmit_capacity
             ];
         }
 
         struct arwill_tcp_segment segment;
         for (size_t index = 0; index < 4U; index++) {
-            segment.source_address[index] = stack->stream.listener.local_address[index];
-            segment.destination_address[index] = stack->stream.listener.peer_address[index];
+            segment.source_address[index] = endpoint->stream.listener.local_address[index];
+            segment.destination_address[index] = endpoint->stream.listener.peer_address[index];
         }
-        segment.source_port = stack->stream.listener.port;
-        segment.destination_port = stack->stream.listener.peer_port;
-        segment.sequence = stack->stream.listener.sequence;
-        segment.acknowledgement = stack->stream.listener.acknowledgement;
+        segment.source_port = endpoint->stream.listener.port;
+        segment.destination_port = endpoint->stream.listener.peer_port;
+        segment.sequence = endpoint->stream.listener.sequence;
+        segment.acknowledgement = endpoint->stream.listener.acknowledgement;
         segment.flags = arwill_tcp_flag_ack | arwill_tcp_flag_psh;
-        segment.window = advertised_receive_window(stack);
+        segment.window = advertised_receive_window(endpoint);
         segment.maximum_segment_size = 0U;
         segment.payload_length = length;
-        if (!send_tcp_segment(stack, &segment, payload, length) ||
-            !remember_pending_segment(stack, &segment, payload, length)) {
-            stack->stream.send_failures++;
+        if (!send_tcp_segment(stack, endpoint, &segment, payload, length) ||
+            !remember_pending_segment(
+                stack, endpoint, &segment, payload, length)) {
+            endpoint->stream.send_failures++;
             return 0;
         }
-        stack->stream.listener.sequence += (uint32_t)length;
-        stack->stream.listener.peer_window =
-            (uint16_t)(stack->stream.listener.peer_window - length);
-        stack->stream.bytes_sent += (uint32_t)length;
-        stack->stream.transmit_head =
-            (stack->stream.transmit_head + length) %
+        endpoint->stream.listener.sequence += (uint32_t)length;
+        endpoint->stream.listener.peer_window =
+            (uint16_t)(endpoint->stream.listener.peer_window - length);
+        endpoint->stream.bytes_sent += (uint32_t)length;
+        endpoint->stream.transmit_head =
+            (endpoint->stream.transmit_head + length) %
                 arwill_tcp_stream_transmit_capacity;
-        stack->stream.transmit_count -= length;
+        endpoint->stream.transmit_count -= length;
     }
     return 1;
 }
@@ -820,7 +909,8 @@ static int send_reset_for_segment(struct arwill_ipv4_stack *stack,
     }
     reset.window = 0U;
     reset.maximum_segment_size = 0U;
-    if (!send_tcp_segment_to(stack, &reset, 0, 0U, destination_mac)) {
+    if (!send_tcp_segment_to(
+            stack, 0, &reset, 0, 0U, destination_mac)) {
         return 0;
     }
     stack->tcp_rst_sent++;
@@ -860,14 +950,18 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
     if (stack == 0 || stack->network == 0) {
         return 0;
     }
-    if (stack->stream.listening) {
-        maintain_pending_segment(stack);
-        maintain_tcp_close(stack);
-        maintain_window_update(stack);
-        (void)flush_stream_transmit(stack);
-        maintain_stream_close(stack);
-    } else {
-        maintain_stream_close(stack);
+    for (size_t index = 0; index < arwill_tcp_endpoint_capacity; index++) {
+        struct arwill_tcp_endpoint *candidate = &stack->endpoints[index];
+        if (!candidate->allocated) {
+            continue;
+        }
+        if (candidate->stream.listening) {
+            maintain_pending_segment(stack, candidate);
+            maintain_tcp_close(stack, candidate);
+            maintain_window_update(stack, candidate);
+            (void)flush_stream_transmit(stack, candidate);
+        }
+        maintain_stream_close(stack, candidate);
     }
     if (!arwill_network_poll_frame(stack->network, frame, sizeof(frame), &length)) {
         return 0;
@@ -928,60 +1022,68 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
         stack->tcp_rst_received++;
     }
 
-    if (!stack->stream.listening ||
-        incoming.destination_port != stack->stream.listener.port) {
+    struct arwill_tcp_endpoint *endpoint = 0;
+    for (size_t index = 0; index < arwill_tcp_endpoint_capacity; index++) {
+        struct arwill_tcp_endpoint *candidate = &stack->endpoints[index];
+        if (candidate->allocated && candidate->stream.listening &&
+            incoming.destination_port == candidate->stream.listener.port) {
+            endpoint = candidate;
+            break;
+        }
+    }
+    if (endpoint == 0) {
         stack->tcp_unknown_port_frames++;
         return send_reset_for_segment(stack, &incoming, frame + 6U);
     }
-    const enum arwill_tcp_state dispatch_state = stack->stream.listener.state;
+    const enum arwill_tcp_state dispatch_state = endpoint->stream.listener.state;
     const int closing_listener =
         dispatch_state == arwill_tcp_state_last_ack ||
         dispatch_state == arwill_tcp_state_fin_wait_1 ||
         dispatch_state == arwill_tcp_state_fin_wait_2 ||
         dispatch_state == arwill_tcp_state_closing ||
         dispatch_state == arwill_tcp_state_time_wait;
-    if ((closing_listener || stack->stream.close_requested) &&
+    if ((closing_listener || endpoint->stream.close_requested) &&
         (incoming.flags & arwill_tcp_flag_syn) != 0U &&
-        !arwill_tcp_listener_matches(&stack->stream.listener, &incoming)) {
-        reset_tcp_stream(stack);
+        !arwill_tcp_listener_matches(&endpoint->stream.listener, &incoming)) {
+        reset_tcp_stream(endpoint);
     }
-    if (!arwill_tcp_listener_matches(&stack->stream.listener, &incoming)) {
+    if (!arwill_tcp_listener_matches(&endpoint->stream.listener, &incoming)) {
         stack->tcp_tuple_mismatches++;
         return 0;
     }
 
     const size_t receive_available = arwill_tcp_stream_receive_capacity -
-        stack->stream.receive_count;
+        endpoint->stream.receive_count;
     if (payload_length > receive_available &&
-        incoming.sequence == stack->stream.listener.acknowledgement) {
+        incoming.sequence == endpoint->stream.listener.acknowledgement) {
         stack->tcp_receive_window_drops++;
-        return send_current_ack(stack);
+        return send_current_ack(stack, endpoint);
     }
 
-    const enum arwill_tcp_state previous_state = stack->stream.listener.state;
-    const uint32_t previous_acknowledgement = stack->stream.listener.acknowledgement;
-    if (!arwill_tcp_listener_receive(&stack->stream.listener, &incoming, &reply)) {
+    const enum arwill_tcp_state previous_state = endpoint->stream.listener.state;
+    const uint32_t previous_acknowledgement = endpoint->stream.listener.acknowledgement;
+    if (!arwill_tcp_listener_receive(&endpoint->stream.listener, &incoming, &reply)) {
         return 0;
     }
-    acknowledge_pending_segment(stack, &incoming);
+    acknowledge_pending_segment(stack, endpoint, &incoming);
 
     if (previous_state != arwill_tcp_state_listen &&
-        stack->stream.listener.state == arwill_tcp_state_listen) {
+        endpoint->stream.listener.state == arwill_tcp_state_listen) {
         if ((incoming.flags & arwill_tcp_flag_rst) != 0U) {
-            stack->stream.disconnects++;
+            endpoint->stream.disconnects++;
         }
-        reset_tcp_stream(stack);
+        reset_tcp_stream(endpoint);
         return 1;
     }
 
     if (reply.flags == (arwill_tcp_flag_syn | arwill_tcp_flag_ack)) {
-        remember_tcp_peer(stack, frame);
+        remember_tcp_peer(endpoint, frame);
         stack->tcp_syn_ack_sent++;
     }
 
     if (previous_state == arwill_tcp_state_syn_received
-        && stack->stream.listener.state == arwill_tcp_state_established) {
-        stack->stream.connections++;
+        && endpoint->stream.listener.state == arwill_tcp_state_established) {
+        endpoint->stream.connections++;
     }
 
     if (previous_state == arwill_tcp_state_established
@@ -990,34 +1092,34 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
         stack->tcp_duplicate_acks++;
     }
 
-    if ((stack->stream.listener.state == arwill_tcp_state_established ||
-            stack->stream.listener.state == arwill_tcp_state_close_wait)
+    if ((endpoint->stream.listener.state == arwill_tcp_state_established ||
+            endpoint->stream.listener.state == arwill_tcp_state_close_wait)
         && payload_length != 0U
-        && stack->stream.listener.acknowledgement != previous_acknowledgement) {
-        enqueue_stream_receive(stack, payload, payload_length);
+        && endpoint->stream.listener.acknowledgement != previous_acknowledgement) {
+        enqueue_stream_receive(endpoint, payload, payload_length);
     }
 
     if ((incoming.flags & arwill_tcp_flag_fin) != 0U
-        && stack->stream.listener.acknowledgement != previous_acknowledgement) {
-        stack->stream.peer_closed = 1;
+        && endpoint->stream.listener.acknowledgement != previous_acknowledgement) {
+        endpoint->stream.peer_closed = 1;
     }
 
-    if (stack->stream.listener.state == arwill_tcp_state_time_wait &&
+    if (endpoint->stream.listener.state == arwill_tcp_state_time_wait &&
         previous_state != arwill_tcp_state_time_wait) {
-        stack->tcp_time_wait_started_milliseconds =
+        endpoint->tcp_time_wait_started_milliseconds =
             arwill_clock_monotonic_milliseconds(stack->clock);
     }
 
-    if (!send_tcp_segment(stack, &reply, 0, 0U)) {
+    if (!send_tcp_segment(stack, endpoint, &reply, 0, 0U)) {
         return 0;
     }
     if (reply.flags == (arwill_tcp_flag_syn | arwill_tcp_flag_ack) &&
-        stack->tcp_pending_count == 0U &&
-        !remember_pending_segment(stack, &reply, 0, 0U)) {
-        reset_tcp_stream(stack);
+        endpoint->tcp_pending_count == 0U &&
+        !remember_pending_segment(stack, endpoint, &reply, 0, 0U)) {
+        reset_tcp_stream(endpoint);
         return 0;
     }
-    (void)flush_stream_transmit(stack);
+    (void)flush_stream_transmit(stack, endpoint);
     return 1;
 }
 

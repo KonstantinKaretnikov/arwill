@@ -21,6 +21,7 @@ enum {
     arwill_tcp_max_retransmissions = 3,
     arwill_tcp_time_wait_ms = 500,
     arwill_tcp_close_timeout_ms = 2500,
+    arwill_tcp_endpoint_capacity = 4,
 };
 
 struct arwill_tcp_pending_segment {
@@ -32,6 +33,23 @@ struct arwill_tcp_pending_segment {
     uint64_t retransmission_timeout_ms;
     unsigned retransmissions;
     int active;
+};
+
+struct arwill_tcp_endpoint {
+    struct arwill_tcp_stream stream;
+    uint8_t tcp_peer_mac[arwill_network_mac_length];
+    struct arwill_tcp_pending_segment
+        tcp_pending[arwill_tcp_pending_segment_capacity];
+    size_t tcp_pending_head;
+    size_t tcp_pending_count;
+    uint64_t tcp_close_started_milliseconds;
+    uint64_t tcp_time_wait_started_milliseconds;
+    uint64_t tcp_smoothed_round_trip_ms;
+    uint64_t tcp_round_trip_variance_ms;
+    uint64_t tcp_retransmission_timeout_ms;
+    uint16_t tcp_last_advertised_window;
+    int tcp_window_update_pending;
+    int allocated;
 };
 
 struct arwill_ipv4_stack {
@@ -47,19 +65,7 @@ struct arwill_ipv4_stack {
     uint32_t icmp_echo_requests_received;
     uint32_t icmp_echo_replies_sent;
     uint32_t icmp_checksum_drops;
-    struct arwill_tcp_stream stream;
-    uint8_t tcp_peer_mac[arwill_network_mac_length];
-    struct arwill_tcp_pending_segment
-        tcp_pending[arwill_tcp_pending_segment_capacity];
-    size_t tcp_pending_head;
-    size_t tcp_pending_count;
-    uint64_t tcp_close_started_milliseconds;
-    uint64_t tcp_time_wait_started_milliseconds;
-    uint64_t tcp_smoothed_round_trip_ms;
-    uint64_t tcp_round_trip_variance_ms;
-    uint64_t tcp_retransmission_timeout_ms;
-    uint16_t tcp_last_advertised_window;
-    int tcp_window_update_pending;
+    struct arwill_tcp_endpoint endpoints[arwill_tcp_endpoint_capacity];
     uint32_t tcp_frames_received;
     uint32_t tcp_frames_sent;
     uint32_t tcp_bytes_received;
@@ -92,6 +98,16 @@ int arwill_ipv4_ping_gateway(struct arwill_ipv4_stack *stack);
 
 int arwill_ipv4_service_tcp(struct arwill_ipv4_stack *stack, size_t *frames_processed);
 int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack);
+
+struct arwill_tcp_stream *arwill_ipv4_tcp_open(struct arwill_ipv4_stack *stack);
+int arwill_ipv4_tcp_listen(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_stream *stream, uint16_t port);
+void arwill_ipv4_tcp_release(struct arwill_ipv4_stack *stack,
+    struct arwill_tcp_stream *stream);
+struct arwill_tcp_stream *arwill_ipv4_remote_stream(
+    struct arwill_ipv4_stack *stack);
+const struct arwill_tcp_stream *arwill_ipv4_remote_stream_const(
+    const struct arwill_ipv4_stack *stack);
 
 void arwill_ipv4_print_config(const struct arwill_ipv4_stack *stack,
     const struct arwill_console *console);
