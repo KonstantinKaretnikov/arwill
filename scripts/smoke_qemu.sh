@@ -410,13 +410,13 @@ run_qemu_to_log() {
     ) &
     concurrent_remote_pid=$!
     sleep 0.2
-    printf 'parallel editor\023\021'
-    wait_for_primary_log "parallel editor"
+    printf 'abc\033[D\033ODX\033OCY\033[1;5D\033[1;5C\033[C parallel editor\023\021'
+    wait_for_primary_log "aXbYc parallel editor"
     wait "$concurrent_remote_pid" || true
     wait_for_log_file "$remote_console_log" "9*9=81"
     sleep 0.1
     printf 'cat /owner/smoke-edit.txt\r'
-    wait_for_primary_log_count "parallel editor" 2
+    wait_for_primary_log_count "aXbYc parallel editor" 2
     sleep 0.1
     printf 'rm /owner/smoke-edit.txt\r'
     wait_for_primary_log "rm: removed /owner/smoke-edit.txt"
@@ -756,7 +756,7 @@ check_line "/owner/note"
 check_line "edit: missing file"
 check_absent "edit file:"
 check_line "/owner/smoke-edit.txt"
-check_line "parallel editor"
+check_line "aXbYc parallel editor"
 check_line "rm: removed /owner/smoke-edit.txt"
 check_line "awp pid state runs exit name"
 check_line "system/"

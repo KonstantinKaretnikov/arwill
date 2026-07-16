@@ -103,6 +103,30 @@ static int read_byte(char *byte) {
     return syscall_read(byte, 1U) == 1L;
 }
 
+static int read_escape_code(char *code, char *parameter) {
+    char prefix = 0;
+    if (!read_byte(&prefix) || (prefix != '[' && prefix != 'O') ||
+        !read_byte(code)) {
+        return 0;
+    }
+    *parameter = 0;
+    if (prefix == 'O') {
+        return 1;
+    }
+    for (size_t count = 0; count < 8U; count++) {
+        if ((*code < '0' || *code > '9') && *code != ';') {
+            return 1;
+        }
+        if (*parameter == 0 && *code >= '0' && *code <= '9') {
+            *parameter = *code;
+        }
+        if (!read_byte(code)) {
+            return 0;
+        }
+    }
+    return 0;
+}
+
 static int append_char(char *output, size_t *length, char value) {
     if (*length >= screen_capacity) {
         return 0;
@@ -336,9 +360,9 @@ int editor_main(void) {
         quit_armed = 0;
 
         if (byte == 0x1b) {
-            char bracket = 0;
             char code = 0;
-            if (!read_byte(&bracket) || bracket != '[' || !read_byte(&code)) {
+            char parameter = 0;
+            if (!read_escape_code(&code, &parameter)) {
                 continue;
             }
             if (code == 'A') {
@@ -353,9 +377,12 @@ int editor_main(void) {
                 cursor = line_start(document, cursor);
             } else if (code == 'F') {
                 cursor = line_end(document, length, cursor);
-            } else if (code == '3') {
-                char tilde = 0;
-                if (read_byte(&tilde) && tilde == '~' && cursor < length) {
+            } else if (code == '~') {
+                if (parameter == '1') {
+                    cursor = line_start(document, cursor);
+                } else if (parameter == '4') {
+                    cursor = line_end(document, length, cursor);
+                } else if (parameter == '3' && cursor < length) {
                     remove_byte(document, &length, cursor);
                     dirty = 1;
                 }
