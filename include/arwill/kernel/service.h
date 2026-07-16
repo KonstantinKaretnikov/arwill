@@ -14,6 +14,7 @@ enum arwill_service_state {
 
 struct arwill_service_manager {
     struct arwill_ipv4_stack *ipv4;
+    struct arwill_tcp_stream *remote_stream;
     struct arwill_config *config;
     struct arwill_event_log *log;
     enum arwill_service_state remote_console_state;
@@ -22,6 +23,7 @@ struct arwill_service_manager {
 void arwill_service_manager_init(
     struct arwill_service_manager *manager,
     struct arwill_ipv4_stack *ipv4,
+    struct arwill_tcp_stream *remote_stream,
     struct arwill_config *config,
     struct arwill_event_log *log,
     int network_ready

@@ -384,7 +384,9 @@ QEMU e1000 and remote output:
   nonblocking queue, read, and close-request operations to services.
 - IPv4 owns a four-entry endpoint table. Each allocated endpoint has its own
   listener tuple, peer MAC, rings, four-segment send flight, adaptive RTO, and
-  close timers; endpoint 0 is reserved for the remote console.
+  close timers; endpoint 0 is reserved for the remote console. Services receive
+  streams through the IPv4 contract instead of indexing that table, while
+  shell diagnostics consume read-only endpoint snapshots.
 - TCP retains a fixed four-segment send flight. A fixed transmit byte ring
   prevents service or future AWP writes from waiting for a peer ACK.
 - The path remains one polling connection, not a socket API or general TCP

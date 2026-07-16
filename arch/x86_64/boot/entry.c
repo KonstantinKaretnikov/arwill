@@ -161,6 +161,7 @@ void arwill_limine_entry(void) {
     arwill_service_manager_init(
         &arwill_limine_services,
         &arwill_limine_ipv4,
+        arwill_ipv4_remote_stream(&arwill_limine_ipv4),
         &arwill_limine_config,
         &arwill_limine_log,
         ipv4_ready

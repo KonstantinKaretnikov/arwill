@@ -132,6 +132,7 @@ struct shell_environment {
     const struct arwill_pci_bus *pci;
     const struct arwill_network_device *network;
     struct arwill_ipv4_stack *ipv4;
+    struct arwill_tcp_stream *remote_stream;
     const struct arwill_block_device *block_device;
     const struct arwill_interrupts *interrupts;
     const struct arwill_clock *clock;
@@ -515,23 +516,40 @@ static void write_uint8_hex(const struct arwill_console *console, uint8_t value)
     arwill_console_write(console, text);
 }
 
+static void write_ipv4_address(
+    const struct arwill_console *console,
+    const uint8_t address[4]
+) {
+    for (size_t index = 0; index < 4U; index++) {
+        if (index != 0U) {
+            arwill_console_write(console, ".");
+        }
+        write_uint64_decimal(console, address[index]);
+    }
+}
+
 static void print_remote_console_info(
     const struct arwill_console *console,
     const struct arwill_ipv4_stack *ipv4
 ) {
+    struct arwill_tcp_endpoint_snapshot remote;
+    if (!arwill_ipv4_tcp_endpoint_snapshot(ipv4, 0U, &remote)) {
+        arwill_console_write_line(console, "remote console: unavailable");
+        return;
+    }
     arwill_console_write(console, "remote console: plaintext, connections ");
-    write_uint64_decimal(console, ipv4->endpoints[0].stream.connections);
+    write_uint64_decimal(console, remote.connections);
     arwill_console_write(console, ", disconnects ");
-    write_uint64_decimal(console, ipv4->endpoints[0].stream.disconnects);
+    write_uint64_decimal(console, remote.disconnects);
     arwill_console_write_line(console, "");
     arwill_console_write(console, "remote bytes: received ");
-    write_uint64_decimal(console, ipv4->endpoints[0].stream.bytes_received);
+    write_uint64_decimal(console, remote.bytes_received);
     arwill_console_write(console, ", sent ");
-    write_uint64_decimal(console, ipv4->endpoints[0].stream.bytes_sent);
+    write_uint64_decimal(console, remote.bytes_sent);
     arwill_console_write(console, ", dropped ");
-    write_uint64_decimal(console, ipv4->endpoints[0].stream.bytes_dropped);
+    write_uint64_decimal(console, remote.bytes_dropped);
     arwill_console_write(console, ", send failures ");
-    write_uint64_decimal(console, ipv4->endpoints[0].stream.send_failures);
+    write_uint64_decimal(console, remote.send_failures);
     arwill_console_write_line(console, "");
     arwill_console_write(console, "tcp integrity: checksum drops ");
     write_uint64_decimal(console, ipv4->tcp_checksum_drops);
@@ -542,12 +560,13 @@ static void print_remote_console_info(
     write_uint64_decimal(console, ipv4->tcp_retransmissions);
     arwill_console_write(console, ", timeouts ");
     write_uint64_decimal(console, ipv4->tcp_timeouts);
-    arwill_console_write(console, ", pending ");
-    arwill_console_write_line(console, ipv4->endpoints[0].tcp_pending_count != 0U ? "yes" : "no");
+    arwill_console_write(console, ", pending segments ");
+    write_size_decimal(console, remote.pending_segments);
+    arwill_console_write_line(console, "");
     arwill_console_write(console, "tcp timing: srtt ");
-    write_uint64_decimal(console, ipv4->endpoints[0].tcp_smoothed_round_trip_ms);
+    write_uint64_decimal(console, remote.smoothed_round_trip_ms);
     arwill_console_write(console, " ms, rto ");
-    write_uint64_decimal(console, ipv4->endpoints[0].tcp_retransmission_timeout_ms);
+    write_uint64_decimal(console, remote.retransmission_timeout_ms);
     arwill_console_write(console, " ms, backoffs ");
     write_uint64_decimal(console, ipv4->tcp_retransmission_backoffs);
     arwill_console_write_line(console, "");
@@ -1045,25 +1064,47 @@ static void print_tcp_info(
         arwill_console_write_line(console, "tcp: unavailable");
         return;
     }
-    arwill_console_write(console, "tcp: port ");
-    write_uint64_decimal(console, ipv4->endpoints[0].stream.listener.port);
+    struct arwill_tcp_endpoint_snapshot remote;
+    if (!arwill_ipv4_tcp_endpoint_snapshot(ipv4, 0U, &remote)) {
+        arwill_console_write_line(console, "tcp: unavailable");
+        return;
+    }
+    arwill_console_write(console, "tcp remote-console: port ");
+    write_uint64_decimal(console, remote.local_port);
     arwill_console_write(console, ", state ");
-    arwill_console_write_line(console, arwill_tcp_state_name(ipv4->endpoints[0].stream.listener.state));
+    arwill_console_write_line(console, remote.state);
     size_t allocated = 0;
     size_t listening = 0;
     size_t connected = 0;
     for (size_t index = 0; index < arwill_tcp_endpoint_capacity; index++) {
-        const struct arwill_tcp_endpoint *endpoint = &ipv4->endpoints[index];
-        if (!endpoint->allocated) {
+        struct arwill_tcp_endpoint_snapshot endpoint;
+        if (!arwill_ipv4_tcp_endpoint_snapshot(ipv4, index, &endpoint) ||
+            !endpoint.allocated) {
             continue;
         }
         allocated++;
-        if (endpoint->stream.listening) {
+        if (endpoint.listening) {
             listening++;
         }
-        if (arwill_tcp_stream_connected(&endpoint->stream)) {
+        if (endpoint.connected) {
             connected++;
         }
+        arwill_console_write(console, "tcp endpoint ");
+        write_size_decimal(console, index);
+        arwill_console_write(console, ": owner ");
+        arwill_console_write(console, endpoint.owner);
+        arwill_console_write(console, ", local :");
+        write_uint64_decimal(console, endpoint.local_port);
+        arwill_console_write(console, ", peer ");
+        if (endpoint.peer_port == 0U) {
+            arwill_console_write(console, "-");
+        } else {
+            write_ipv4_address(console, endpoint.peer_address);
+            arwill_console_write(console, ":");
+            write_uint64_decimal(console, endpoint.peer_port);
+        }
+        arwill_console_write(console, ", state ");
+        arwill_console_write_line(console, endpoint.state);
     }
     arwill_console_write(console, "tcp endpoints: allocated ");
     write_uint64_decimal(console, allocated);
@@ -1101,14 +1142,13 @@ static void print_tcp_info(
     write_uint64_decimal(console, ipv4->tcp_tuple_mismatches);
     arwill_console_write_line(console, "");
     arwill_console_write(console, "tcp flow: receive window ");
-    write_uint64_decimal(console, arwill_tcp_stream_receive_capacity -
-        ipv4->endpoints[0].stream.receive_count);
+    write_uint64_decimal(console, remote.receive_available);
     arwill_console_write(console, "/");
     write_uint64_decimal(console, arwill_tcp_stream_receive_capacity);
     arwill_console_write(console, ", peer window ");
-    write_uint64_decimal(console, ipv4->endpoints[0].stream.listener.peer_window);
+    write_uint64_decimal(console, remote.peer_window);
     arwill_console_write(console, ", peer mss ");
-    write_uint64_decimal(console, ipv4->endpoints[0].stream.listener.peer_maximum_segment_size);
+    write_uint64_decimal(console, remote.peer_maximum_segment_size);
     arwill_console_write(console, ", drops ");
     write_uint64_decimal(console, ipv4->tcp_receive_window_drops);
     arwill_console_write(console, ", updates ");
@@ -1132,6 +1172,12 @@ static void print_icmp_info(
     arwill_console_write(console, ", checksum drops ");
     write_uint64_decimal(console, ipv4->icmp_checksum_drops);
     arwill_console_write_line(console, "");
+}
+
+static const char *remote_tcp_state_name(const struct arwill_ipv4_stack *ipv4) {
+    struct arwill_tcp_endpoint_snapshot remote;
+    return arwill_ipv4_tcp_endpoint_snapshot(ipv4, 0U, &remote)
+        ? remote.state : "unavailable";
 }
 
 static void ping_network(
@@ -2665,8 +2711,7 @@ static void render_top(
     arwill_console_write(session->console, "  tcp ");
     arwill_console_write(
         session->console,
-        environment->ipv4 == 0 ? "unavailable" :
-            arwill_tcp_state_name(environment->ipv4->endpoints[0].stream.listener.state)
+        remote_tcp_state_name(environment->ipv4)
     );
     arwill_console_write(session->console, "  scheduler ticks ");
     write_uint64_decimal(session->console, scheduler.ticks);
@@ -3641,8 +3686,10 @@ static void run_command(
         struct arwill_tcp_segment syn = { 0 };
         struct arwill_tcp_segment reply = { 0 };
         struct arwill_tcp_segment ack = { 0 };
+        struct arwill_tcp_endpoint_snapshot remote;
         const uint16_t listener_port =
-            ipv4 == 0 ? 23232U : ipv4->endpoints[0].stream.listener.port;
+            arwill_ipv4_tcp_endpoint_snapshot(ipv4, 0U, &remote)
+                ? remote.local_port : 23232U;
 
         arwill_tcp_listener_init(&listener, listener_port, 0x41520000U);
         syn.source_port = 4242U;
@@ -3681,7 +3728,7 @@ static void run_command(
         arwill_console_write(console, "tcplisten: frames ");
         write_size_decimal(console, processed);
         arwill_console_write(console, ", state ");
-        arwill_console_write_line(console, arwill_tcp_state_name(ipv4->endpoints[0].stream.listener.state));
+        arwill_console_write_line(console, remote_tcp_state_name(ipv4));
         arwill_console_write(console, "tcp frames: ");
         write_uint64_decimal(console, ipv4->tcp_frames_received);
         arwill_console_write(console, ", syn-ack: ");
@@ -4107,11 +4154,11 @@ static int handle_shell_byte(
     return 1;
 }
 
-static uint64_t remote_peer_address(const struct arwill_ipv4_stack *ipv4) {
-    if (ipv4 == 0) {
+static uint64_t remote_peer_address(const struct arwill_tcp_stream *stream) {
+    if (stream == 0) {
         return 0;
     }
-    const uint8_t *address = arwill_tcp_stream_peer_address(&ipv4->endpoints[0].stream);
+    const uint8_t *address = arwill_tcp_stream_peer_address(stream);
     return ((uint64_t)address[0] << 24U) |
         ((uint64_t)address[1] << 16U) |
         ((uint64_t)address[2] << 8U) |
@@ -4130,7 +4177,7 @@ static void record_remote_event(
         severity,
         subsystem,
         code,
-        remote_peer_address(environment->ipv4),
+        remote_peer_address(environment->remote_stream),
         detail
     );
 }
@@ -4250,10 +4297,9 @@ static void close_remote_session(
     record_remote_event(
         environment, arwill_log_info, arwill_log_network,
         arwill_log_tcp_disconnected,
-        environment->ipv4 == 0 ? 0U :
-            arwill_tcp_stream_peer_port(&environment->ipv4->endpoints[0].stream)
+        arwill_tcp_stream_peer_port(environment->remote_stream)
     );
-    arwill_tcp_stream_close(&environment->ipv4->endpoints[0].stream);
+    arwill_tcp_stream_close(environment->remote_stream);
     session->active = 0;
 }
 
@@ -4277,15 +4323,16 @@ static void service_remote_shell(
     const struct shell_environment *environment
 ) {
     struct arwill_ipv4_stack *ipv4 = environment->ipv4;
-    if (ipv4 == 0) {
+    struct arwill_tcp_stream *stream = environment->remote_stream;
+    if (ipv4 == 0 || stream == 0) {
         return;
     }
 
-    if (ipv4->endpoints[0].stream.close_requested) {
+    if (arwill_tcp_stream_close_requested(stream)) {
         return;
     }
 
-    if (!arwill_tcp_stream_connected(&ipv4->endpoints[0].stream)) {
+    if (!arwill_tcp_stream_connected(stream)) {
         if (session->active) {
             cancel_remote_program(session, environment);
             if (ipv4->tcp_timeouts > session->tcp_timeouts_at_connection) {
@@ -4297,7 +4344,7 @@ static void service_remote_shell(
             record_remote_event(
                 environment, arwill_log_info, arwill_log_network,
                 arwill_log_tcp_disconnected,
-                arwill_tcp_stream_peer_port(&ipv4->endpoints[0].stream)
+                arwill_tcp_stream_peer_port(stream)
             );
         }
         session->active = 0;
@@ -4317,7 +4364,7 @@ static void service_remote_shell(
         record_remote_event(
             environment, arwill_log_info, arwill_log_network,
             arwill_log_tcp_connected,
-            arwill_tcp_stream_peer_port(&ipv4->endpoints[0].stream)
+            arwill_tcp_stream_peer_port(stream)
         );
         arwill_console_write(session->console, "Access key: ");
     }
@@ -4335,7 +4382,8 @@ static void service_remote_shell(
     }
 
     uint8_t byte = 0;
-    if (arwill_tcp_stream_read(&ipv4->endpoints[0].stream, &byte, 1U) == 1U) {
+    const size_t bytes_read = arwill_tcp_stream_read(stream, &byte, 1U);
+    if (bytes_read == 1U) {
         const int keep_open = session->authenticated
             ? handle_shell_byte(session, environment, byte)
             : handle_authentication_byte(session, environment, byte);
@@ -4345,8 +4393,7 @@ static void service_remote_shell(
         }
     }
 
-    if (arwill_tcp_stream_peer_closed(&ipv4->endpoints[0].stream) &&
-        ipv4->endpoints[0].stream.receive_count == 0U) {
+    if (bytes_read == 0U && arwill_tcp_stream_peer_closed(stream)) {
         close_remote_session(session, environment);
     }
 }
@@ -4486,6 +4533,7 @@ void arwill_shell_run(
     environment.pci = pci;
     environment.network = network;
     environment.ipv4 = ipv4;
+    environment.remote_stream = arwill_ipv4_remote_stream(ipv4);
     environment.block_device = block_device;
     environment.interrupts = interrupts;
     environment.clock = clock;
@@ -4495,7 +4543,7 @@ void arwill_shell_run(
     environment.log = log;
     environment.services = services;
 
-    remote_console.context = &ipv4->endpoints[0].stream;
+    remote_console.context = environment.remote_stream;
     remote_console.write = remote_console_write;
     remote_session.console = &remote_console;
     remote_session.active = 0;

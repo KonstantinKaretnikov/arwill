@@ -285,6 +285,17 @@ static int expect(int condition, const char *message) {
     return 0;
 }
 
+static int text_equals(const char *left, const char *right) {
+    size_t index = 0;
+    while (left[index] != '\0' && right[index] != '\0') {
+        if (left[index] != right[index]) {
+            return 0;
+        }
+        index++;
+    }
+    return left[index] == right[index];
+}
+
 int main(void) {
     struct fake_network fake = { 0 };
     struct fake_clock time = { 0 };
@@ -307,6 +318,19 @@ int main(void) {
     if (!expect(arwill_ipv4_init(
             &stack, &network, &clock, test_remote_console_port
         ), "stack initialization")) {
+        return 1;
+    }
+
+    struct arwill_tcp_endpoint_snapshot endpoint_snapshot;
+    if (!expect(arwill_ipv4_tcp_endpoint_snapshot(
+            &stack, 0U, &endpoint_snapshot), "remote endpoint snapshot")
+        || !expect(endpoint_snapshot.allocated && endpoint_snapshot.listening,
+            "remote snapshot reports allocation")
+        || !expect(text_equals(endpoint_snapshot.owner, "remote-console") &&
+            text_equals(endpoint_snapshot.state, "listen"),
+            "remote snapshot names owner and state")
+        || !expect(endpoint_snapshot.local_port == test_remote_console_port,
+            "remote snapshot reports local port")) {
         return 1;
     }
 
@@ -872,6 +896,16 @@ int main(void) {
             "active connect begins asynchronously")) {
         return 1;
     }
+    if (!expect(arwill_ipv4_tcp_endpoint_snapshot(
+            &stack, 1U, &endpoint_snapshot), "active endpoint snapshot")
+        || !expect(text_equals(endpoint_snapshot.owner, "application") &&
+            text_equals(endpoint_snapshot.state, "resolving-peer"),
+            "active snapshot reports ARP resolution")
+        || !expect(endpoint_snapshot.local_port == 26000U &&
+            endpoint_snapshot.peer_port == 27000U,
+            "active snapshot reports requested tuple")) {
+        return 1;
+    }
     const unsigned sends_before_arp = fake.send_count;
     (void)arwill_ipv4_poll_tcp(&stack);
     if (!expect(fake.send_count == sends_before_arp + 1U,
@@ -924,7 +958,11 @@ int main(void) {
         time.milliseconds += arwill_tcp_arp_retry_ms;
     }
     if (!expect(arwill_ipv4_tcp_connect_status(&stack, unresolved) == -1,
-            "active connect reports bounded ARP failure")) {
+            "active connect reports bounded ARP failure")
+        || !expect(arwill_ipv4_tcp_endpoint_snapshot(
+            &stack, 1U, &endpoint_snapshot), "failed endpoint snapshot")
+        || !expect(text_equals(endpoint_snapshot.state, "connect-failed"),
+            "failed snapshot names terminal connect state")) {
         return 1;
     }
     arwill_ipv4_tcp_release(&stack, unresolved);

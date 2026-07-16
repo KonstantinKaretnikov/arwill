@@ -135,7 +135,9 @@ Rules for future work:
 - Keep TCP service consumers behind the architecture-independent `tcp_stream`
   contract. IPv4 owns framing, ACK/RTO progress, and retransmission; stream
   consumers use bounded nonblocking read/write/close requests and must not
-  poll the network or wait for peer acknowledgements themselves.
+  poll the network or wait for peer acknowledgements themselves. Do not let
+  services index the IPv4 endpoint table; use stream accessors and read-only
+  endpoint snapshots for diagnostics.
 - Treat the TCP endpoint table as four fixed, boot-allocated slots. Endpoint 0
   belongs to the remote console; the remaining slots are allocatable consumers.
   Each endpoint owns its tuple, rings, send flight, peer MAC, RTO, and close

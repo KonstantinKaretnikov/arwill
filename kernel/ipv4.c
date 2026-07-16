@@ -162,6 +162,59 @@ const struct arwill_tcp_stream *arwill_ipv4_remote_stream_const(
     return stack == 0 ? 0 : &stack->endpoints[0].stream;
 }
 
+int arwill_ipv4_tcp_endpoint_snapshot(
+    const struct arwill_ipv4_stack *stack,
+    size_t index,
+    struct arwill_tcp_endpoint_snapshot *snapshot
+) {
+    if (stack == 0 || snapshot == 0 || index >= arwill_tcp_endpoint_capacity) {
+        return 0;
+    }
+
+    const struct arwill_tcp_endpoint *endpoint = &stack->endpoints[index];
+    const struct arwill_tcp_stream *stream = &endpoint->stream;
+    snapshot->allocated = endpoint->allocated;
+    snapshot->listening = endpoint->allocated && stream->listening;
+    snapshot->connected = endpoint->allocated &&
+        arwill_tcp_stream_connected(stream);
+    snapshot->owner = index == 0U ? "remote-console" : "application";
+    if (!endpoint->allocated) {
+        snapshot->state = "free";
+    } else if (endpoint->connect_failed) {
+        snapshot->state = "connect-failed";
+    } else if (endpoint->connect_pending) {
+        snapshot->state = "resolving-peer";
+    } else if (!stream->listening) {
+        snapshot->state = "idle";
+    } else {
+        snapshot->state = arwill_tcp_state_name(stream->listener.state);
+    }
+    snapshot->local_port = endpoint->bound_port;
+    snapshot->peer_port = endpoint->connect_pending
+        ? endpoint->connect_peer_port : stream->listener.peer_port;
+    for (size_t address_index = 0; address_index < 4U; address_index++) {
+        snapshot->peer_address[address_index] = endpoint->connect_pending
+            ? endpoint->connect_peer_address[address_index]
+            : stream->listener.peer_address[address_index];
+    }
+    snapshot->receive_available = arwill_tcp_stream_receive_capacity -
+        stream->receive_count;
+    snapshot->peer_window = stream->listener.peer_window;
+    snapshot->peer_maximum_segment_size =
+        stream->listener.peer_maximum_segment_size;
+    snapshot->pending_segments = endpoint->tcp_pending_count;
+    snapshot->smoothed_round_trip_ms = endpoint->tcp_smoothed_round_trip_ms;
+    snapshot->retransmission_timeout_ms =
+        endpoint->tcp_retransmission_timeout_ms;
+    snapshot->connections = stream->connections;
+    snapshot->disconnects = stream->disconnects;
+    snapshot->bytes_received = stream->bytes_received;
+    snapshot->bytes_sent = stream->bytes_sent;
+    snapshot->bytes_dropped = stream->bytes_dropped;
+    snapshot->send_failures = stream->send_failures;
+    return 1;
+}
+
 struct arwill_tcp_stream *arwill_ipv4_tcp_open(struct arwill_ipv4_stack *stack) {
     if (stack == 0) {
         return 0;

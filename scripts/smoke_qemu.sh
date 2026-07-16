@@ -145,7 +145,7 @@ run_qemu_to_log() {
     wait_for_primary_log "tcplisten: frames 0, state listen"
     sleep 0.1
     printf 'network t\t\r'
-    wait_for_primary_log "tcp: port 23232, state listen"
+    wait_for_primary_log "tcp remote-console: port 23232, state listen"
     sleep 0.1
     (
         printf 'wrong\rwrong\rwrong\r'
@@ -595,11 +595,12 @@ check_line "arping: request transmitted to 10.0.2.2"
 check_line "ping: reply received"
 check_line "tcpcheck: listener state established"
 check_line "tcplisten: frames 0, state listen"
-check_line "tcp: port 23232, state listen"
+check_line "tcp remote-console: port 23232, state listen"
+check_line "tcp endpoint 0: owner remote-console, local :23232, peer -, state listen"
 check_line "remote console: plaintext, connections 0"
 check_line "remote bytes: received 0, sent 0, dropped 0, send failures 0"
 check_line "tcp integrity: checksum drops 0, duplicate acks 0"
-check_line "tcp reliability: retransmissions 0, timeouts 0, pending no"
+check_line "tcp reliability: retransmissions 0, timeouts 0, pending segments 0"
 check_line "Arwill 0.23.1 ready"
 check_absent "ARCHITECTURE IS THE PRODUCT"
 check_absent "config: /owner/arwill.conf"

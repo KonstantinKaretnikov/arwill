@@ -168,7 +168,7 @@ int main(void) {
     struct arwill_ipv4_stack ipv4 = { 0 };
     struct arwill_service_manager services;
     arwill_service_manager_init(
-        &services, &ipv4, &config, &log, 1
+        &services, &ipv4, &ipv4.endpoints[0].stream, &config, &log, 1
     );
     if (!expect(services.remote_console_state == arwill_service_running,
             "enabled service starts") ||

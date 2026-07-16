@@ -64,6 +64,29 @@ struct arwill_tcp_endpoint {
     int allocated;
 };
 
+struct arwill_tcp_endpoint_snapshot {
+    int allocated;
+    int listening;
+    int connected;
+    const char *owner;
+    const char *state;
+    uint16_t local_port;
+    uint8_t peer_address[4];
+    uint16_t peer_port;
+    size_t receive_available;
+    uint16_t peer_window;
+    uint16_t peer_maximum_segment_size;
+    size_t pending_segments;
+    uint64_t smoothed_round_trip_ms;
+    uint64_t retransmission_timeout_ms;
+    uint32_t connections;
+    uint32_t disconnects;
+    uint32_t bytes_received;
+    uint32_t bytes_sent;
+    uint32_t bytes_dropped;
+    uint32_t send_failures;
+};
+
 struct arwill_ipv4_stack {
     const struct arwill_network_device *network;
     const struct arwill_clock *clock;
@@ -127,6 +150,11 @@ struct arwill_tcp_stream *arwill_ipv4_remote_stream(
     struct arwill_ipv4_stack *stack);
 const struct arwill_tcp_stream *arwill_ipv4_remote_stream_const(
     const struct arwill_ipv4_stack *stack);
+int arwill_ipv4_tcp_endpoint_snapshot(
+    const struct arwill_ipv4_stack *stack,
+    size_t index,
+    struct arwill_tcp_endpoint_snapshot *snapshot
+);
 
 void arwill_ipv4_print_config(const struct arwill_ipv4_stack *stack,
     const struct arwill_console *console);

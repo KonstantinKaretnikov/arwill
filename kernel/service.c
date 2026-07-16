@@ -23,12 +23,12 @@ static int start_remote_console(
     enum arwill_log_code code
 ) {
     if (manager == 0 || manager->remote_console_state == arwill_service_unavailable ||
-        manager->ipv4 == 0 || manager->config == 0) {
+        manager->ipv4 == 0 || manager->remote_stream == 0 || manager->config == 0) {
         return 0;
     }
     if (!manager->config->valid ||
         !arwill_ipv4_tcp_listen(
-            manager->ipv4, &manager->ipv4->endpoints[0].stream,
+            manager->ipv4, manager->remote_stream,
             manager->config->remote_port
         )) {
         manager->remote_console_state = arwill_service_failed;
@@ -43,6 +43,7 @@ static int start_remote_console(
 void arwill_service_manager_init(
     struct arwill_service_manager *manager,
     struct arwill_ipv4_stack *ipv4,
+    struct arwill_tcp_stream *remote_stream,
     struct arwill_config *config,
     struct arwill_event_log *log,
     int network_ready
@@ -51,6 +52,7 @@ void arwill_service_manager_init(
         return;
     }
     manager->ipv4 = ipv4;
+    manager->remote_stream = remote_stream;
     manager->config = config;
     manager->log = log;
     if (!network_ready || ipv4 == 0) {
@@ -61,7 +63,7 @@ void arwill_service_manager_init(
     if (config != 0 && config->valid && config->remote_enabled) {
         (void)start_remote_console(manager, arwill_log_service_started);
     } else {
-        arwill_tcp_stream_stop(&ipv4->endpoints[0].stream);
+        arwill_tcp_stream_stop(manager->remote_stream);
         record_service_event(manager, arwill_log_info, arwill_log_service_stopped);
     }
 }
@@ -75,11 +77,11 @@ int arwill_service_remote_console_start(struct arwill_service_manager *manager) 
 
 int arwill_service_remote_console_stop(struct arwill_service_manager *manager) {
     if (manager == 0 || manager->remote_console_state == arwill_service_unavailable ||
-        manager->ipv4 == 0) {
+        manager->remote_stream == 0) {
         return 0;
     }
     if (manager->remote_console_state != arwill_service_stopped) {
-        arwill_tcp_stream_stop(&manager->ipv4->endpoints[0].stream);
+        arwill_tcp_stream_stop(manager->remote_stream);
         manager->remote_console_state = arwill_service_stopped;
         record_service_event(manager, arwill_log_info, arwill_log_service_stopped);
     }
@@ -88,10 +90,10 @@ int arwill_service_remote_console_stop(struct arwill_service_manager *manager) {
 
 int arwill_service_remote_console_restart(struct arwill_service_manager *manager) {
     if (manager == 0 || manager->remote_console_state == arwill_service_unavailable ||
-        manager->ipv4 == 0 || manager->config == 0) {
+        manager->remote_stream == 0 || manager->config == 0) {
         return 0;
     }
-    arwill_tcp_stream_stop(&manager->ipv4->endpoints[0].stream);
+    arwill_tcp_stream_stop(manager->remote_stream);
     manager->remote_console_state = arwill_service_stopped;
     if (!arwill_config_load(manager->config)) {
         manager->remote_console_state = arwill_service_failed;

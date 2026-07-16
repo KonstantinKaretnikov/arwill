@@ -67,6 +67,10 @@ int arwill_tcp_stream_peer_closed(const struct arwill_tcp_stream *stream) {
     return stream != 0 && stream->peer_closed;
 }
 
+int arwill_tcp_stream_close_requested(const struct arwill_tcp_stream *stream) {
+    return stream != 0 && stream->close_requested;
+}
+
 size_t arwill_tcp_stream_read(struct arwill_tcp_stream *stream,
     uint8_t *data, size_t capacity) {
     if (stream == 0 || data == 0) {
