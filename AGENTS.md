@@ -31,6 +31,10 @@ Rules for future work:
   convenience, not as Cyrillic text support.
 - Keep shell commands canonical; do not add built-in alias commands unless a
   later ADR explicitly reverses ADR-0015.
+- Keep shell editing bounded and single-line. Left and Right move the per-session
+  cursor, typing inserts, and Backspace removes before it; Tab completion runs
+  only at the end of the line. Do not grow this into readline, selection, undo,
+  or multiline editing without a current requirement.
 - Distinguish process kinds precisely. `counter` is the only cooperative
   kernel-managed built-in. `userhello` and `userbad` are narrow ring 3
   user-mode demos using the first `int 0x80` syscall ABI (`write`, `exit`,

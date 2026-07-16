@@ -808,3 +808,14 @@ driver work, not accidental default access for every ring 3 program.
    endpoint-0 indexing remains owned by IPv4, `make check` passes the native,
    QEMU, persistence, networking, and secondary-master IDE suites, and tracked
    C/header source decreases from 17,110 to 16,776 physical lines.
+
+43. [x] Bounded shell line editing
+
+   Completed in `0.23.1` per ADR-0063.
+
+   Scope: support Left and Right movement, insertion, and Backspace within the
+   current fixed-size shell line on serial and remote sessions, without adding
+   a terminal framework or general line-editing library.
+
+   Verified by: the QEMU serial smoke corrects commands with cursor movement,
+   mid-line insertion, and Backspace before continuing the full system suite.

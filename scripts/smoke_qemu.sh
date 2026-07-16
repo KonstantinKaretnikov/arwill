@@ -112,6 +112,12 @@ run_qemu_to_log() {
     printf 'ver\t\r'
     wait_for_primary_log_count "Arwill 0.23.1" 2
     sleep 0.1
+    printf 'versxion\033[D\033[D\033[D\033[D\033[C\010\r'
+    wait_for_primary_log_count "Arwill 0.23.1" 3
+    sleep 0.1
+    printf 'vesion\033[D\033[D\033[D\033[Dr\r'
+    wait_for_primary_log_count "Arwill 0.23.1" 4
+    sleep 0.1
     printf 'sys\t\r'
     wait_for_primary_log "system: Arwill 0.23.1"
     wait_for_primary_log_count "uptime: " 1
@@ -631,6 +637,7 @@ check_line "run [name] launch a built-in kernel process"
 check_line "exec [program] [file] run a stored program image"
 check_absent "step       run one cooperative process step"
 check_line "Up/Down    browse command history"
+check_line "Left/Right edit the current command line"
 check_absent "  dir [path]  list the current filesystem"
 check_absent "info [path]"
 check_absent "poweroff"

@@ -1,6 +1,6 @@
 # ADR-0009: Shell Tab Completion
 
-Status: accepted
+Status: accepted; cursor-movement limit superseded by ADR-0063
 
 ## Context
 
@@ -30,8 +30,9 @@ terminal abstraction or a broad line editor. Completion remains shell-local
 state and depends only on the existing console, input, and filesystem
 contracts.
 
-The UI is intentionally plain: no cursor movement, reverse search, quoted
-argument parsing, or command-specific completion hooks.
+The original UI intentionally omitted cursor movement. ADR-0063 adds bounded
+single-line cursor editing while retaining the other exclusions: no reverse
+search, quoted argument parsing, or command-specific completion hooks.
 
 ## Alternatives Considered
 

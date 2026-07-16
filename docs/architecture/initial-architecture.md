@@ -106,6 +106,9 @@ Shell:
   authentication, remote input, and remote shell-session progress.
 - Owns a small in-memory command history navigated by Up and Down escape
   sequences.
+- Keeps a bounded cursor position per shell session. Left and Right move within
+  the current single line; typing inserts and Backspace removes before the
+  cursor. Tab completion remains available only at the end of the line.
 - Dispatch receives the current shell session and its dependency environment;
   it parses the command token once while preserving exact-match internal smoke
   inputs.

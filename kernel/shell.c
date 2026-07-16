@@ -40,6 +40,8 @@ enum {
     ascii_left_bracket = '[',
     ascii_arrow_up = 'A',
     ascii_arrow_down = 'B',
+    ascii_arrow_right = 'C',
+    ascii_arrow_left = 'D',
     utf8_cyrillic_lead_0 = 0xd0,
     utf8_cyrillic_lead_1 = 0xd1,
     remote_authentication_max_attempts = 3,
@@ -152,6 +154,7 @@ struct shell_session {
     char line[shell_line_capacity];
     char current_directory[shell_path_capacity];
     size_t length;
+    size_t cursor;
     struct shell_history history;
     size_t history_position;
     enum shell_escape_state escape_state;
@@ -404,6 +407,24 @@ static void write_byte_echo(const struct arwill_console *console, uint8_t byte) 
     arwill_console_write(console, text);
 }
 
+static void move_console_cursor_left(
+    const struct arwill_console *console,
+    size_t count
+) {
+    for (size_t index = 0; index < count; index++) {
+        arwill_console_write(console, "\033[D");
+    }
+}
+
+static void move_console_cursor_right(
+    const struct arwill_console *console,
+    size_t count
+) {
+    for (size_t index = 0; index < count; index++) {
+        arwill_console_write(console, "\033[C");
+    }
+}
+
 static int append_char_to_line(
     const struct arwill_console *console,
     char *line,
@@ -417,6 +438,32 @@ static int append_char_to_line(
     line[*length] = value;
     *length = *length + 1U;
     write_byte_echo(console, (uint8_t)value);
+    return 1;
+}
+
+static int insert_char_into_line(
+    const struct arwill_console *console,
+    char *line,
+    size_t *length,
+    size_t *cursor,
+    char value
+) {
+    if (*length >= shell_line_capacity - 1U || *cursor > *length) {
+        return 0;
+    }
+
+    for (size_t index = *length; index > *cursor; index--) {
+        line[index] = line[index - 1U];
+    }
+    line[*cursor] = value;
+    *length = *length + 1U;
+    *cursor = *cursor + 1U;
+    line[*length] = '\0';
+
+    for (size_t index = *cursor - 1U; index < *length; index++) {
+        write_byte_echo(console, (uint8_t)line[index]);
+    }
+    move_console_cursor_left(console, *length - *cursor);
     return 1;
 }
 
@@ -547,8 +594,12 @@ static void replace_line(
     const struct arwill_console *console,
     char *line,
     size_t *length,
+    size_t *cursor,
     const char *replacement
 ) {
+    if (*cursor < *length) {
+        move_console_cursor_right(console, *length - *cursor);
+    }
     erase_line_contents(console, *length);
 
     *length = 0;
@@ -561,6 +612,7 @@ static void replace_line(
     }
 
     line[*length] = '\0';
+    *cursor = *length;
 }
 
 static const char *argument_after_command(const char *line) {
@@ -684,6 +736,7 @@ static void history_previous(
     const struct shell_history *history,
     char *line,
     size_t *length,
+    size_t *cursor,
     size_t *history_position
 ) {
     if (history->count == 0U) {
@@ -699,7 +752,9 @@ static void history_previous(
     }
 
     *history_position = *history_position - 1U;
-    replace_line(console, line, length, history->entries[*history_position]);
+    replace_line(
+        console, line, length, cursor, history->entries[*history_position]
+    );
 }
 
 static void history_next(
@@ -707,6 +762,7 @@ static void history_next(
     const struct shell_history *history,
     char *line,
     size_t *length,
+    size_t *cursor,
     size_t *history_position
 ) {
     if (history->count == 0U || *history_position >= history->count) {
@@ -716,11 +772,13 @@ static void history_next(
     *history_position = *history_position + 1U;
 
     if (*history_position == history->count) {
-        replace_line(console, line, length, "");
+        replace_line(console, line, length, cursor, "");
         return;
     }
 
-    replace_line(console, line, length, history->entries[*history_position]);
+    replace_line(
+        console, line, length, cursor, history->entries[*history_position]
+    );
 }
 
 static void path_set_root(char *path, size_t capacity) {
@@ -939,6 +997,7 @@ static void print_help(const struct arwill_console *console, int remote_session)
         console, "  Tab        complete commands, arguments, paths, and processes"
     );
     arwill_console_write_line(console, "  Up/Down    browse command history");
+    arwill_console_write_line(console, "  Left/Right edit the current command line");
     arwill_console_write_line(console, "  halt       enter the CPU idle loop");
 }
 
@@ -3728,6 +3787,7 @@ static void run_command(
 
 static void reset_shell_input(struct shell_session *session) {
     session->length = 0;
+    session->cursor = 0;
     session->escape_state = shell_escape_none;
     session->normalizer.utf8_state = shell_utf8_none;
     session->normalizer.utf8_lead = 0;
@@ -3849,7 +3909,7 @@ static int handle_shell_byte(
     }
 
     if (session->escape_state == shell_escape_started) {
-        if (byte == ascii_left_bracket) {
+        if (byte == ascii_left_bracket || byte == (uint8_t)'O') {
             session->escape_state = shell_escape_bracket;
         } else {
             session->escape_state = shell_escape_none;
@@ -3864,6 +3924,7 @@ static int handle_shell_byte(
                 &session->history,
                 session->line,
                 &session->length,
+                &session->cursor,
                 &session->history_position
             );
         } else if (byte == ascii_arrow_down) {
@@ -3872,8 +3933,15 @@ static int handle_shell_byte(
                 &session->history,
                 session->line,
                 &session->length,
+                &session->cursor,
                 &session->history_position
             );
+        } else if (byte == ascii_arrow_right && session->cursor < session->length) {
+            move_console_cursor_right(console, 1U);
+            session->cursor++;
+        } else if (byte == ascii_arrow_left && session->cursor != 0U) {
+            move_console_cursor_left(console, 1U);
+            session->cursor--;
         }
         session->escape_state = shell_escape_none;
         return 1;
@@ -3919,9 +3987,21 @@ static int handle_shell_byte(
     }
 
     if (byte == ascii_backspace || byte == ascii_delete) {
-        if (session->length > 0U) {
+        if (session->cursor != 0U) {
+            const size_t removed = session->cursor - 1U;
+            for (size_t index = removed; index < session->length; index++) {
+                session->line[index] = session->line[index + 1U];
+            }
             session->length--;
-            arwill_console_write(console, "\b \b");
+            session->cursor--;
+            arwill_console_write(console, "\b");
+            for (size_t index = session->cursor; index < session->length; index++) {
+                write_byte_echo(console, (uint8_t)session->line[index]);
+            }
+            arwill_console_write(console, " ");
+            move_console_cursor_left(
+                console, session->length - session->cursor + 1U
+            );
             if (session->length == 0U) {
                 session->normalizer.russian_layout_active = 0;
             }
@@ -3930,6 +4010,9 @@ static int handle_shell_byte(
     }
 
     if (byte == ascii_tab) {
+        if (session->cursor != session->length) {
+            return 1;
+        }
         complete_line(
             console,
             environment->filesystem,
@@ -3937,6 +4020,7 @@ static int handle_shell_byte(
             session->line,
             &session->length
         );
+        session->cursor = session->length;
         return 1;
     }
 
@@ -3946,7 +4030,13 @@ static int handle_shell_byte(
     }
 
     session->history_position = session->history.count;
-    (void)append_char_to_line(console, session->line, &session->length, input_char);
+    (void)insert_char_into_line(
+        console,
+        session->line,
+        &session->length,
+        &session->cursor,
+        input_char
+    );
     return 1;
 }
 

@@ -105,10 +105,12 @@ provides a live system and process dashboard.
 | Operations | `config logs service` |
 | Programs | `ps run exec` |
 
-`Tab` completes commands, subsystem arguments, paths, and process names.
-Up/Down browse in-memory history. `Ctrl+C` cancels the current line, `top`, or
-a foreground AWP. Russian-layout input is normalized to ASCII key positions
-for command entry only.
+`Tab` completes commands, subsystem arguments, paths, and process names when
+the cursor is at the end of the line. Left/Right move within the current line;
+typing inserts and Backspace removes at the cursor. Up/Down browse in-memory
+history. `Ctrl+C` cancels the current line, `top`, or a foreground AWP.
+Russian-layout input is normalized to ASCII key positions for command entry
+only.
 
 Inspection commands use one canonical interface per subsystem:
 
