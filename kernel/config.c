@@ -3,6 +3,7 @@
 
 #include <arwill/kernel/config.h>
 #include <arwill/kernel/filesystem.h>
+#include <arwill/kernel/text.h>
 
 enum {
     config_file_capacity = 1024,
@@ -16,25 +17,6 @@ enum {
 };
 
 static const char config_path[] = "/owner/arwill.conf";
-
-static size_t string_length(const char *text) {
-    size_t length = 0;
-    while (text[length] != '\0') {
-        length++;
-    }
-    return length;
-}
-
-static int string_equals(const char *left, const char *right) {
-    size_t index = 0;
-    while (left[index] != '\0' && right[index] != '\0') {
-        if (left[index] != right[index]) {
-            return 0;
-        }
-        index++;
-    }
-    return left[index] == right[index];
-}
 
 static int token_equals(
     const char *token,
@@ -300,23 +282,23 @@ int arwill_config_set(
         return 0;
     }
     struct arwill_config candidate = *config;
-    if (string_equals(key, "remote.enabled")) {
-        if (string_equals(value, "true")) {
+    if (arwill_text_equals(key, "remote.enabled")) {
+        if (arwill_text_equals(value, "true")) {
             candidate.remote_enabled = 1;
-        } else if (string_equals(value, "false")) {
+        } else if (arwill_text_equals(value, "false")) {
             candidate.remote_enabled = 0;
         } else {
             return 0;
         }
-    } else if (string_equals(key, "remote.port")) {
+    } else if (arwill_text_equals(key, "remote.port")) {
         uint32_t port = 0;
-        if (!parse_decimal(value, string_length(value), &port) ||
+        if (!parse_decimal(value, arwill_text_length(value), &port) ||
             port == 0U || port > 65535U) {
             return 0;
         }
         candidate.remote_port = (uint16_t)port;
-    } else if (string_equals(key, "log.level")) {
-        if (!string_equals(value, "info")) {
+    } else if (arwill_text_equals(key, "log.level")) {
+        if (!arwill_text_equals(value, "info")) {
             return 0;
         }
         candidate.log_level = arwill_config_log_info;
@@ -339,7 +321,7 @@ int arwill_config_set_remote_key(
         return 0;
     }
     struct arwill_config candidate = *config;
-    if (!copy_remote_key(candidate.remote_key, value, string_length(value)) ||
+    if (!copy_remote_key(candidate.remote_key, value, arwill_text_length(value)) ||
         !persist_config(&candidate)) {
         return 0;
     }

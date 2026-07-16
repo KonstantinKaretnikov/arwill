@@ -3,6 +3,7 @@
 #include <arwill/identity.h>
 #include <arwill/kernel/boot_catalog.h>
 #include <arwill/kernel/filesystem.h>
+#include <arwill/kernel/text.h>
 
 #define STATIC_TEXT_SIZE(text) ((uint64_t)(sizeof(text) - 1U))
 
@@ -48,20 +49,6 @@ static const struct arwill_fs_entry system_entries[] = {
     },
 };
 
-static int string_equals(const char *left, const char *right) {
-    size_t index = 0;
-
-    while (left[index] != '\0' && right[index] != '\0') {
-        if (left[index] != right[index]) {
-            return 0;
-        }
-
-        index++;
-    }
-
-    return left[index] == right[index];
-}
-
 static int listing_for(
     const struct arwill_fs_entry *entries,
     size_t count,
@@ -80,7 +67,7 @@ static int boot_catalog_list(
 ) {
     (void)context;
 
-    if (string_equals(path, "/") || string_equals(path, "")) {
+    if (arwill_text_equals(path, "/") || arwill_text_equals(path, "")) {
         return listing_for(
             root_entries,
             sizeof(root_entries) / sizeof(root_entries[0]),
@@ -88,7 +75,7 @@ static int boot_catalog_list(
         );
     }
 
-    if (string_equals(path, "/boot") || string_equals(path, "/boot/")) {
+    if (arwill_text_equals(path, "/boot") || arwill_text_equals(path, "/boot/")) {
         return listing_for(
             boot_entries,
             sizeof(boot_entries) / sizeof(boot_entries[0]),
@@ -96,7 +83,7 @@ static int boot_catalog_list(
         );
     }
 
-    if (string_equals(path, "/boot/limine") || string_equals(path, "/boot/limine/")) {
+    if (arwill_text_equals(path, "/boot/limine") || arwill_text_equals(path, "/boot/limine/")) {
         return listing_for(
             limine_entries,
             sizeof(limine_entries) / sizeof(limine_entries[0]),
@@ -104,7 +91,7 @@ static int boot_catalog_list(
         );
     }
 
-    if (string_equals(path, "/system") || string_equals(path, "/system/")) {
+    if (arwill_text_equals(path, "/system") || arwill_text_equals(path, "/system/")) {
         return listing_for(
             system_entries,
             sizeof(system_entries) / sizeof(system_entries[0]),
@@ -135,11 +122,11 @@ static int boot_catalog_read_file(
 ) {
     (void)context;
 
-    if (string_equals(path, "/boot/kernel.elf")) {
+    if (arwill_text_equals(path, "/boot/kernel.elf")) {
         return file_for(arwill_fs_file_binary, 0, 0, file);
     }
 
-    if (string_equals(path, "/boot/limine/limine.conf")) {
+    if (arwill_text_equals(path, "/boot/limine/limine.conf")) {
         return file_for(
             arwill_fs_file_text,
             limine_conf_contents,
@@ -148,11 +135,11 @@ static int boot_catalog_read_file(
         );
     }
 
-    if (string_equals(path, "/boot/limine/limine-bios.sys")) {
+    if (arwill_text_equals(path, "/boot/limine/limine-bios.sys")) {
         return file_for(arwill_fs_file_binary, 0, 0, file);
     }
 
-    if (string_equals(path, "/system/identity")) {
+    if (arwill_text_equals(path, "/system/identity")) {
         return file_for(
             arwill_fs_file_text,
             system_identity_contents,

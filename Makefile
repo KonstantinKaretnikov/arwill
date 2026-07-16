@@ -24,10 +24,11 @@ IPV4_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/co
 	include/arwill/kernel/network.h include/arwill/kernel/tcp.h \
 	include/arwill/kernel/tcp_stream.h include/arwill/kernel/awp_network.h
 CONFIG_LOG_HOST_TEST := $(BUILD_DIR)/tests/config_log_test
-CONFIG_LOG_HOST_TEST_SOURCES := tests/config_log_test.c kernel/clock.c kernel/config.c kernel/filesystem.c kernel/log.c kernel/service.c
+CONFIG_LOG_HOST_TEST_SOURCES := tests/config_log_test.c kernel/clock.c kernel/config.c kernel/filesystem.c kernel/log.c kernel/service.c kernel/text.c
 CONFIG_LOG_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/config.h \
 	include/arwill/kernel/filesystem.h include/arwill/kernel/ipv4.h \
-	include/arwill/kernel/log.h include/arwill/kernel/service.h
+	include/arwill/kernel/log.h include/arwill/kernel/service.h \
+	include/arwill/kernel/text.h
 BLOCK_DEVICE_HOST_TEST := $(BUILD_DIR)/tests/block_device_test
 BLOCK_DEVICE_HOST_TEST_SOURCES := tests/block_device_test.c kernel/block_device.c
 BLOCK_DEVICE_HOST_TEST_HEADERS := include/arwill/kernel/block_device.h
@@ -88,6 +89,7 @@ SOURCES := \
 	kernel/shell.c \
 	kernel/tcp.c \
 	kernel/tcp_stream.c \
+	kernel/text.c \
 	kernel/user.c \
 	arch/x86_64/boot/framebuffer_console.c \
 	arch/x86_64/boot/entry.c \

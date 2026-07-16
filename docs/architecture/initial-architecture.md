@@ -58,6 +58,13 @@ Console contract:
 - Provides only `write` and `write_line`.
 - Is intentionally smaller than a driver model or formatting library.
 
+Bounded text primitives:
+
+- Live in `include/arwill/kernel/text.h` and `kernel/text.c`.
+- Share only the current length, equality, and prefix operations used by the
+  shell, configuration, ARFS, and boot catalog.
+- They are not a libc replacement or a general-purpose utility layer.
+
 Framebuffer text console:
 
 - Public init contract lives in

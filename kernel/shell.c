@@ -23,6 +23,7 @@
 #include <arwill/kernel/shell.h>
 #include <arwill/kernel/tcp.h>
 #include <arwill/kernel/tcp_stream.h>
+#include <arwill/kernel/text.h>
 #include <arwill/kernel/user.h>
 
 enum {
@@ -177,40 +178,6 @@ struct shell_builtin_process {
     const char *name;
     arwill_process_entry entry;
 };
-
-static int string_equals(const char *left, const char *right) {
-    size_t index = 0;
-
-    while (left[index] != '\0' && right[index] != '\0') {
-        if (left[index] != right[index]) {
-            return 0;
-        }
-
-        index++;
-    }
-
-    return left[index] == right[index];
-}
-
-static int starts_with_sized(const char *text, const char *prefix, size_t prefix_length) {
-    for (size_t index = 0; index < prefix_length; index++) {
-        if (text[index] != prefix[index]) {
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-static size_t string_length(const char *text) {
-    size_t length = 0;
-
-    while (text[length] != '\0') {
-        length++;
-    }
-
-    return length;
-}
 
 static void remote_console_write(void *context, const char *text) {
     struct arwill_tcp_stream *stream = (struct arwill_tcp_stream *)context;
@@ -691,7 +658,7 @@ static void history_add(struct shell_history *history, const char *line) {
         return;
     }
 
-    if (history->count > 0U && string_equals(history->entries[history->count - 1U], line)) {
+    if (history->count > 0U && arwill_text_equals(history->entries[history->count - 1U], line)) {
         return;
     }
 
@@ -764,7 +731,7 @@ static void path_set_root(char *path, size_t capacity) {
 }
 
 static void path_pop_segment(char *path) {
-    size_t length = string_length(path);
+    size_t length = arwill_text_length(path);
 
     if (length <= 1U) {
         path[0] = '/';
@@ -806,7 +773,7 @@ static int path_append_segment(
         return 1;
     }
 
-    size_t path_length = string_length(path);
+    size_t path_length = arwill_text_length(path);
 
     if (!(path_length == 1U && path[0] == '/')) {
         if (path_length >= capacity - 1U) {
@@ -884,13 +851,13 @@ static int string_contains(const char *value, char character) {
 }
 
 static int string_ends_with(const char *value, const char *suffix) {
-    const size_t value_length = string_length(value);
-    const size_t suffix_length = string_length(suffix);
+    const size_t value_length = arwill_text_length(value);
+    const size_t suffix_length = arwill_text_length(suffix);
 
     if (suffix_length > value_length) {
         return 0;
     }
-    return string_equals(&value[value_length - suffix_length], suffix);
+    return arwill_text_equals(&value[value_length - suffix_length], suffix);
 }
 
 static int resolve_program_image_path(
@@ -907,7 +874,7 @@ static int resolve_program_image_path(
     }
 
     const size_t directory_length = sizeof(application_directory) - 1U;
-    const size_t program_length = string_length(program);
+    const size_t program_length = arwill_text_length(program);
     const size_t suffix_length = sizeof(program_suffix) - 1U;
 
     if (directory_length + program_length + suffix_length >= capacity) {
@@ -1308,7 +1275,7 @@ static void print_file(
 
     arwill_console_write(console, file.contents);
 
-    const size_t contents_length = string_length(file.contents);
+    const size_t contents_length = arwill_text_length(file.contents);
     if (contents_length == 0U || file.contents[contents_length - 1U] != '\n') {
         arwill_console_write_line(console, "");
     }
@@ -1448,14 +1415,14 @@ static void write_file(
             resolved_path,
             arwill_fs_file_text,
             (const uint8_t *)contents,
-            string_length(contents))) {
+            arwill_text_length(contents))) {
         arwill_console_write(console, "write: cannot write: ");
         arwill_console_write_line(console, resolved_path);
         return;
     }
 
     arwill_console_write(console, "write: wrote ");
-    write_uint64_decimal(console, (uint64_t)string_length(contents));
+    write_uint64_decimal(console, (uint64_t)arwill_text_length(contents));
     arwill_console_write(console, " bytes to ");
     arwill_console_write_line(console, resolved_path);
 }
@@ -1486,7 +1453,7 @@ static void write_hex_file(
     char resolved_path[shell_path_capacity];
     uint8_t bytes[shell_line_capacity / 2U];
     const char *hex = second_argument_after_first(argument);
-    const size_t hex_length = string_length(hex);
+    const size_t hex_length = arwill_text_length(hex);
 
     if (!copy_first_argument(path_argument, sizeof(path_argument), argument)) {
         arwill_console_write_line(console, "writehex: path too long");
@@ -2303,7 +2270,7 @@ static void configure_value(
         return;
     }
     const char *value_argument = second_argument_after_first(argument);
-    if (string_equals(key, "remote.key")) {
+    if (arwill_text_equals(key, "remote.key")) {
         if (value_argument[0] != '\0') {
             arwill_console_write_line(console, "config: remote.key uses hidden input");
             return;
@@ -2383,11 +2350,11 @@ static void control_service(
     const char *argument,
     int remote_session
 ) {
-    if (string_equals(argument, "status")) {
+    if (arwill_text_equals(argument, "status")) {
         print_service_status(console, services);
         return;
     }
-    if (string_equals(argument, "start remote-console")) {
+    if (arwill_text_equals(argument, "start remote-console")) {
         if (!arwill_service_remote_console_start(services)) {
             arwill_console_write_line(console, "service: start failed");
             return;
@@ -2395,7 +2362,7 @@ static void control_service(
         arwill_console_write_line(console, "service: remote-console running");
         return;
     }
-    if (string_equals(argument, "stop remote-console")) {
+    if (arwill_text_equals(argument, "stop remote-console")) {
         if (remote_session) {
             arwill_console_write_line(console, "service: stopping remote-console");
         }
@@ -2410,7 +2377,7 @@ static void control_service(
         }
         return;
     }
-    if (string_equals(argument, "restart remote-console")) {
+    if (arwill_text_equals(argument, "restart remote-console")) {
         if (remote_session) {
             arwill_console_write_line(console, "service: restarting remote-console");
         }
@@ -2527,7 +2494,7 @@ static const struct shell_builtin_process *find_builtin_process(const char *name
         sizeof(shell_builtin_processes) / sizeof(shell_builtin_processes[0]);
 
     for (size_t index = 0; index < process_count; index++) {
-        if (string_equals(name, shell_builtin_processes[index].name)) {
+        if (arwill_text_equals(name, shell_builtin_processes[index].name)) {
             return &shell_builtin_processes[index];
         }
     }
@@ -2809,7 +2776,7 @@ static enum shell_completion_kind command_completion(const char *command) {
     const size_t command_count = sizeof(shell_commands) / sizeof(shell_commands[0]);
 
     for (size_t index = 0; index < command_count; index++) {
-        if (string_equals(command, shell_commands[index].name)) {
+        if (arwill_text_equals(command, shell_commands[index].name)) {
             return shell_commands[index].completion;
         }
     }
@@ -2861,7 +2828,7 @@ static void complete_text_candidates(
     shell_candidate_add_space add_space
 ) {
     const char *prefix = &line[prefix_start];
-    const size_t prefix_length = string_length(prefix);
+    const size_t prefix_length = arwill_text_length(prefix);
     const char *single_match = 0;
     size_t single_index = 0;
     size_t match_count = 0;
@@ -2870,14 +2837,14 @@ static void complete_text_candidates(
     for (size_t index = 0; index < candidate_count; index++) {
         const char *candidate = candidate_name(context, index);
 
-        if (!starts_with_sized(candidate, prefix, prefix_length)) {
+        if (!arwill_text_starts_with_sized(candidate, prefix, prefix_length)) {
             continue;
         }
 
         if (match_count == 0U) {
             single_match = candidate;
             single_index = index;
-            shared_length = string_length(candidate);
+            shared_length = arwill_text_length(candidate);
         } else {
             shared_length = common_prefix_length(single_match, candidate, shared_length);
         }
@@ -2890,7 +2857,7 @@ static void complete_text_candidates(
     }
 
     if (match_count == 1U && single_match != 0) {
-        const size_t candidate_length = string_length(single_match);
+        const size_t candidate_length = arwill_text_length(single_match);
 
         for (size_t index = prefix_length; index < candidate_length; index++) {
             if (!append_char_to_line(console, line, length, single_match[index])) {
@@ -2919,7 +2886,7 @@ static void complete_text_candidates(
     arwill_console_write_line(console, "");
     for (size_t index = 0; index < candidate_count; index++) {
         const char *candidate = candidate_name(context, index);
-        if (starts_with_sized(candidate, prefix, prefix_length)) {
+        if (arwill_text_starts_with_sized(candidate, prefix, prefix_length)) {
             arwill_console_write_line(console, candidate);
         }
     }
@@ -3052,7 +3019,7 @@ static void split_path_for_completion(
     size_t prefix_capacity
 ) {
     size_t last_slash = 0;
-    size_t length = string_length(path);
+    size_t length = arwill_text_length(path);
     int saw_slash = 0;
 
     for (size_t index = 0; index < length; index++) {
@@ -3099,7 +3066,7 @@ static void show_path_candidates(
             continue;
         }
 
-        if (!starts_with_sized(entry->name, prefix, string_length(prefix))) {
+        if (!arwill_text_starts_with_sized(entry->name, prefix, arwill_text_length(prefix))) {
             continue;
         }
 
@@ -3152,7 +3119,7 @@ static void complete_path(
         return;
     }
 
-    const size_t prefix_length = string_length(prefix);
+    const size_t prefix_length = arwill_text_length(prefix);
 
     for (size_t index = 0; index < listing.count; index++) {
         const struct arwill_fs_entry *entry = &listing.entries[index];
@@ -3161,13 +3128,13 @@ static void complete_path(
             continue;
         }
 
-        if (!starts_with_sized(entry->name, prefix, prefix_length)) {
+        if (!arwill_text_starts_with_sized(entry->name, prefix, prefix_length)) {
             continue;
         }
 
         if (match_count == 0U) {
             single_match = entry;
-            shared_length = string_length(entry->name);
+            shared_length = arwill_text_length(entry->name);
         } else if (single_match != 0) {
             shared_length = common_prefix_length(
                 single_match->name,
@@ -3184,7 +3151,7 @@ static void complete_path(
     }
 
     if (match_count == 1U && single_match != 0) {
-        const size_t match_length = string_length(single_match->name);
+        const size_t match_length = arwill_text_length(single_match->name);
 
         for (size_t index = prefix_length; index < match_length; index++) {
             if (!append_char_to_line(console, line, length, single_match->name[index])) {
@@ -3224,18 +3191,18 @@ static void show_program_candidates(
 ) {
     static const char program_suffix[] = ".awp";
     const size_t suffix_length = sizeof(program_suffix) - 1U;
-    const size_t prefix_length = string_length(prefix);
+    const size_t prefix_length = arwill_text_length(prefix);
     char program_name[shell_path_capacity];
 
     arwill_console_write_line(console, "");
     for (size_t index = 0; index < listing->count; index++) {
         const struct arwill_fs_entry *entry = &listing->entries[index];
-        const size_t name_length = string_length(entry->name);
+        const size_t name_length = arwill_text_length(entry->name);
 
         if (entry->type != arwill_fs_entry_file ||
             !string_ends_with(entry->name, program_suffix) ||
             name_length <= suffix_length ||
-            !starts_with_sized(entry->name, prefix, prefix_length)) {
+            !arwill_text_starts_with_sized(entry->name, prefix, prefix_length)) {
             continue;
         }
         if (copy_sized_string(
@@ -3261,7 +3228,7 @@ static void complete_program_name(
     static const char program_suffix[] = ".awp";
     const size_t suffix_length = sizeof(program_suffix) - 1U;
     const char *prefix = &line[argument_start];
-    const size_t prefix_length = string_length(prefix);
+    const size_t prefix_length = arwill_text_length(prefix);
     const struct arwill_fs_entry *single_match = 0;
     size_t match_count = 0;
     size_t shared_length = 0;
@@ -3286,12 +3253,12 @@ static void complete_program_name(
 
     for (size_t index = 0; index < listing.count; index++) {
         const struct arwill_fs_entry *entry = &listing.entries[index];
-        const size_t name_length = string_length(entry->name);
+        const size_t name_length = arwill_text_length(entry->name);
 
         if (entry->type != arwill_fs_entry_file ||
             !string_ends_with(entry->name, program_suffix) ||
             name_length <= suffix_length ||
-            !starts_with_sized(entry->name, prefix, prefix_length)) {
+            !arwill_text_starts_with_sized(entry->name, prefix, prefix_length)) {
             continue;
         }
 
@@ -3313,7 +3280,7 @@ static void complete_program_name(
         return;
     }
     if (match_count == 1U && single_match != 0) {
-        const size_t program_length = string_length(single_match->name) - suffix_length;
+        const size_t program_length = arwill_text_length(single_match->name) - suffix_length;
         for (size_t index = prefix_length; index < program_length; index++) {
             if (!append_char_to_line(console, line, length, single_match->name[index])) {
                 return;
@@ -3357,7 +3324,7 @@ static void complete_line(
         return;
     }
 
-    if (string_length(command) == *length) {
+    if (arwill_text_length(command) == *length) {
         complete_command(console, current_directory, line, length);
         return;
     }
@@ -3478,17 +3445,17 @@ static void run_command(
     }
     const char *argument = &line[argument_start];
 
-    if (string_equals(line, "help")) {
+    if (arwill_text_equals(line, "help")) {
         print_help(console, remote_session);
         return;
     }
 
-    if (string_equals(line, "version")) {
+    if (arwill_text_equals(line, "version")) {
         print_version(console);
         return;
     }
 
-    if (string_equals(command, "system")) {
+    if (arwill_text_equals(command, "system")) {
         run_system_command(
             console,
             argument,
@@ -3503,7 +3470,7 @@ static void run_command(
         return;
     }
 
-    if (string_equals(command, "devices")) {
+    if (arwill_text_equals(command, "devices")) {
         run_devices_command(
             console,
             argument,
@@ -3515,17 +3482,17 @@ static void run_command(
         return;
     }
 
-    if (string_equals(command, "network")) {
+    if (arwill_text_equals(command, "network")) {
         run_network_command(console, argument, network, ipv4);
         return;
     }
 
-    if (string_equals(line, "top")) {
+    if (arwill_text_equals(line, "top")) {
         *top_requested = 1;
         return;
     }
 
-    if (string_equals(line, "netprobe")) {
+    if (arwill_text_equals(line, "netprobe")) {
         uint8_t mac[arwill_network_mac_length];
         uint8_t frame[60];
         static const char payload[] = "ARWILL-NETWORK-FRAME-TEST";
@@ -3557,7 +3524,7 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "arping")) {
+    if (arwill_text_equals(line, "arping")) {
         if (ipv4 == 0 || !arwill_ipv4_send_arp_request(ipv4, ipv4->gateway)) {
             arwill_console_write_line(console, "arping: transmit failed");
             return;
@@ -3566,7 +3533,7 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "tcpcheck")) {
+    if (arwill_text_equals(line, "tcpcheck")) {
         struct arwill_tcp_listener listener;
         struct arwill_tcp_segment syn = { 0 };
         struct arwill_tcp_segment reply = { 0 };
@@ -3604,7 +3571,7 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "tcplisten")) {
+    if (arwill_text_equals(line, "tcplisten")) {
         size_t processed = 0;
         if (ipv4 == 0 || !arwill_ipv4_service_tcp(ipv4, &processed)) {
             arwill_console_write_line(console, "tcplisten: network unavailable");
@@ -3623,54 +3590,54 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "pwd")) {
+    if (arwill_text_equals(line, "pwd")) {
         arwill_console_write_line(console, current_directory);
         return;
     }
 
-    if (string_equals(line, "clear")) {
+    if (arwill_text_equals(line, "clear")) {
         clear_screen(console);
         return;
     }
 
-    if (string_equals(line, "heaptest")) {
+    if (arwill_text_equals(line, "heaptest")) {
         run_heap_test(console, memory);
         return;
     }
 
-    if (string_equals(line, "irqprobe")) {
+    if (arwill_text_equals(line, "irqprobe")) {
         probe_interrupts(console, interrupts);
         return;
     }
 
-    if (string_equals(command, "config")) {
+    if (arwill_text_equals(command, "config")) {
         configure_value(
             console, config, log, argument, config_key_requested
         );
         return;
     }
 
-    if (string_equals(line, "logs")) {
+    if (arwill_text_equals(line, "logs")) {
         print_logs(console, log);
         return;
     }
 
-    if (string_equals(command, "service")) {
+    if (arwill_text_equals(command, "service")) {
         control_service(console, services, argument, remote_session);
         return;
     }
 
-    if (string_equals(line, "ps")) {
+    if (arwill_text_equals(line, "ps")) {
         print_process_table(console, processes, user_runtime);
         return;
     }
 
-    if (string_equals(command, "run")) {
+    if (arwill_text_equals(command, "run")) {
         run_process(console, processes, process_context, argument);
         return;
     }
 
-    if (string_equals(command, "exec")) {
+    if (arwill_text_equals(command, "exec")) {
         *foreground_pid = exec_program_image(
             console,
             filesystem,
@@ -3687,12 +3654,12 @@ static void run_command(
         return;
     }
 
-    if (string_equals(line, "step")) {
+    if (arwill_text_equals(line, "step")) {
         step_processes(console, processes);
         return;
     }
 
-    if (string_equals(line, "exit")) {
+    if (arwill_text_equals(line, "exit")) {
         if (remote_session) {
             arwill_console_write_line(console, "remote console: disconnected");
             *close_requested = 1;
@@ -3702,49 +3669,49 @@ static void run_command(
         arwill_poweroff(power);
     }
 
-    if (string_equals(command, "cd")) {
+    if (arwill_text_equals(command, "cd")) {
         change_directory(console, filesystem, current_directory, argument);
         return;
     }
 
-    if (string_equals(line, "halt")) {
+    if (arwill_text_equals(line, "halt")) {
         arwill_console_write_line(console, "status: shell halted");
         arwill_cpu_idle_forever();
     }
 
-    if (string_equals(command, "ls")) {
+    if (arwill_text_equals(command, "ls")) {
         print_listing(console, filesystem, current_directory, argument);
         return;
     }
 
-    if (string_equals(command, "cat")) {
+    if (arwill_text_equals(command, "cat")) {
         print_file(console, filesystem, current_directory, argument);
         return;
     }
 
-    if (string_equals(command, "mkdir")) {
+    if (arwill_text_equals(command, "mkdir")) {
         mutate_path(console, filesystem, current_directory,
             argument, "mkdir", 1);
         return;
     }
 
-    if (string_equals(command, "write")) {
+    if (arwill_text_equals(command, "write")) {
         write_file(console, filesystem, current_directory, argument);
         return;
     }
 
-    if (string_equals(command, "writehex")) {
+    if (arwill_text_equals(command, "writehex")) {
         write_hex_file(console, filesystem, current_directory, argument);
         return;
     }
 
-    if (string_equals(command, "rm")) {
+    if (arwill_text_equals(command, "rm")) {
         mutate_path(console, filesystem, current_directory,
             argument, "rm", 0);
         return;
     }
 
-    if (string_equals(command, "stat")) {
+    if (arwill_text_equals(command, "stat")) {
         print_stat(
             console,
             filesystem,

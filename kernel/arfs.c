@@ -4,6 +4,7 @@
 #include <arwill/kernel/arfs.h>
 #include <arwill/kernel/block_device.h>
 #include <arwill/kernel/filesystem.h>
+#include <arwill/kernel/text.h>
 
 enum {
     arfs_sector_size = 512,
@@ -45,44 +46,6 @@ struct arfs_context {
 };
 
 static struct arfs_context arfs;
-
-static size_t string_length(const char *text) {
-    size_t length = 0;
-
-    while (text[length] != '\0') {
-        length++;
-    }
-
-    return length;
-}
-
-static int string_equals(const char *left, const char *right) {
-    size_t index = 0;
-
-    while (left[index] != '\0' && right[index] != '\0') {
-        if (left[index] != right[index]) {
-            return 0;
-        }
-
-        index++;
-    }
-
-    return left[index] == right[index];
-}
-
-static int starts_with(const char *text, const char *prefix) {
-    size_t index = 0;
-
-    while (prefix[index] != '\0') {
-        if (text[index] != prefix[index]) {
-            return 0;
-        }
-
-        index++;
-    }
-
-    return 1;
-}
 
 static int copy_token(
     char *destination,
@@ -149,7 +112,7 @@ static const char *next_token(
 
 static void derive_name(const char *path, char *name, size_t capacity) {
     size_t last_slash = 0;
-    const size_t length = string_length(path);
+    const size_t length = arwill_text_length(path);
 
     for (size_t index = 0; index < length; index++) {
         if (path[index] == '/') {
@@ -204,9 +167,9 @@ static int add_file_entry(
     entry->data_lba = data_lba;
     entry->size_bytes = size_bytes;
 
-    if (type_length == 4U && starts_with(type, "text")) {
+    if (type_length == 4U && arwill_text_starts_with(type, "text")) {
         entry->file_type = arwill_fs_file_text;
-    } else if (type_length == 6U && starts_with(type, "binary")) {
+    } else if (type_length == 6U && arwill_text_starts_with(type, "binary")) {
         entry->file_type = arwill_fs_file_binary;
     } else {
         return 0;
@@ -313,10 +276,10 @@ static int parse_key_decimal(
     const char *key,
     uint64_t *value
 ) {
-    const size_t key_length = string_length(key);
+    const size_t key_length = arwill_text_length(key);
 
     for (size_t index = 0; index + key_length < arfs_sector_size; index++) {
-        if (!starts_with((const char *)&sector[index], key)) {
+        if (!arwill_text_starts_with((const char *)&sector[index], key)) {
             continue;
         }
 
@@ -340,7 +303,7 @@ static int parse_key_decimal(
 }
 
 static int entry_is_child_of(const struct arfs_entry *entry, const char *path) {
-    if (string_equals(path, "/")) {
+    if (arwill_text_equals(path, "/")) {
         const char *tail = &entry->path[1];
 
         if (tail[0] == '\0') {
@@ -356,9 +319,9 @@ static int entry_is_child_of(const struct arfs_entry *entry, const char *path) {
         return 1;
     }
 
-    const size_t path_length = string_length(path);
+    const size_t path_length = arwill_text_length(path);
 
-    if (!starts_with(entry->path, path) || entry->path[path_length] != '/') {
+    if (!arwill_text_starts_with(entry->path, path) || entry->path[path_length] != '/') {
         return 0;
     }
 
@@ -379,7 +342,7 @@ static int entry_is_child_of(const struct arfs_entry *entry, const char *path) {
 
 static struct arfs_entry *find_entry(const char *path) {
     for (size_t index = 0; index < arfs.entry_count; index++) {
-        if (string_equals(arfs.entries[index].path, path)) {
+        if (arwill_text_equals(arfs.entries[index].path, path)) {
             return &arfs.entries[index];
         }
     }
@@ -388,7 +351,7 @@ static struct arfs_entry *find_entry(const char *path) {
 }
 
 static int path_is_valid(const char *path) {
-    const size_t length = string_length(path);
+    const size_t length = arwill_text_length(path);
     size_t segment_length = 0;
 
     if (length < 2U || length >= arfs_max_path_length || path[0] != '/' ||
@@ -417,7 +380,7 @@ static int path_is_valid(const char *path) {
 static int parent_directory_exists(const char *path) {
     char parent[arfs_max_path_length];
     size_t slash = 0;
-    const size_t length = string_length(path);
+    const size_t length = arwill_text_length(path);
 
     for (size_t index = 1; index < length; index++) {
         if (path[index] == '/') {
@@ -446,7 +409,7 @@ static int arfs_list(
 
     size_t count = 0;
 
-    if (!string_equals(path, "/")) {
+    if (!arwill_text_equals(path, "/")) {
         const struct arfs_entry *directory = find_entry(path);
 
         if (directory == 0 || directory->kind != arfs_entry_directory) {
@@ -757,7 +720,7 @@ static int arfs_write_bytes(
     entry->file_type = type;
     entry->data_lba = data_lba;
     entry->size_bytes = (uint64_t)size;
-    if (is_new && (!copy_token(entry->path, sizeof(entry->path), path, string_length(path)))) {
+    if (is_new && (!copy_token(entry->path, sizeof(entry->path), path, arwill_text_length(path)))) {
         return 0;
     }
     derive_name(entry->path, entry->name, sizeof(entry->name));
@@ -782,7 +745,7 @@ static int arfs_create_directory(void *context, const char *path) {
     (void)context;
 
     if (!path_is_valid(path) || find_entry(path) != 0 || !parent_directory_exists(path) ||
-        !add_directory_entry(path, string_length(path))) {
+        !add_directory_entry(path, arwill_text_length(path))) {
         return 0;
     }
 
@@ -799,7 +762,7 @@ static int arfs_remove(void *context, const char *path) {
     size_t remove_index = arfs.entry_count;
 
     for (size_t index = 0; index < arfs.entry_count; index++) {
-        if (string_equals(arfs.entries[index].path, path)) {
+        if (arwill_text_equals(arfs.entries[index].path, path)) {
             remove_index = index;
             break;
         }
@@ -873,7 +836,7 @@ const struct arwill_filesystem *arwill_arfs_mount(
         return 0;
     }
 
-    if (!starts_with((const char *)superblock, "ARFS2\n")) {
+    if (!arwill_text_starts_with((const char *)superblock, "ARFS2\n")) {
         return 0;
     }
 
