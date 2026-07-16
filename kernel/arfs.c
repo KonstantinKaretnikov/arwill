@@ -778,20 +778,6 @@ static int arfs_write_bytes(
     return 1;
 }
 
-static int arfs_write_file(void *context, const char *path, const char *contents) {
-    if (!string_equals(path, "/owner/note")) {
-        return 0;
-    }
-
-    return arfs_write_bytes(
-        context,
-        path,
-        arwill_fs_file_text,
-        (const uint8_t *)contents,
-        string_length(contents)
-    );
-}
-
 static int arfs_create_directory(void *context, const char *path) {
     (void)context;
 
@@ -854,7 +840,6 @@ static const struct arwill_filesystem arfs_filesystem = {
     .context = &arfs,
     .list = arfs_list,
     .read_file = arfs_read_file,
-    .write_file = arfs_write_file,
     .create_directory = arfs_create_directory,
     .write_bytes = arfs_write_bytes,
     .remove = arfs_remove,

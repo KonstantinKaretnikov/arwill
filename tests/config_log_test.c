@@ -112,7 +112,6 @@ int main(void) {
         .context = &storage,
         .list = 0,
         .read_file = fake_read_file,
-        .write_file = 0,
         .create_directory = 0,
         .write_bytes = fake_write_bytes,
         .remove = 0,

@@ -54,10 +54,6 @@ void arwill_tcp_stream_stop(struct arwill_tcp_stream *stream) {
     arwill_tcp_listener_reset(&stream->listener, 0U);
 }
 
-int arwill_tcp_stream_is_listening(const struct arwill_tcp_stream *stream) {
-    return stream != 0 && stream->listening;
-}
-
 int arwill_tcp_stream_connected(const struct arwill_tcp_stream *stream) {
     return stream != 0 && stream->listening &&
         arwill_tcp_listener_connected(&stream->listener);

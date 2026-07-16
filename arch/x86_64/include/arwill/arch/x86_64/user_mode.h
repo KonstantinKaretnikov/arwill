@@ -4,7 +4,6 @@
 #include <stdint.h>
 
 #include <arwill/kernel/memory.h>
-#include <arwill/kernel/input.h>
 #include <arwill/kernel/clock.h>
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/log.h>
@@ -46,7 +45,6 @@ struct arwill_x86_64_user_saved_context {
 const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     struct arwill_memory *memory,
     uint64_t hhdm_offset,
-    const struct arwill_input *input,
     const struct arwill_clock *clock,
     const struct arwill_filesystem *filesystem,
     struct arwill_ipv4_stack *ipv4,

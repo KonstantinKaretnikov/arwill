@@ -148,8 +148,6 @@ void arwill_ipv4_tcp_release(struct arwill_ipv4_stack *stack,
     struct arwill_tcp_stream *stream);
 struct arwill_tcp_stream *arwill_ipv4_remote_stream(
     struct arwill_ipv4_stack *stack);
-const struct arwill_tcp_stream *arwill_ipv4_remote_stream_const(
-    const struct arwill_ipv4_stack *stack);
 int arwill_ipv4_tcp_endpoint_snapshot(
     const struct arwill_ipv4_stack *stack,
     size_t index,

@@ -154,7 +154,6 @@ struct x86_64_user_context {
     uint64_t bad_syscalls;
     uint64_t preemptions;
     uint64_t faults;
-    const struct arwill_input *legacy_input;
     const struct arwill_clock *clock;
     const struct arwill_filesystem *filesystem;
     struct arwill_ipv4_stack *ipv4;
@@ -1290,27 +1289,6 @@ static int x86_64_user_spawn_image(
     return 1;
 }
 
-static int x86_64_user_run_image(
-    void *opaque,
-    const uint8_t *image,
-    uint64_t image_size,
-    const struct arwill_console *console,
-    struct arwill_user_program_result *result
-) {
-    struct x86_64_user_context *context = (struct x86_64_user_context *)opaque;
-    uint32_t pid = 0;
-    if (!x86_64_user_spawn_image(
-            opaque, image, image_size, "awp", "", console, &pid
-        )) {
-        return 0;
-    }
-    struct x86_64_user_task *task = find_task(context, pid);
-    run_until_stable(context, task);
-    fill_program_result(task, result);
-    task->state = arwill_user_task_empty;
-    return 1;
-}
-
 static int x86_64_user_deliver_input(void *opaque, uint32_t pid, uint8_t byte) {
     struct x86_64_user_context *context = (struct x86_64_user_context *)opaque;
     struct x86_64_user_task *task = context == 0 ? 0 : find_task(context, pid);
@@ -1413,7 +1391,6 @@ static const struct arwill_user_runtime user_runtime = {
     .context = &user_context,
     .name = "x86_64 ring3 awp scheduler",
     .run = x86_64_user_run,
-    .run_image = x86_64_user_run_image,
     .spawn_image = x86_64_user_spawn_image,
     .poll = x86_64_user_poll,
     .deliver_input = x86_64_user_deliver_input,
@@ -1426,7 +1403,6 @@ static const struct arwill_user_runtime user_runtime = {
 const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     struct arwill_memory *memory,
     uint64_t hhdm_offset,
-    const struct arwill_input *input,
     const struct arwill_clock *clock,
     const struct arwill_filesystem *filesystem,
     struct arwill_ipv4_stack *ipv4,
@@ -1447,7 +1423,6 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     user_context.bad_syscalls = 0;
     user_context.preemptions = 0;
     user_context.faults = 0;
-    user_context.legacy_input = input;
     user_context.clock = clock;
     user_context.filesystem = filesystem;
     user_context.ipv4 = ipv4;

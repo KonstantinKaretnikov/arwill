@@ -35,7 +35,6 @@ void arwill_tcp_stream_init(struct arwill_tcp_stream *stream);
 int arwill_tcp_stream_listen(struct arwill_tcp_stream *stream,
     uint16_t port, uint32_t initial_sequence);
 void arwill_tcp_stream_stop(struct arwill_tcp_stream *stream);
-int arwill_tcp_stream_is_listening(const struct arwill_tcp_stream *stream);
 int arwill_tcp_stream_connected(const struct arwill_tcp_stream *stream);
 int arwill_tcp_stream_peer_closed(const struct arwill_tcp_stream *stream);
 int arwill_tcp_stream_close_requested(const struct arwill_tcp_stream *stream);

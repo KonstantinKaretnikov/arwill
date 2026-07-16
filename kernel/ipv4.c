@@ -157,11 +157,6 @@ struct arwill_tcp_stream *arwill_ipv4_remote_stream(
     return stack == 0 ? 0 : &stack->endpoints[0].stream;
 }
 
-const struct arwill_tcp_stream *arwill_ipv4_remote_stream_const(
-    const struct arwill_ipv4_stack *stack) {
-    return stack == 0 ? 0 : &stack->endpoints[0].stream;
-}
-
 int arwill_ipv4_tcp_endpoint_snapshot(
     const struct arwill_ipv4_stack *stack,
     size_t index,

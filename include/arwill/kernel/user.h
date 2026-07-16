@@ -67,13 +67,6 @@ struct arwill_user_runtime {
         const struct arwill_console *console,
         struct arwill_user_program_result *result
     );
-    int (*run_image)(
-        void *context,
-        const uint8_t *image,
-        uint64_t image_size,
-        const struct arwill_console *console,
-        struct arwill_user_program_result *result
-    );
     int (*spawn_image)(
         void *context,
         const uint8_t *image,
@@ -99,14 +92,6 @@ void arwill_user_runtime_stats(
 int arwill_user_run_program(
     const struct arwill_user_runtime *runtime,
     enum arwill_user_program program,
-    const struct arwill_console *console,
-    struct arwill_user_program_result *result
-);
-
-int arwill_user_run_image(
-    const struct arwill_user_runtime *runtime,
-    const uint8_t *image,
-    uint64_t image_size,
     const struct arwill_console *console,
     struct arwill_user_program_result *result
 );

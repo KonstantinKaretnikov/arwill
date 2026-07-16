@@ -17,14 +17,6 @@ enum {
     line_status_transmitter_empty = 0x20
 };
 
-static uint8_t serial_read_byte(void) {
-    while ((arwill_x86_64_in8(com1_base + register_line_status) &
-            line_status_data_ready) == 0) {
-    }
-
-    return arwill_x86_64_in8(com1_base + register_data);
-}
-
 static void serial_write_byte(uint8_t byte) {
     while ((arwill_x86_64_in8(com1_base + register_line_status) &
             line_status_transmitter_empty) == 0) {
@@ -45,12 +37,6 @@ static void serial_console_write(void *context, const char *text) {
     }
 }
 
-static uint8_t serial_input_read_byte(void *context) {
-    (void)context;
-
-    return serial_read_byte();
-}
-
 static int serial_input_try_read_byte(void *context, uint8_t *byte) {
     (void)context;
     if (byte == 0 || (arwill_x86_64_in8(com1_base + register_line_status) &
@@ -68,7 +54,6 @@ static const struct arwill_console serial_console = {
 
 static const struct arwill_input serial_input = {
     .context = 0,
-    .read_byte = serial_input_read_byte,
     .try_read_byte = serial_input_try_read_byte,
 };
 

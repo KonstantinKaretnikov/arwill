@@ -73,7 +73,8 @@ Framebuffer text console:
 Input contract:
 
 - Lives in `include/arwill/kernel/input.h`.
-- Provides blocking byte input and nonblocking byte polling.
+- Provides nonblocking byte polling. The shell owns input delivery to serial
+  and AWP sessions; the retired blocking read entry point had no consumer.
 - It is not yet a general keyboard driver or event system.
 
 Shell:
@@ -293,6 +294,8 @@ Filesystem contract:
 - Lives in `include/arwill/kernel/filesystem.h`.
 - Provides directory listing, whole-file reads and writes by path, directory
   creation, and removal.
+- Whole-file mutation uses the typed byte-write operation; the earlier
+  text-only write callback was retired after all consumers moved to it.
 - Optionally reports bounded storage allocation statistics through a single
   snapshot operation. Unsupported filesystems report the statistics as
   unavailable.

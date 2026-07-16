@@ -153,7 +153,7 @@ void arwill_limine_entry(void) {
     );
     const struct arwill_user_runtime *user_runtime =
         arwill_x86_64_user_mode_init(
-            &arwill_limine_memory, hhdm_offset, input, clock, filesystem,
+            &arwill_limine_memory, hhdm_offset, clock, filesystem,
             ipv4_ready ? &arwill_limine_ipv4 : 0,
             &arwill_limine_log
         );

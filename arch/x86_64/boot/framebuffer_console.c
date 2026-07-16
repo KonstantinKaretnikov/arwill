@@ -296,10 +296,6 @@ const struct arwill_console *arwill_x86_64_framebuffer_console_init(
     return &framebuffer_console;
 }
 
-int arwill_x86_64_framebuffer_console_available(void) {
-    return framebuffer_console_context.available;
-}
-
 const char *arwill_x86_64_framebuffer_console_status(void) {
     return framebuffer_console_context.available ? "ready" : "unavailable";
 }

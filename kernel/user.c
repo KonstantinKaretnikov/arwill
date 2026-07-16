@@ -55,22 +55,6 @@ int arwill_user_run_program(
     return runtime->run(runtime->context, program, console, result);
 }
 
-int arwill_user_run_image(
-    const struct arwill_user_runtime *runtime,
-    const uint8_t *image,
-    uint64_t image_size,
-    const struct arwill_console *console,
-    struct arwill_user_program_result *result
-) {
-    clear_result(result);
-
-    if (runtime == 0 || runtime->run_image == 0 || image == 0) {
-        return 0;
-    }
-
-    return runtime->run_image(runtime->context, image, image_size, console, result);
-}
-
 int arwill_user_spawn_image(
     const struct arwill_user_runtime *runtime,
     const uint8_t *image,

@@ -10,8 +10,6 @@ const struct arwill_console *arwill_x86_64_framebuffer_console_init(
     const struct arwill_console *serial_console
 );
 
-int arwill_x86_64_framebuffer_console_available(void);
-
 const char *arwill_x86_64_framebuffer_console_status(void);
 
 #endif

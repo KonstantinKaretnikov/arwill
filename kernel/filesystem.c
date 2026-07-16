@@ -41,18 +41,6 @@ int arwill_filesystem_read_file(
     return filesystem->read_file(filesystem->context, path, file);
 }
 
-int arwill_filesystem_write_file(
-    const struct arwill_filesystem *filesystem,
-    const char *path,
-    const char *contents
-) {
-    if (filesystem == 0 || filesystem->write_file == 0 || path == 0 || contents == 0) {
-        return 0;
-    }
-
-    return filesystem->write_file(filesystem->context, path, contents);
-}
-
 int arwill_filesystem_create_directory(
     const struct arwill_filesystem *filesystem,
     const char *path
