@@ -6,6 +6,7 @@
 
 struct arwill_ipv4_stack;
 struct arwill_tcp_stream;
+struct arwill_udp_endpoint;
 
 enum {
     arwill_awp_network_handle_capacity = 2,
@@ -37,6 +38,10 @@ struct arwill_awp_network_handle {
 
 struct arwill_awp_network_owner {
     struct arwill_awp_network_handle handles[arwill_awp_network_handle_capacity];
+    struct arwill_udp_endpoint *udp;
+    uint16_t udp_local_port;
+    int udp_bound;
+    int udp_connecting;
 };
 
 void arwill_awp_network_owner_init(struct arwill_awp_network_owner *owner);
@@ -59,5 +64,20 @@ long arwill_awp_network_write(struct arwill_awp_network_owner *owner,
     uint64_t handle, const uint8_t *buffer, size_t length);
 long arwill_awp_network_close(struct arwill_ipv4_stack *stack,
     struct arwill_awp_network_owner *owner, uint64_t handle);
+long arwill_awp_udp_open(struct arwill_ipv4_stack *stack,
+    struct arwill_awp_network_owner *owner);
+long arwill_awp_udp_bind(struct arwill_ipv4_stack *stack,
+    struct arwill_awp_network_owner *owner, uint64_t port);
+long arwill_awp_udp_connect(struct arwill_ipv4_stack *stack,
+    struct arwill_awp_network_owner *owner, uint32_t peer_address,
+    uint64_t peer_port);
+long arwill_awp_udp_send(struct arwill_ipv4_stack *stack,
+    struct arwill_awp_network_owner *owner, const uint8_t *buffer,
+    size_t length);
+long arwill_awp_udp_receive(struct arwill_ipv4_stack *stack,
+    struct arwill_awp_network_owner *owner, uint8_t *buffer,
+    size_t capacity);
+long arwill_awp_udp_close(struct arwill_ipv4_stack *stack,
+    struct arwill_awp_network_owner *owner);
 
 #endif

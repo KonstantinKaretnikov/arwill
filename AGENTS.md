@@ -60,6 +60,11 @@ Rules for future work:
   fault, and slot reuse force-release owned endpoints. `/apps/netserve.awp` is
   the first real consumer on guest port 23233. Do not describe this ABI as
   POSIX sockets or file descriptors.
+- Treat AWP UDP syscalls `16` through `21` as the connected-datagram contract
+  in ADR-0064. The kernel owns four fixed UDP endpoints, each AWP owner may
+  hold one, receive preserves datagram boundaries, and retry yields through
+  the existing system progress pass. DNS remains user-space protocol policy;
+  do not move domain names or DNS message parsing into the kernel.
 - Treat Arwill as a single-owner OS. Do not introduce login accounts, groups,
   roles, or multi-user permission checks unless a later ADR explicitly changes
   this direction. The owner has full system control; ring 3 is an engineering
@@ -155,6 +160,9 @@ Rules for future work:
 - Commit completed, verified milestones locally, but do not push every commit
   automatically. Push when asked, when sharing is needed, or when the owner has
   clearly approved publishing the accumulated work.
+- Before committing a completed milestone, leave its full diff visible in the
+  Codex Review Panel so the project owner can inspect the line impact. Commit
+  only after the owner has had that review opportunity.
 - For longer tasks, play `/System/Library/Sounds/Glass.aiff` with `afplay`
   after the work is complete, if tool permissions allow it.
 

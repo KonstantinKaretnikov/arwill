@@ -98,6 +98,26 @@ static void initialize_tcp_endpoint(struct arwill_tcp_endpoint *endpoint) {
     endpoint->allocated = 0;
 }
 
+static void initialize_udp_endpoint(struct arwill_udp_endpoint *endpoint) {
+    endpoint->receive_length = 0U;
+    for (size_t index = 0; index < 4U; index++) {
+        endpoint->peer_address[index] = 0U;
+        endpoint->next_hop[index] = 0U;
+    }
+    for (size_t index = 0; index < arwill_network_mac_length; index++) {
+        endpoint->peer_mac[index] = 0U;
+    }
+    endpoint->local_port = 0U;
+    endpoint->peer_port = 0U;
+    endpoint->arp_sent_milliseconds = 0U;
+    endpoint->arp_attempts = 0U;
+    endpoint->allocated = 0;
+    endpoint->bound = 0;
+    endpoint->connected = 0;
+    endpoint->resolving = 0;
+    endpoint->failed = 0;
+}
+
 static void reset_tcp_stream(struct arwill_tcp_endpoint *endpoint);
 
 int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
@@ -149,6 +169,16 @@ int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
     stack->tcp_timeouts = 0;
     stack->tcp_receive_window_drops = 0;
     stack->tcp_window_updates = 0;
+    for (size_t index = 0; index < arwill_udp_endpoint_capacity; index++) {
+        initialize_udp_endpoint(&stack->udp_endpoints[index]);
+    }
+    stack->udp_frames_received = 0U;
+    stack->udp_frames_sent = 0U;
+    stack->udp_bytes_received = 0U;
+    stack->udp_bytes_sent = 0U;
+    stack->udp_checksum_drops = 0U;
+    stack->udp_port_drops = 0U;
+    stack->udp_queue_drops = 0U;
     return 1;
 }
 
@@ -339,6 +369,94 @@ void arwill_ipv4_tcp_release(struct arwill_ipv4_stack *stack,
     }
     arwill_tcp_stream_stop(&endpoint->stream);
     initialize_tcp_endpoint(endpoint);
+}
+
+static struct arwill_udp_endpoint *udp_endpoint_for_pointer(
+    struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint
+) {
+    if (stack == 0 || endpoint == 0) {
+        return 0;
+    }
+    for (size_t index = 0; index < arwill_udp_endpoint_capacity; index++) {
+        if (&stack->udp_endpoints[index] == endpoint &&
+            endpoint->allocated) {
+            return endpoint;
+        }
+    }
+    return 0;
+}
+
+struct arwill_udp_endpoint *arwill_ipv4_udp_open(
+    struct arwill_ipv4_stack *stack) {
+    if (stack == 0) {
+        return 0;
+    }
+    for (size_t index = 0; index < arwill_udp_endpoint_capacity; index++) {
+        if (!stack->udp_endpoints[index].allocated) {
+            initialize_udp_endpoint(&stack->udp_endpoints[index]);
+            stack->udp_endpoints[index].allocated = 1;
+            return &stack->udp_endpoints[index];
+        }
+    }
+    return 0;
+}
+
+int arwill_ipv4_udp_bind(struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint, uint16_t port) {
+    if (udp_endpoint_for_pointer(stack, endpoint) == 0 || port == 0U ||
+        endpoint->bound) {
+        return 0;
+    }
+    for (size_t index = 0; index < arwill_udp_endpoint_capacity; index++) {
+        const struct arwill_udp_endpoint *candidate =
+            &stack->udp_endpoints[index];
+        if (candidate != endpoint && candidate->allocated &&
+            candidate->bound && candidate->local_port == port) {
+            return 0;
+        }
+    }
+    endpoint->local_port = port;
+    endpoint->bound = 1;
+    return 1;
+}
+
+int arwill_ipv4_udp_connect(struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint, const uint8_t peer_address[4],
+    uint16_t peer_port) {
+    if (udp_endpoint_for_pointer(stack, endpoint) == 0 ||
+        peer_address == 0 || peer_port == 0U || !endpoint->bound ||
+        endpoint->connected || endpoint->resolving || endpoint->failed) {
+        return -1;
+    }
+    for (size_t index = 0; index < 4U; index++) {
+        endpoint->peer_address[index] = peer_address[index];
+        endpoint->next_hop[index] =
+            peer_address[0] == stack->address[0] &&
+            peer_address[1] == stack->address[1] &&
+            peer_address[2] == stack->address[2]
+                ? peer_address[index] : stack->gateway[index];
+    }
+    endpoint->peer_port = peer_port;
+    endpoint->arp_sent_milliseconds = 0U;
+    endpoint->arp_attempts = 0U;
+    endpoint->resolving = 1;
+    return 0;
+}
+
+int arwill_ipv4_udp_connect_status(struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint) {
+    if (udp_endpoint_for_pointer(stack, endpoint) == 0 || endpoint->failed) {
+        return -1;
+    }
+    return endpoint->connected ? 1 : 0;
+}
+
+void arwill_ipv4_udp_release(struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint) {
+    if (udp_endpoint_for_pointer(stack, endpoint) != 0) {
+        initialize_udp_endpoint(endpoint);
+    }
 }
 
 int arwill_ipv4_send_arp_request(const struct arwill_ipv4_stack *stack,
@@ -568,6 +686,102 @@ static uint16_t tcp_checksum(const uint8_t *ip, const uint8_t *tcp, size_t lengt
     return (uint16_t)~sum;
 }
 
+static uint16_t udp_checksum(
+    const uint8_t *ip,
+    const uint8_t *udp,
+    size_t length
+) {
+    uint32_t sum = 17U + (uint32_t)length;
+    sum += get16(ip, 12U);
+    sum += get16(ip, 14U);
+    sum += get16(ip, 16U);
+    sum += get16(ip, 18U);
+    for (size_t index = 0; index + 1U < length; index += 2U) {
+        sum += get16(udp, index);
+    }
+    if ((length & 1U) != 0U) {
+        sum += (uint32_t)udp[length - 1U] << 8U;
+    }
+    while ((sum >> 16U) != 0U) {
+        sum = (sum & 0xffffU) + (sum >> 16U);
+    }
+    return (uint16_t)~sum;
+}
+
+int arwill_ipv4_udp_send(struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint, const uint8_t *data,
+    size_t length) {
+    if (udp_endpoint_for_pointer(stack, endpoint) == 0 || data == 0 ||
+        length == 0U || length > arwill_udp_payload_capacity) {
+        return -1;
+    }
+    if (!endpoint->connected) {
+        return endpoint->failed ? -1 : 0;
+    }
+
+    uint8_t frame[arwill_network_frame_capacity];
+    uint8_t *ip = frame + 14U;
+    uint8_t *udp = ip + 20U;
+    const size_t udp_length = 8U + length;
+    const size_t frame_length = 14U + 20U + udp_length;
+    for (size_t index = 0; index < sizeof(frame); index++) {
+        frame[index] = 0U;
+    }
+    for (size_t index = 0; index < arwill_network_mac_length; index++) {
+        frame[index] = endpoint->peer_mac[index];
+        frame[6U + index] = stack->mac[index];
+    }
+    put16(frame, 12U, 0x0800U);
+    ip[0] = 0x45U;
+    put16(ip, 2U, (uint16_t)(20U + udp_length));
+    ip[6] = 0x40U;
+    ip[8] = 64U;
+    ip[9] = 17U;
+    for (size_t index = 0; index < 4U; index++) {
+        ip[12U + index] = stack->address[index];
+        ip[16U + index] = endpoint->peer_address[index];
+    }
+    put16(ip, 10U, checksum(ip, 20U));
+    put16(udp, 0U, endpoint->local_port);
+    put16(udp, 2U, endpoint->peer_port);
+    put16(udp, 4U, (uint16_t)udp_length);
+    for (size_t index = 0; index < length; index++) {
+        udp[8U + index] = data[index];
+    }
+    uint16_t datagram_checksum = udp_checksum(ip, udp, udp_length);
+    if (datagram_checksum == 0U) {
+        datagram_checksum = UINT16_MAX;
+    }
+    put16(udp, 6U, datagram_checksum);
+    if (!arwill_network_send_frame(stack->network, frame,
+            frame_length < 60U ? 60U : frame_length)) {
+        return -1;
+    }
+    stack->udp_frames_sent++;
+    stack->udp_bytes_sent += (uint32_t)length;
+    return 1;
+}
+
+long arwill_ipv4_udp_receive(struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint, uint8_t *data, size_t capacity) {
+    if (udp_endpoint_for_pointer(stack, endpoint) == 0 || data == 0 ||
+        capacity == 0U) {
+        return -1L;
+    }
+    if (endpoint->receive_length == 0U) {
+        return 0L;
+    }
+    if (capacity < endpoint->receive_length) {
+        return -1L;
+    }
+    const size_t length = endpoint->receive_length;
+    for (size_t index = 0; index < length; index++) {
+        data[index] = endpoint->receive[index];
+    }
+    endpoint->receive_length = 0U;
+    return (long)length;
+}
+
 static uint16_t advertised_receive_window(
     const struct arwill_tcp_endpoint *endpoint) {
     const size_t available = arwill_tcp_stream_receive_capacity -
@@ -755,6 +969,27 @@ static void maintain_active_connect(struct arwill_ipv4_stack *stack,
     }
 }
 
+static void maintain_udp_connect(struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint) {
+    if (!endpoint->allocated || !endpoint->resolving) {
+        return;
+    }
+    const uint64_t now = arwill_clock_monotonic_milliseconds(stack->clock);
+    if (endpoint->arp_attempts != 0U &&
+        now - endpoint->arp_sent_milliseconds < arwill_udp_arp_retry_ms) {
+        return;
+    }
+    if (endpoint->arp_attempts >= arwill_udp_arp_max_attempts) {
+        endpoint->resolving = 0;
+        endpoint->failed = 1;
+        return;
+    }
+    if (arwill_ipv4_send_arp_request(stack, endpoint->next_hop)) {
+        endpoint->arp_sent_milliseconds = now;
+        endpoint->arp_attempts++;
+    }
+}
+
 static int handle_arp_reply(struct arwill_ipv4_stack *stack,
     const uint8_t *frame, size_t length) {
     if (length < 42U || get16(frame, 20U) != 2U ||
@@ -780,6 +1015,21 @@ static int handle_arp_reply(struct arwill_ipv4_stack *stack,
             endpoint->tcp_peer_mac[index] = frame[22U + index];
         }
         (void)start_active_syn(stack, endpoint);
+        matched = 1;
+    }
+    for (size_t endpoint_index = 0;
+        endpoint_index < arwill_udp_endpoint_capacity; endpoint_index++) {
+        struct arwill_udp_endpoint *endpoint =
+            &stack->udp_endpoints[endpoint_index];
+        if (!endpoint->allocated || !endpoint->resolving ||
+            !same_bytes(frame + 28U, endpoint->next_hop, 4U)) {
+            continue;
+        }
+        for (size_t index = 0; index < arwill_network_mac_length; index++) {
+            endpoint->peer_mac[index] = frame[22U + index];
+        }
+        endpoint->resolving = 0;
+        endpoint->connected = 1;
         matched = 1;
     }
     return matched;
@@ -1159,6 +1409,63 @@ static uint16_t parse_tcp_maximum_segment_size(const uint8_t *tcp,
     return 0U;
 }
 
+static int handle_udp_frame(struct arwill_ipv4_stack *stack,
+    const uint8_t *frame, size_t length) {
+    if (length < 42U || frame[14] != 0x45U ||
+        !same_bytes(frame + 30U, stack->address, 4U)) {
+        return 0;
+    }
+    if (checksum(frame + 14U, 20U) != 0U) {
+        stack->udp_checksum_drops++;
+        return 0;
+    }
+    const size_t ip_length = get16(frame, 16U);
+    if (ip_length < 28U || 14U + ip_length > length) {
+        return 0;
+    }
+    const uint8_t *udp = frame + 34U;
+    const size_t udp_length = get16(udp, 4U);
+    if (udp_length < 8U || udp_length > ip_length - 20U) {
+        return 0;
+    }
+    if (get16(udp, 6U) != 0U &&
+        udp_checksum(frame + 14U, udp, udp_length) != 0U) {
+        stack->udp_checksum_drops++;
+        return 0;
+    }
+    const uint16_t source_port = get16(udp, 0U);
+    const uint16_t destination_port = get16(udp, 2U);
+    struct arwill_udp_endpoint *endpoint = 0;
+    for (size_t index = 0; index < arwill_udp_endpoint_capacity; index++) {
+        struct arwill_udp_endpoint *candidate = &stack->udp_endpoints[index];
+        if (candidate->allocated && candidate->bound &&
+            candidate->connected &&
+            candidate->local_port == destination_port &&
+            candidate->peer_port == source_port &&
+            same_bytes(candidate->peer_address, frame + 26U, 4U)) {
+            endpoint = candidate;
+            break;
+        }
+    }
+    if (endpoint == 0) {
+        stack->udp_port_drops++;
+        return 0;
+    }
+    const size_t payload_length = udp_length - 8U;
+    if (payload_length > arwill_udp_payload_capacity ||
+        endpoint->receive_length != 0U) {
+        stack->udp_queue_drops++;
+        return 0;
+    }
+    for (size_t index = 0; index < payload_length; index++) {
+        endpoint->receive[index] = udp[8U + index];
+    }
+    endpoint->receive_length = payload_length;
+    stack->udp_frames_received++;
+    stack->udp_bytes_received += (uint32_t)payload_length;
+    return 1;
+}
+
 int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
     uint8_t frame[arwill_network_frame_capacity];
     size_t length = 0;
@@ -1179,6 +1486,9 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
         }
         maintain_stream_close(stack, candidate);
     }
+    for (size_t index = 0; index < arwill_udp_endpoint_capacity; index++) {
+        maintain_udp_connect(stack, &stack->udp_endpoints[index]);
+    }
     if (!arwill_network_poll_frame(stack->network, frame, sizeof(frame), &length)) {
         return 0;
     }
@@ -1192,6 +1502,10 @@ int arwill_ipv4_poll_tcp(struct arwill_ipv4_stack *stack) {
     if (length >= 42U && get16(frame, 12U) == 0x0800U &&
         (frame[14] >> 4U) == 4U && frame[23] == 1U) {
         return send_echo_reply(stack, frame, length);
+    }
+    if (length >= 42U && get16(frame, 12U) == 0x0800U &&
+        (frame[14] >> 4U) == 4U && frame[23] == 17U) {
+        return handle_udp_frame(stack, frame, length);
     }
     if (length < 54U || get16(frame, 12U) != 0x0800U || frame[14] != 0x45U ||
         frame[23] != 6U || !same_bytes(frame + 30U, stack->address, 4U)) {

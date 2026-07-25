@@ -24,6 +24,10 @@ enum {
     arwill_tcp_endpoint_capacity = 4,
     arwill_tcp_arp_retry_ms = 250,
     arwill_tcp_arp_max_attempts = 3,
+    arwill_udp_endpoint_capacity = 4,
+    arwill_udp_payload_capacity = 512,
+    arwill_udp_arp_retry_ms = 250,
+    arwill_udp_arp_max_attempts = 3,
 };
 
 struct arwill_tcp_pending_segment {
@@ -87,6 +91,23 @@ struct arwill_tcp_endpoint_snapshot {
     uint32_t send_failures;
 };
 
+struct arwill_udp_endpoint {
+    uint8_t receive[arwill_udp_payload_capacity];
+    size_t receive_length;
+    uint8_t peer_address[4];
+    uint8_t next_hop[4];
+    uint8_t peer_mac[arwill_network_mac_length];
+    uint16_t local_port;
+    uint16_t peer_port;
+    uint64_t arp_sent_milliseconds;
+    unsigned arp_attempts;
+    int allocated;
+    int bound;
+    int connected;
+    int resolving;
+    int failed;
+};
+
 struct arwill_ipv4_stack {
     const struct arwill_network_device *network;
     const struct arwill_clock *clock;
@@ -119,6 +140,14 @@ struct arwill_ipv4_stack {
     uint32_t tcp_timeouts;
     uint32_t tcp_receive_window_drops;
     uint32_t tcp_window_updates;
+    struct arwill_udp_endpoint udp_endpoints[arwill_udp_endpoint_capacity];
+    uint32_t udp_frames_received;
+    uint32_t udp_frames_sent;
+    uint32_t udp_bytes_received;
+    uint32_t udp_bytes_sent;
+    uint32_t udp_checksum_drops;
+    uint32_t udp_port_drops;
+    uint32_t udp_queue_drops;
 };
 
 int arwill_ipv4_init(struct arwill_ipv4_stack *stack,
@@ -146,6 +175,21 @@ int arwill_ipv4_tcp_connect_status(struct arwill_ipv4_stack *stack,
     struct arwill_tcp_stream *stream);
 void arwill_ipv4_tcp_release(struct arwill_ipv4_stack *stack,
     struct arwill_tcp_stream *stream);
+struct arwill_udp_endpoint *arwill_ipv4_udp_open(
+    struct arwill_ipv4_stack *stack);
+int arwill_ipv4_udp_bind(struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint, uint16_t port);
+int arwill_ipv4_udp_connect(struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint, const uint8_t peer_address[4],
+    uint16_t peer_port);
+int arwill_ipv4_udp_connect_status(struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint);
+int arwill_ipv4_udp_send(struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint, const uint8_t *data, size_t length);
+long arwill_ipv4_udp_receive(struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint, uint8_t *data, size_t capacity);
+void arwill_ipv4_udp_release(struct arwill_ipv4_stack *stack,
+    struct arwill_udp_endpoint *endpoint);
 struct arwill_tcp_stream *arwill_ipv4_remote_stream(
     struct arwill_ipv4_stack *stack);
 int arwill_ipv4_tcp_endpoint_snapshot(

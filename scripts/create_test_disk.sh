@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 6 ]; then
-    echo "usage: create_test_disk.sh <output-image> <project-version> <hello-awp> <calc-awp> <edit-awp> <netserve-awp>" >&2
+if [ "$#" -ne 7 ]; then
+    echo "usage: create_test_disk.sh <output-image> <project-version> <hello-awp> <calc-awp> <edit-awp> <netserve-awp> <curl-awp>" >&2
     exit 2
 fi
 
@@ -12,6 +12,7 @@ hello_app=$3
 calc_app=$4
 edit_app=$5
 netserve_app=$6
+curl_app=$7
 temporary=$output.tmp
 payload_dir=$output.payloads
 
@@ -36,6 +37,7 @@ app_hello=$payload_dir/hello.awp
 app_calc=$payload_dir/calc.awp
 app_edit=$payload_dir/edit.awp
 app_netserve=$payload_dir/netserve.awp
+app_curl=$payload_dir/curl.awp
 
 printf 'name: Arwill\nversion: %s\narchitecture: x86_64\nplatform: qemu\nfilesystem: arfs\n' \
     "$project_version" > "$identity"
@@ -64,15 +66,18 @@ cp "$edit_app" "$app_edit"
 app_edit_size=$(wc -c < "$app_edit" | tr -d ' ')
 cp "$netserve_app" "$app_netserve"
 app_netserve_size=$(wc -c < "$app_netserve" | tr -d ' ')
+cp "$curl_app" "$app_curl"
+app_curl_size=$(wc -c < "$app_curl" | tr -d ' ')
 
 if [ "$app_hello_size" -gt 512 ] || [ "$app_calc_size" -gt 2048 ] ||
-   [ "$app_edit_size" -gt 8192 ] || [ "$app_netserve_size" -gt 8192 ]; then
+   [ "$app_edit_size" -gt 8192 ] || [ "$app_netserve_size" -gt 8192 ] ||
+   [ "$app_curl_size" -gt 8192 ]; then
     echo "test application exceeds its ARFS slot" >&2
     exit 1
 fi
 
-printf 'D /apps\nD /boot\nD /boot/limine\nD /docs\nD /owner\nD /system\nF /apps/hello.awp binary 13 %s\nF /apps/calc.awp binary 14 %s\nF /apps/edit.awp binary 18 %s\nF /apps/netserve.awp binary 35 %s\nF /boot/kernel.elf binary 0 0\nF /boot/limine/limine.conf text 10 %s\nF /docs/readme text 11 %s\nF /owner/arwill.conf text 34 %s\nF /owner/note text 12 %s\nF /system/identity text 8 %s\n' \
-    "$app_hello_size" "$app_calc_size" "$app_edit_size" "$app_netserve_size" "$limine_conf_size" "$readme_size" "$arwill_config_size" "$owner_note_size" "$identity_size" > "$manifest"
+printf 'D /apps\nD /boot\nD /boot/limine\nD /docs\nD /owner\nD /system\nF /apps/hello.awp binary 13 %s\nF /apps/calc.awp binary 14 %s\nF /apps/edit.awp binary 18 %s\nF /apps/netserve.awp binary 35 %s\nF /apps/curl.awp binary 51 %s\nF /boot/kernel.elf binary 0 0\nF /boot/limine/limine.conf text 10 %s\nF /docs/readme text 11 %s\nF /owner/arwill.conf text 34 %s\nF /owner/note text 12 %s\nF /system/identity text 8 %s\n' \
+    "$app_hello_size" "$app_calc_size" "$app_edit_size" "$app_netserve_size" "$app_curl_size" "$limine_conf_size" "$readme_size" "$arwill_config_size" "$owner_note_size" "$identity_size" > "$manifest"
 
 printf 'ARFS2\nmanifest_lba=4\nmanifest_sectors=2\ndata_lba=14\n' > "$superblock"
 
@@ -87,5 +92,6 @@ dd if="$app_calc" of="$temporary" bs=512 seek=14 conv=notrunc >/dev/null 2>&1
 dd if="$app_edit" of="$temporary" bs=512 seek=18 conv=notrunc >/dev/null 2>&1
 dd if="$arwill_config" of="$temporary" bs=512 seek=34 conv=notrunc >/dev/null 2>&1
 dd if="$app_netserve" of="$temporary" bs=512 seek=35 conv=notrunc >/dev/null 2>&1
+dd if="$app_curl" of="$temporary" bs=512 seek=51 conv=notrunc >/dev/null 2>&1
 
 mv "$temporary" "$output"

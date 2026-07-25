@@ -26,6 +26,10 @@ void arwill_awp_network_owner_init(struct arwill_awp_network_owner *owner) {
     for (size_t index = 0; index < arwill_awp_network_handle_capacity; index++) {
         clear_handle(&owner->handles[index]);
     }
+    owner->udp = 0;
+    owner->udp_local_port = 0U;
+    owner->udp_bound = 0;
+    owner->udp_connecting = 0;
 }
 
 void arwill_awp_network_cleanup(struct arwill_ipv4_stack *stack,
@@ -40,6 +44,13 @@ void arwill_awp_network_cleanup(struct arwill_ipv4_stack *stack,
         }
         clear_handle(handle);
     }
+    if (owner->udp != 0 && stack != 0) {
+        arwill_ipv4_udp_release(stack, owner->udp);
+    }
+    owner->udp = 0;
+    owner->udp_local_port = 0U;
+    owner->udp_bound = 0;
+    owner->udp_connecting = 0;
 }
 
 long arwill_awp_network_open(struct arwill_ipv4_stack *stack,
@@ -202,5 +213,102 @@ long arwill_awp_network_close(struct arwill_ipv4_stack *stack,
     }
     arwill_ipv4_tcp_release(stack, handle->stream);
     clear_handle(handle);
+    return 0L;
+}
+
+long arwill_awp_udp_open(struct arwill_ipv4_stack *stack,
+    struct arwill_awp_network_owner *owner) {
+    if (stack == 0 || owner == 0 || owner->udp != 0) {
+        return arwill_awp_network_unavailable;
+    }
+    owner->udp = arwill_ipv4_udp_open(stack);
+    return owner->udp == 0 ? arwill_awp_network_unavailable : 0L;
+}
+
+long arwill_awp_udp_bind(struct arwill_ipv4_stack *stack,
+    struct arwill_awp_network_owner *owner, uint64_t port) {
+    if (stack == 0 || owner == 0 || owner->udp == 0 ||
+        owner->udp_bound || port == 0U || port > UINT16_MAX) {
+        return arwill_awp_network_invalid;
+    }
+    if (!arwill_ipv4_udp_bind(stack, owner->udp, (uint16_t)port)) {
+        return arwill_awp_network_address_in_use;
+    }
+    owner->udp_local_port = (uint16_t)port;
+    owner->udp_bound = 1;
+    return 0L;
+}
+
+long arwill_awp_udp_connect(struct arwill_ipv4_stack *stack,
+    struct arwill_awp_network_owner *owner, uint32_t peer_address,
+    uint64_t peer_port) {
+    if (stack == 0 || owner == 0 || owner->udp == 0 ||
+        !owner->udp_bound || peer_address == 0U || peer_port == 0U ||
+        peer_port > UINT16_MAX) {
+        return arwill_awp_network_invalid;
+    }
+    if (owner->udp_connecting) {
+        const int status =
+            arwill_ipv4_udp_connect_status(stack, owner->udp);
+        if (status > 0) {
+            return 0L;
+        }
+        return status < 0 ? arwill_awp_network_unavailable :
+            arwill_awp_network_retry;
+    }
+    const uint8_t address[4] = {
+        (uint8_t)(peer_address >> 24U),
+        (uint8_t)(peer_address >> 16U),
+        (uint8_t)(peer_address >> 8U),
+        (uint8_t)peer_address
+    };
+    const int status = arwill_ipv4_udp_connect(
+        stack, owner->udp, address, (uint16_t)peer_port);
+    if (status < 0) {
+        return arwill_awp_network_unavailable;
+    }
+    owner->udp_connecting = 1;
+    return status > 0 ? 0L : arwill_awp_network_retry;
+}
+
+long arwill_awp_udp_send(struct arwill_ipv4_stack *stack,
+    struct arwill_awp_network_owner *owner, const uint8_t *buffer,
+    size_t length) {
+    if (stack == 0 || owner == 0 || owner->udp == 0 || buffer == 0 ||
+        length == 0U || length > arwill_awp_network_io_capacity) {
+        return arwill_awp_network_invalid;
+    }
+    const int sent = arwill_ipv4_udp_send(stack, owner->udp, buffer, length);
+    if (sent < 0) {
+        return arwill_awp_network_unavailable;
+    }
+    return sent == 0 ? arwill_awp_network_retry : (long)length;
+}
+
+long arwill_awp_udp_receive(struct arwill_ipv4_stack *stack,
+    struct arwill_awp_network_owner *owner, uint8_t *buffer,
+    size_t capacity) {
+    if (stack == 0 || owner == 0 || owner->udp == 0 || buffer == 0 ||
+        capacity == 0U || capacity > arwill_awp_network_io_capacity) {
+        return arwill_awp_network_invalid;
+    }
+    const long received =
+        arwill_ipv4_udp_receive(stack, owner->udp, buffer, capacity);
+    if (received < 0L) {
+        return arwill_awp_network_invalid;
+    }
+    return received == 0L ? arwill_awp_network_retry : received;
+}
+
+long arwill_awp_udp_close(struct arwill_ipv4_stack *stack,
+    struct arwill_awp_network_owner *owner) {
+    if (stack == 0 || owner == 0 || owner->udp == 0) {
+        return arwill_awp_network_invalid;
+    }
+    arwill_ipv4_udp_release(stack, owner->udp);
+    owner->udp = 0;
+    owner->udp_local_port = 0U;
+    owner->udp_bound = 0;
+    owner->udp_connecting = 0;
     return 0L;
 }

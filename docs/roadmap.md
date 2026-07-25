@@ -819,3 +819,25 @@ driver work, not accidental default access for every ring 3 program.
 
    Verified by: the QEMU serial smoke corrects commands with cursor movement,
    mid-line insertion, and Backspace before continuing the full system suite.
+
+44. [ ] User-space web client
+
+   Status: functional implementation completed for `0.24.0` per ADR-0064;
+   deterministic local DNS/HTTP fixture coverage remains in progress.
+
+   Goal: let an AWP application perform basic HTTP GET and POST requests by
+   domain name without moving DNS or HTTP policy into the kernel.
+
+   Sequential scope:
+
+   - [x] freestanding URL, HTTP request, and DNS message codecs with native
+     tests;
+   - [x] bounded kernel UDP datagrams and AWP UDP syscalls;
+   - [x] user-space DNS A-record resolver;
+   - [x] interactive `/apps/curl.awp` using DNS, existing TCP active open, and
+     HTTP/1.0 `Connection: close`;
+   - [ ] deterministic QEMU DNS plus GET/POST integration coverage.
+
+   HTTPS, TLS, redirects, compression, chunked responses, cookies, proxies,
+   authentication, IPv6, and a general `argc`/`argv` launch model remain
+   outside this milestone.

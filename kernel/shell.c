@@ -1190,6 +1190,32 @@ static void print_icmp_info(
     arwill_console_write_line(console, "");
 }
 
+static void print_udp_info(
+    const struct arwill_console *console,
+    const struct arwill_ipv4_stack *ipv4
+) {
+    if (ipv4 == 0) {
+        arwill_console_write_line(console, "udp: unavailable");
+        return;
+    }
+    arwill_console_write(console, "udp frames: received ");
+    write_uint64_decimal(console, ipv4->udp_frames_received);
+    arwill_console_write(console, ", sent ");
+    write_uint64_decimal(console, ipv4->udp_frames_sent);
+    arwill_console_write(console, ", bytes received ");
+    write_uint64_decimal(console, ipv4->udp_bytes_received);
+    arwill_console_write(console, ", sent ");
+    write_uint64_decimal(console, ipv4->udp_bytes_sent);
+    arwill_console_write_line(console, "");
+    arwill_console_write(console, "udp drops: checksum ");
+    write_uint64_decimal(console, ipv4->udp_checksum_drops);
+    arwill_console_write(console, ", tuple ");
+    write_uint64_decimal(console, ipv4->udp_port_drops);
+    arwill_console_write(console, ", queue ");
+    write_uint64_decimal(console, ipv4->udp_queue_drops);
+    arwill_console_write_line(console, "");
+}
+
 static const char *remote_tcp_state_name(const struct arwill_ipv4_stack *ipv4) {
     struct arwill_tcp_endpoint_snapshot remote;
     return arwill_ipv4_tcp_endpoint_snapshot(ipv4, 0U, &remote)
@@ -2265,6 +2291,7 @@ static void run_network_command(
         print_network_device_info(console, network);
         arwill_ipv4_print_config(ipv4, console);
         print_icmp_info(console, ipv4);
+        print_udp_info(console, ipv4);
         print_tcp_info(console, ipv4);
         return;
     }

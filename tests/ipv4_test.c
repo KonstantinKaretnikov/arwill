@@ -82,6 +82,24 @@ static uint16_t tcp_checksum(const uint8_t *ip, const uint8_t *tcp, size_t lengt
     return (uint16_t)~sum;
 }
 
+static uint16_t udp_checksum(const uint8_t *ip, const uint8_t *udp, size_t length) {
+    uint32_t sum = 17U + (uint32_t)length;
+    sum += get16(ip, 12U);
+    sum += get16(ip, 14U);
+    sum += get16(ip, 16U);
+    sum += get16(ip, 18U);
+    for (size_t index = 0; index + 1U < length; index += 2U) {
+        sum += get16(udp, index);
+    }
+    if ((length & 1U) != 0U) {
+        sum += (uint32_t)udp[length - 1U] << 8U;
+    }
+    while ((sum >> 16U) != 0U) {
+        sum = (sum & 0xffffU) + (sum >> 16U);
+    }
+    return (uint16_t)~sum;
+}
+
 static int fake_send_frame(void *context, const uint8_t *frame, size_t length) {
     struct fake_network *network = (struct fake_network *)context;
     if (network == 0 || frame == 0 || length > sizeof(network->outgoing)) {
@@ -248,6 +266,48 @@ static void queue_segment(struct fake_network *network, uint16_t source_port,
     const uint8_t *payload, size_t payload_length) {
     queue_segment_for_port(network, source_port, test_remote_console_port,
         sequence, acknowledgement, flags, payload, payload_length);
+}
+
+static void queue_udp_datagram(struct fake_network *network,
+    const uint8_t source_address[4], uint16_t source_port,
+    uint16_t destination_port, const uint8_t *payload, size_t payload_length) {
+    uint8_t *frame = network->incoming;
+    uint8_t *ip = frame + 14U;
+    uint8_t *udp = ip + 20U;
+    const size_t udp_length = 8U + payload_length;
+    const size_t ip_length = 20U + udp_length;
+    const size_t frame_length = 14U + ip_length;
+
+    for (size_t index = 0; index < sizeof(network->incoming); index++) {
+        frame[index] = 0U;
+    }
+    for (size_t index = 0; index < arwill_network_mac_length; index++) {
+        frame[index] = guest_mac[index];
+        frame[6U + index] = peer_mac[index];
+    }
+    put16(frame, 12U, 0x0800U);
+    ip[0] = 0x45U;
+    put16(ip, 2U, (uint16_t)ip_length);
+    ip[6] = 0x40U;
+    ip[8] = 64U;
+    ip[9] = 17U;
+    for (size_t index = 0; index < 4U; index++) {
+        ip[12U + index] = source_address[index];
+    }
+    ip[16] = 10U;
+    ip[17] = 0U;
+    ip[18] = 2U;
+    ip[19] = 15U;
+    put16(ip, 10U, checksum(ip, 20U));
+    put16(udp, 0U, source_port);
+    put16(udp, 2U, destination_port);
+    put16(udp, 4U, (uint16_t)udp_length);
+    for (size_t index = 0; index < payload_length; index++) {
+        udp[8U + index] = payload[index];
+    }
+    put16(udp, 6U, udp_checksum(ip, udp, udp_length));
+    network->incoming_length = frame_length < 60U ? 60U : frame_length;
+    network->incoming_ready = 1;
 }
 
 static void change_queued_source_address(struct fake_network *network,
@@ -976,6 +1036,90 @@ int main(void) {
     }
     arwill_ipv4_tcp_release(&stack, unresolved);
 
+    struct arwill_udp_endpoint *udp = arwill_ipv4_udp_open(&stack);
+    struct arwill_udp_endpoint *udp_second = arwill_ipv4_udp_open(&stack);
+    struct arwill_udp_endpoint *udp_third = arwill_ipv4_udp_open(&stack);
+    struct arwill_udp_endpoint *udp_fourth = arwill_ipv4_udp_open(&stack);
+    const uint8_t dns_address[4] = { 10U, 0U, 2U, 3U };
+    if (!expect(udp != 0 && udp_second != 0 && udp_third != 0 &&
+            udp_fourth != 0, "four UDP endpoints allocated")
+        || !expect(arwill_ipv4_udp_open(&stack) == 0,
+            "UDP endpoint table is bounded")
+        || !expect(arwill_ipv4_udp_bind(&stack, udp, 53000U),
+            "UDP endpoint binds")
+        || !expect(!arwill_ipv4_udp_bind(&stack, udp_second, 53000U),
+            "duplicate UDP port rejected")
+        || !expect(arwill_ipv4_udp_connect(
+            &stack, udp, dns_address, 53U) == 0,
+            "UDP connect begins asynchronously")) {
+        return 1;
+    }
+    const unsigned sends_before_udp_arp = fake.send_count;
+    (void)arwill_ipv4_poll_tcp(&stack);
+    if (!expect(fake.send_count == sends_before_udp_arp + 1U,
+            "UDP connect sends ARP request")
+        || !expect(get16(fake.outgoing, 12U) == 0x0806U,
+            "UDP connect emits ARP frame")) {
+        return 1;
+    }
+    queue_arp_reply(&fake, dns_address);
+    if (!expect(arwill_ipv4_poll_tcp(&stack),
+            "UDP connect accepts ARP reply")
+        || !expect(arwill_ipv4_udp_connect_status(&stack, udp) == 1,
+            "UDP endpoint reports connected")) {
+        return 1;
+    }
+    const uint8_t dns_query[] = { 0x12U, 0x34U, 0x01U, 0x00U };
+    if (!expect(arwill_ipv4_udp_send(
+            &stack, udp, dns_query, sizeof(dns_query)) == 1,
+            "UDP datagram sends")
+        || !expect(fake.outgoing[23] == 17U &&
+            get16(fake.outgoing, 34U) == 53000U &&
+            get16(fake.outgoing, 36U) == 53U,
+            "UDP frame carries requested tuple")
+        || !expect(udp_checksum(fake.outgoing + 14U,
+            fake.outgoing + 34U, 8U + sizeof(dns_query)) == 0U,
+            "UDP transmit checksum is valid")) {
+        return 1;
+    }
+    const uint8_t dns_response[] = { 0x12U, 0x34U, 0x81U, 0x80U, 0x00U };
+    queue_udp_datagram(&fake, dns_address, 53U, 53000U,
+        dns_response, sizeof(dns_response));
+    uint8_t udp_read[16];
+    if (!expect(arwill_ipv4_poll_tcp(&stack),
+            "UDP response dispatches")
+        || !expect(arwill_ipv4_udp_receive(
+            &stack, udp, udp_read, sizeof(udp_read)) ==
+            (long)sizeof(dns_response), "UDP response reads atomically")
+        || !expect(udp_read[0] == 0x12U && udp_read[3] == 0x80U,
+            "UDP response preserves payload")
+        || !expect(arwill_ipv4_udp_receive(
+            &stack, udp, udp_read, sizeof(udp_read)) == 0L,
+            "UDP receive is nonblocking")) {
+        return 1;
+    }
+    queue_udp_datagram(&fake, dns_address, 54U, 53000U,
+        dns_response, sizeof(dns_response));
+    if (!expect(!arwill_ipv4_poll_tcp(&stack),
+            "UDP response from wrong tuple is dropped")
+        || !expect(stack.udp_port_drops == 1U,
+            "UDP tuple drop is counted")) {
+        return 1;
+    }
+    queue_udp_datagram(&fake, dns_address, 53U, 53000U,
+        dns_response, sizeof(dns_response));
+    fake.incoming[40] ^= 0x01U;
+    if (!expect(!arwill_ipv4_poll_tcp(&stack),
+            "UDP response with bad checksum is dropped")
+        || !expect(stack.udp_checksum_drops == 1U,
+            "UDP checksum drop is counted")) {
+        return 1;
+    }
+    arwill_ipv4_udp_release(&stack, udp);
+    arwill_ipv4_udp_release(&stack, udp_second);
+    arwill_ipv4_udp_release(&stack, udp_third);
+    arwill_ipv4_udp_release(&stack, udp_fourth);
+
     struct arwill_awp_network_owner first_owner;
     struct arwill_awp_network_owner second_owner;
     arwill_awp_network_owner_init(&first_owner);
@@ -1018,6 +1162,28 @@ int main(void) {
         return 1;
     }
 
-    puts("IPv4/ICMP/TCP host test passed");
+    struct arwill_awp_network_owner udp_owner;
+    arwill_awp_network_owner_init(&udp_owner);
+    if (!expect(arwill_awp_udp_open(&stack, &udp_owner) == 0L,
+            "AWP owner opens one UDP endpoint")
+        || !expect(arwill_awp_udp_open(&stack, &udp_owner) ==
+            arwill_awp_network_unavailable,
+            "AWP owner UDP handle is bounded")
+        || !expect(arwill_awp_udp_bind(
+            &stack, &udp_owner, 53001U) == 0L,
+            "AWP UDP endpoint binds")
+        || !expect(arwill_awp_udp_connect(
+            &stack, &udp_owner, 0x0a000203U, 53U) ==
+            arwill_awp_network_retry,
+            "AWP UDP connect yields for ARP")) {
+        return 1;
+    }
+    arwill_awp_network_cleanup(&stack, &udp_owner);
+    if (!expect(stack.udp_endpoints[0].allocated == 0,
+            "AWP cleanup releases UDP endpoint")) {
+        return 1;
+    }
+
+    puts("IPv4/ICMP/TCP/UDP host test passed");
     return 0;
 }

@@ -41,6 +41,12 @@ enum {
     syscall_net_read = 13,
     syscall_net_write = 14,
     syscall_net_close = 15,
+    syscall_udp_open = 16,
+    syscall_udp_bind = 17,
+    syscall_udp_connect = 18,
+    syscall_udp_send = 19,
+    syscall_udp_receive = 20,
+    syscall_udp_close = 21,
     user_code_message_offset = 0x100,
     user_write_limit = 256,
     user_input_capacity = 128,
@@ -1011,6 +1017,63 @@ static int arwill_x86_64_user_handle_syscall(
         const long result = arwill_awp_network_close(
             user_context.ipv4, &task->network, registers->rdi);
         return return_network_result(task, registers, frame, result);
+    }
+
+    if (registers->rax == syscall_udp_open) {
+        registers->rax = (uint64_t)arwill_awp_udp_open(
+            user_context.ipv4, &task->network);
+        return 0;
+    }
+
+    if (registers->rax == syscall_udp_bind) {
+        registers->rax = (uint64_t)arwill_awp_udp_bind(
+            user_context.ipv4, &task->network, registers->rdi);
+        return 0;
+    }
+
+    if (registers->rax == syscall_udp_connect) {
+        const long result = arwill_awp_udp_connect(
+            user_context.ipv4, &task->network,
+            (uint32_t)registers->rdi, registers->rsi);
+        return return_network_result(task, registers, frame, result);
+    }
+
+    if (registers->rax == syscall_udp_send) {
+        const uint64_t length = registers->rsi;
+        if (length == 0U || length > arwill_awp_network_io_capacity ||
+            !user_range_readable(registers->rdi, length)) {
+            registers->rax = (uint64_t)arwill_awp_network_invalid;
+            return 0;
+        }
+        const long result = arwill_awp_udp_send(
+            user_context.ipv4, &task->network,
+            (const uint8_t *)(uintptr_t)registers->rdi, (size_t)length);
+        return return_network_result(task, registers, frame, result);
+    }
+
+    if (registers->rax == syscall_udp_receive) {
+        const uint64_t capacity = registers->rsi;
+        if (capacity == 0U || capacity > arwill_awp_network_io_capacity ||
+            !user_range_writable(registers->rdi, capacity)) {
+            registers->rax = (uint64_t)arwill_awp_network_invalid;
+            return 0;
+        }
+        const long result = arwill_awp_udp_receive(
+            user_context.ipv4, &task->network,
+            user_context.filesystem_buffer, (size_t)capacity);
+        if (result > 0 && !copy_to_task(
+                &user_context, task, registers->rdi,
+                user_context.filesystem_buffer, (size_t)result)) {
+            registers->rax = (uint64_t)arwill_awp_network_invalid;
+            return 0;
+        }
+        return return_network_result(task, registers, frame, result);
+    }
+
+    if (registers->rax == syscall_udp_close) {
+        registers->rax = (uint64_t)arwill_awp_udp_close(
+            user_context.ipv4, &task->network);
+        return 0;
     }
 
     user_context.bad_syscalls++;

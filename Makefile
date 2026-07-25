@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.23.1
+PROJECT_VERSION := 0.24.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -17,6 +17,7 @@ HELLO_APP := $(BUILD_DIR)/apps/hello.awp
 CALC_APP := $(BUILD_DIR)/apps/calc.awp
 EDIT_APP := $(BUILD_DIR)/apps/edit.awp
 NETSERVE_APP := $(BUILD_DIR)/apps/netserve.awp
+CURL_APP := $(BUILD_DIR)/apps/curl.awp
 IPV4_HOST_TEST := $(BUILD_DIR)/tests/ipv4_test
 IPV4_HOST_TEST_SOURCES := tests/ipv4_test.c kernel/awp_network.c kernel/clock.c kernel/console.c kernel/ipv4.c kernel/network.c kernel/tcp.c kernel/tcp_stream.c
 IPV4_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/kernel/console.h \
@@ -32,6 +33,11 @@ CONFIG_LOG_HOST_TEST_HEADERS := include/arwill/kernel/clock.h include/arwill/ker
 BLOCK_DEVICE_HOST_TEST := $(BUILD_DIR)/tests/block_device_test
 BLOCK_DEVICE_HOST_TEST_SOURCES := tests/block_device_test.c kernel/block_device.c
 BLOCK_DEVICE_HOST_TEST_HEADERS := include/arwill/kernel/block_device.h
+WEB_PROTOCOL_HOST_TEST := $(BUILD_DIR)/tests/web_protocol_test
+WEB_PROTOCOL_HOST_TEST_SOURCES := tests/web_protocol_test.c \
+	libs/libhttp/http.c libs/libnet/dns.c
+WEB_PROTOCOL_HOST_TEST_HEADERS := include/arwill/user/http.h \
+	include/arwill/user/dns.h
 
 BREW_LLVM_PREFIX := $(shell brew --prefix llvm 2>/dev/null)
 BREW_LLD_PREFIX := $(shell brew --prefix lld 2>/dev/null)
@@ -130,10 +136,11 @@ utm-recreate:
 
 check: build check-host check-artifacts smoke smoke-ide-slot
 
-check-host: $(IPV4_HOST_TEST) $(CONFIG_LOG_HOST_TEST) $(BLOCK_DEVICE_HOST_TEST)
+check-host: $(IPV4_HOST_TEST) $(CONFIG_LOG_HOST_TEST) $(BLOCK_DEVICE_HOST_TEST) $(WEB_PROTOCOL_HOST_TEST)
 	@$(IPV4_HOST_TEST)
 	@$(CONFIG_LOG_HOST_TEST)
 	@$(BLOCK_DEVICE_HOST_TEST)
+	@$(WEB_PROTOCOL_HOST_TEST)
 
 clean:
 	rm -rf $(BUILD_DIR)
@@ -169,6 +176,11 @@ $(BLOCK_DEVICE_HOST_TEST): $(BLOCK_DEVICE_HOST_TEST_SOURCES) $(BLOCK_DEVICE_HOST
 	$(CLANG) -std=c11 -Wall -Wextra -Werror -Wpedantic -Wconversion \
 		-Wsign-conversion -Iinclude $(BLOCK_DEVICE_HOST_TEST_SOURCES) -o $@
 
+$(WEB_PROTOCOL_HOST_TEST): $(WEB_PROTOCOL_HOST_TEST_SOURCES) $(WEB_PROTOCOL_HOST_TEST_HEADERS) Makefile
+	@mkdir -p $(dir $@)
+	$(CLANG) -std=c11 -Wall -Wextra -Werror -Wpedantic -Wconversion \
+		-Wsign-conversion -Iinclude $(WEB_PROTOCOL_HOST_TEST_SOURCES) -o $@
+
 $(KERNEL): $(OBJECTS) arch/x86_64/linker.ld
 	@mkdir -p $(dir $@)
 	$(LD_LLD) $(LDFLAGS) -o $@ $(OBJECTS)
@@ -195,8 +207,8 @@ $(ISO): $(KERNEL) platform/qemu/limine.conf third_party/limine/limine
 		$(ISO_ROOT) -o $(ISO)
 	third_party/limine/limine bios-install $(ISO)
 
-$(ARFS_SEED): scripts/create_test_disk.sh $(HELLO_APP) $(CALC_APP) $(EDIT_APP) $(NETSERVE_APP) Makefile
-	@sh scripts/create_test_disk.sh "$@" "$(PROJECT_VERSION)" "$(HELLO_APP)" "$(CALC_APP)" "$(EDIT_APP)" "$(NETSERVE_APP)"
+$(ARFS_SEED): scripts/create_test_disk.sh $(HELLO_APP) $(CALC_APP) $(EDIT_APP) $(NETSERVE_APP) $(CURL_APP) Makefile
+	@sh scripts/create_test_disk.sh "$@" "$(PROJECT_VERSION)" "$(HELLO_APP)" "$(CALC_APP)" "$(EDIT_APP)" "$(NETSERVE_APP)" "$(CURL_APP)"
 
 $(DISK_IMAGE): $(ISO) $(ARFS_SEED) scripts/create_disk_image.sh Makefile
 	@sh scripts/create_disk_image.sh "$@" "$(ISO)" "$(ARFS_SEED)" \
@@ -215,6 +227,11 @@ $(EDIT_APP): apps/edit/build.sh apps/edit/edit.c apps/edit/start.S apps/edit/lin
 
 $(NETSERVE_APP): apps/netserve/build.sh apps/netserve/netserve.c apps/netserve/start.S apps/netserve/linker.ld Makefile
 	@sh apps/netserve/build.sh "$@"
+
+$(CURL_APP): apps/curl/build.sh apps/curl/curl.c apps/curl/start.S \
+		apps/curl/linker.ld libs/libhttp/http.c libs/libnet/dns.c \
+		include/arwill/user/http.h include/arwill/user/dns.h Makefile
+	@sh apps/curl/build.sh "$@"
 
 third_party/limine/limine:
 	@scripts/setup_limine.sh
