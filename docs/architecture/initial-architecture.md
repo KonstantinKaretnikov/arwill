@@ -1,6 +1,6 @@
 # Initial Architecture
 
-Arwill 0.24.0 has one executable path:
+Arwill 0.25.0 has one executable path:
 
 ```text
 Limine bootloader
@@ -237,7 +237,7 @@ User runtime:
 - Limine HHDM is requested so the kernel can initialize newly allocated
   physical pages before mapping them into user virtual memory.
 - The x86-64 implementation installs a GDT and TSS, preallocates four AWP
-  slots, and gives each slot its own CR3, two read/execute code pages, two
+  slots, and gives each slot its own CR3, 48 read/execute code pages, 24
   read/write non-executable stack pages, and an unmapped stack guard.
 - The syscall ABI uses `int 0x80`: syscall `1` writes to the originating
   session, syscall `2` exits, syscall `3` reads session input, syscall `4`
@@ -248,6 +248,11 @@ User runtime:
   `open`, `bind`, `listen`, `connect`, `accept`, `read`, `write`, and `close`.
   Each AWP slot owns two handles; retry results yield progress to the system
   task pass before the AWP resumes.
+- Syscalls `16` through `21` expose one connected bounded UDP endpoint per AWP
+  owner. Syscall `22` fills at most 256 validated writable bytes from the
+  architecture entropy provider; syscall `23` returns Unix UTC seconds from
+  the architecture realtime provider. TLS and certificate policy remain in
+  user space.
 - `run userhello` executes a tiny generated user program that writes
   `user hello: hello from ring 3` through syscall `write` and exits with code
   `7`.
@@ -270,6 +275,8 @@ Program loader:
 - The shell command `exec [program] [file]` reads a binary file from ARFS and asks
   the user runtime to map and execute its code bytes in ring 3 with at most one
   63-byte launch file path resolved against the shell current directory.
+- A seeded AWP image may contain at most 192 KiB of code. This is a fixed image
+  and mapping limit, not an ELF loader, heap, or demand-paging contract.
 - A bare program name without `.awp` resolves exactly to `/apps/<name>.awp`.
   Image arguments containing `/`, or ending in `.awp`, retain ordinary explicit
   filesystem-path resolution. There is no `PATH` or multi-directory search.
@@ -330,9 +337,10 @@ ARFS filesystem:
   rebooted QEMU session.
 - Reports its fixed entry capacity, data-sector use, largest free contiguous
   run, manifest size, and path/file limits through `system storage`.
-- It is intentionally simple: a fixed 24-entry table, short paths, 8192-byte
-  file limit, no append, rename, journal, atomic metadata update, open handles,
-  block cache, or partition table.
+- It is intentionally simple: a fixed 24-entry table, short paths, an
+  8192-byte mutable-file limit, and a 192-KiB read allowance for seeded
+  executable images. It has no append, rename, journal, atomic metadata
+  update, open handles, block cache, or partition table.
 
 Static boot catalog:
 
@@ -407,6 +415,9 @@ QEMU e1000 and remote output:
   close timers; endpoint 0 is reserved for the remote console. Services receive
   streams through the IPv4 contract instead of indexing that table, while
   shell diagnostics consume read-only endpoint snapshots.
+- User-space `libnet`, `libhttp`, and `libtls` layer DNS, HTTP/1.0, and
+  verified TLS 1.2 over the AWP UDP/TCP contracts. The kernel does not parse
+  domain names, URLs, HTTP, TLS records, or X.509 certificates.
 - TCP retains a fixed four-segment send flight. A fixed transmit byte ring
   prevents service or future AWP writes from waiting for a peer ACK.
 - The path remains one polling connection, not a socket API or general TCP

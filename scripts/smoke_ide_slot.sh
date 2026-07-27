@@ -20,7 +20,7 @@ exec 3<>"$input_fifo"
 
 (
     set +e
-    "$qemu" -M "$machine" -m 128M -boot c \
+    "$qemu" -M "$machine" -cpu max -m 128M -boot c \
         -serial stdio -monitor none -display none -no-reboot \
         -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
         -drive file="$disk_image",format=raw,if=ide,index=2,media=disk \

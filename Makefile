@@ -1,5 +1,5 @@
 PROJECT_NAME := Arwill
-PROJECT_VERSION := 0.24.0
+PROJECT_VERSION := 0.25.0
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -11,6 +11,7 @@ ARFS_SEED := $(BUILD_DIR)/arwill-arfs-seed.img
 SMOKE_DISK := $(BUILD_DIR)/arwill-smoke.img
 SERIAL_LOG := $(BUILD_DIR)/serial-smoke.log
 IDE_SLOT_LOG := $(BUILD_DIR)/ide-slot-smoke.log
+HTTPS_SERIAL_LOG := $(BUILD_DIR)/https-serial-smoke.log
 ARFS_REGION_LBA := 32768
 ARFS_REGION_SECTORS := 2048
 HELLO_APP := $(BUILD_DIR)/apps/hello.awp
@@ -38,6 +39,11 @@ WEB_PROTOCOL_HOST_TEST_SOURCES := tests/web_protocol_test.c \
 	libs/libhttp/http.c libs/libnet/dns.c
 WEB_PROTOCOL_HOST_TEST_HEADERS := include/arwill/user/http.h \
 	include/arwill/user/dns.h
+SECURE_RUNTIME_HOST_TEST := $(BUILD_DIR)/tests/secure_runtime_test
+SECURE_RUNTIME_HOST_TEST_SOURCES := tests/secure_runtime_test.c \
+	kernel/entropy.c kernel/realtime.c
+SECURE_RUNTIME_HOST_TEST_HEADERS := include/arwill/kernel/entropy.h \
+	include/arwill/kernel/realtime.h
 
 BREW_LLVM_PREFIX := $(shell brew --prefix llvm 2>/dev/null)
 BREW_LLD_PREFIX := $(shell brew --prefix lld 2>/dev/null)
@@ -79,6 +85,7 @@ SOURCES := \
 	kernel/console.c \
 	kernel/config.c \
 	kernel/device.c \
+	kernel/entropy.c \
 	kernel/filesystem.c \
 	kernel/interrupts.c \
 	kernel/input.c \
@@ -90,6 +97,7 @@ SOURCES := \
 	kernel/pci.c \
 	kernel/power.c \
 	kernel/process.c \
+	kernel/realtime.c \
 	kernel/scheduler.c \
 	kernel/service.c \
 	kernel/shell.c \
@@ -101,9 +109,11 @@ SOURCES := \
 	arch/x86_64/boot/entry.c \
 	arch/x86_64/boot/limine_requests.c \
 	arch/x86_64/cpu/idle.c \
+	arch/x86_64/cpu/entropy.c \
 	arch/x86_64/cpu/interrupts.c \
 	arch/x86_64/cpu/pci.c \
 	arch/x86_64/cpu/process_context.c \
+	arch/x86_64/cpu/rtc.c \
 	arch/x86_64/cpu/user_mode.c \
 	platform/qemu/x86_64/ata_pio.c \
 	platform/qemu/x86_64/e1000.c \
@@ -115,7 +125,7 @@ DEPENDENCIES := $(OBJECTS:.o=.d)
 
 -include $(DEPENDENCIES)
 
-.PHONY: setup build image run utm-recreate check check-host clean check-tools check-artifacts smoke smoke-ide-slot FORCE
+.PHONY: setup build image run utm-recreate check check-host clean check-tools check-artifacts smoke smoke-ide-slot smoke-https FORCE
 
 setup:
 	@scripts/setup_limine.sh
@@ -126,7 +136,7 @@ image: build
 
 run: build
 	@set +e; \
-	$(QEMU) -M $(QEMU_MACHINE) -m 128M -boot c -serial stdio -monitor none -display none -no-reboot $(QEMU_POWEROFF_ARGS) $(QEMU_STORAGE_ARGS) $(QEMU_NETWORK_ARGS); \
+	$(QEMU) -M $(QEMU_MACHINE) -cpu max -m 128M -boot c -serial stdio -monitor none -display none -no-reboot $(QEMU_POWEROFF_ARGS) $(QEMU_STORAGE_ARGS) $(QEMU_NETWORK_ARGS); \
 	status=$$?; \
 	if [ "$$status" -eq "$(QEMU_POWEROFF_EXIT_STATUS)" ]; then exit 0; fi; \
 	exit "$$status"
@@ -136,11 +146,12 @@ utm-recreate:
 
 check: build check-host check-artifacts smoke smoke-ide-slot
 
-check-host: $(IPV4_HOST_TEST) $(CONFIG_LOG_HOST_TEST) $(BLOCK_DEVICE_HOST_TEST) $(WEB_PROTOCOL_HOST_TEST)
+check-host: $(IPV4_HOST_TEST) $(CONFIG_LOG_HOST_TEST) $(BLOCK_DEVICE_HOST_TEST) $(WEB_PROTOCOL_HOST_TEST) $(SECURE_RUNTIME_HOST_TEST)
 	@$(IPV4_HOST_TEST)
 	@$(CONFIG_LOG_HOST_TEST)
 	@$(BLOCK_DEVICE_HOST_TEST)
 	@$(WEB_PROTOCOL_HOST_TEST)
+	@$(SECURE_RUNTIME_HOST_TEST)
 
 clean:
 	rm -rf $(BUILD_DIR)
@@ -161,6 +172,10 @@ smoke-ide-slot: $(DISK_IMAGE)
 	@scripts/smoke_ide_slot.sh "$(QEMU)" "$(QEMU_MACHINE)" "$(DISK_IMAGE)" \
 		"$(IDE_SLOT_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)"
 
+smoke-https: $(DISK_IMAGE)
+	@scripts/smoke_https_qemu.sh "$(QEMU)" "$(QEMU_MACHINE)" "$(DISK_IMAGE)" \
+		"$(HTTPS_SERIAL_LOG)" "$(QEMU_POWEROFF_EXIT_STATUS)"
+
 $(IPV4_HOST_TEST): $(IPV4_HOST_TEST_SOURCES) $(IPV4_HOST_TEST_HEADERS) Makefile
 	@mkdir -p $(dir $@)
 	$(CLANG) -std=c11 -Wall -Wextra -Werror -Wpedantic -Wconversion \
@@ -180,6 +195,11 @@ $(WEB_PROTOCOL_HOST_TEST): $(WEB_PROTOCOL_HOST_TEST_SOURCES) $(WEB_PROTOCOL_HOST
 	@mkdir -p $(dir $@)
 	$(CLANG) -std=c11 -Wall -Wextra -Werror -Wpedantic -Wconversion \
 		-Wsign-conversion -Iinclude $(WEB_PROTOCOL_HOST_TEST_SOURCES) -o $@
+
+$(SECURE_RUNTIME_HOST_TEST): $(SECURE_RUNTIME_HOST_TEST_SOURCES) $(SECURE_RUNTIME_HOST_TEST_HEADERS) Makefile
+	@mkdir -p $(dir $@)
+	$(CLANG) -std=c11 -Wall -Wextra -Werror -Wpedantic -Wconversion \
+		-Wsign-conversion -Iinclude $(SECURE_RUNTIME_HOST_TEST_SOURCES) -o $@
 
 $(KERNEL): $(OBJECTS) arch/x86_64/linker.ld
 	@mkdir -p $(dir $@)
@@ -230,7 +250,9 @@ $(NETSERVE_APP): apps/netserve/build.sh apps/netserve/netserve.c apps/netserve/s
 
 $(CURL_APP): apps/curl/build.sh apps/curl/curl.c apps/curl/start.S \
 		apps/curl/linker.ld libs/libhttp/http.c libs/libnet/dns.c \
-		include/arwill/user/http.h include/arwill/user/dns.h Makefile
+		libs/libtls/tls.c libs/libtls/trust_anchors.c libs/libc/memory.c \
+		include/arwill/user/http.h include/arwill/user/dns.h \
+		include/arwill/user/tls.h $(shell find third_party/bearssl -type f) Makefile
 	@sh apps/curl/build.sh "$@"
 
 third_party/limine/limine:

@@ -4,7 +4,9 @@
 #include <limine.h>
 
 #include <arwill/arch/x86_64/framebuffer_console.h>
+#include <arwill/arch/x86_64/entropy.h>
 #include <arwill/arch/x86_64/process_context.h>
+#include <arwill/arch/x86_64/rtc.h>
 #include <arwill/arch/x86_64/interrupts.h>
 #include <arwill/arch/x86_64/pci.h>
 #include <arwill/arch/x86_64/limine_requests.h>
@@ -154,7 +156,8 @@ void arwill_limine_entry(void) {
     );
     const struct arwill_user_runtime *user_runtime =
         arwill_x86_64_user_mode_init(
-            &arwill_limine_memory, hhdm_offset, clock, filesystem,
+            &arwill_limine_memory, hhdm_offset, clock,
+            arwill_x86_64_entropy(), arwill_x86_64_rtc(), filesystem,
             ipv4_ready ? &arwill_limine_ipv4 : 0,
             &arwill_limine_log
         );

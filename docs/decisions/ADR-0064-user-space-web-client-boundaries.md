@@ -41,10 +41,9 @@ Implement the web path in sequential increments:
    It must use fixed storage, nonblocking results, owner cleanup, and the
    existing network progress task.
 3. Add a user-space DNS resolver over UDP. The first application uses
-   `1.1.1.1` because the current QEMU SLIRP environment reports its synthetic
-   `10.0.2.3` DNS endpoint unreachable. Moving the resolver address into owner
-   network configuration is a follow-up and does not move DNS policy into the
-   kernel.
+   QEMU/UTM synthetic `10.0.2.3` endpoint first and falls back to `1.1.1.1`.
+   Moving resolver addresses into owner network configuration is a follow-up
+   and does not move DNS policy into the kernel.
 4. Add `/apps/curl.awp`. Its first interface is interactive so the existing
    file-path launch argument remains unchanged: it asks for method, URL, and
    a bounded POST body.

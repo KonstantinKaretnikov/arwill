@@ -14,7 +14,7 @@ enum {
     arfs_max_listing_entries = 24,
     arfs_max_path_length = 64,
     arfs_max_name_length = 32,
-    arfs_file_buffer_capacity = 8193,
+    arfs_file_buffer_capacity = 196609,
     arfs_write_buffer_capacity = 8192
 };
 

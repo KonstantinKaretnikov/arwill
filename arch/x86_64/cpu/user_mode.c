@@ -5,10 +5,12 @@
 #include <arwill/kernel/awp_network.h>
 #include <arwill/kernel/clock.h>
 #include <arwill/kernel/console.h>
+#include <arwill/kernel/entropy.h>
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/input.h>
 #include <arwill/kernel/log.h>
 #include <arwill/kernel/memory.h>
+#include <arwill/kernel/realtime.h>
 #include <arwill/kernel/user.h>
 
 enum {
@@ -47,11 +49,13 @@ enum {
     syscall_udp_send = 19,
     syscall_udp_receive = 20,
     syscall_udp_close = 21,
+    syscall_random_fill = 22,
+    syscall_realtime = 23,
     user_code_message_offset = 0x100,
     user_write_limit = 256,
     user_input_capacity = 128,
-    user_code_page_count = 2,
-    user_stack_page_count = 2,
+    user_code_page_count = 48,
+    user_stack_page_count = 24,
     user_quantum_ticks = 2,
     user_file_limit = 2048,
     user_path_limit = 63,
@@ -161,6 +165,8 @@ struct x86_64_user_context {
     uint64_t preemptions;
     uint64_t faults;
     const struct arwill_clock *clock;
+    const struct arwill_entropy *entropy;
+    const struct arwill_realtime *realtime;
     const struct arwill_filesystem *filesystem;
     struct arwill_ipv4_stack *ipv4;
     struct arwill_event_log *log;
@@ -1076,6 +1082,30 @@ static int arwill_x86_64_user_handle_syscall(
         return 0;
     }
 
+    if (registers->rax == syscall_random_fill) {
+        uint64_t length = registers->rsi;
+        if (length > user_write_limit) {
+            length = user_write_limit;
+        }
+        if (length == 0U || !user_range_writable(registers->rdi, length) ||
+            !arwill_entropy_fill(user_context.entropy,
+                user_context.filesystem_buffer, (size_t)length) ||
+            !copy_to_task(&user_context, task, registers->rdi,
+                user_context.filesystem_buffer, (size_t)length)) {
+            registers->rax = UINT64_MAX;
+            return 0;
+        }
+        registers->rax = length;
+        return 0;
+    }
+
+    if (registers->rax == syscall_realtime) {
+        uint64_t seconds = 0U;
+        registers->rax = arwill_realtime_unix_seconds(
+            user_context.realtime, &seconds) ? seconds : UINT64_MAX;
+        return 0;
+    }
+
     user_context.bad_syscalls++;
     copy_active_context(task, registers, frame);
     cleanup_task_network(&user_context, task);
@@ -1467,6 +1497,8 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     struct arwill_memory *memory,
     uint64_t hhdm_offset,
     const struct arwill_clock *clock,
+    const struct arwill_entropy *entropy,
+    const struct arwill_realtime *realtime,
     const struct arwill_filesystem *filesystem,
     struct arwill_ipv4_stack *ipv4,
     struct arwill_event_log *log
@@ -1487,6 +1519,8 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     user_context.preemptions = 0;
     user_context.faults = 0;
     user_context.clock = clock;
+    user_context.entropy = entropy;
+    user_context.realtime = realtime;
     user_context.filesystem = filesystem;
     user_context.ipv4 = ipv4;
     user_context.log = log;

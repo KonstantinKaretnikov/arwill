@@ -59,17 +59,31 @@ static int valid_host_character(char value) {
 }
 
 int arwill_http_parse_url(const char *text, struct arwill_http_url *url) {
-    static const char prefix[] = "http://";
+    static const char http_prefix[] = "http://";
+    static const char https_prefix[] = "https://";
     if (text == 0 || url == 0) {
         return arwill_http_invalid;
     }
     size_t index = 0;
-    while (prefix[index] != '\0') {
-        if (text[index] != prefix[index]) {
+    while (http_prefix[index] != '\0' &&
+        text[index] == http_prefix[index]) {
+        index++;
+    }
+    if (http_prefix[index] == '\0') {
+        url->scheme = arwill_http_scheme_http;
+        url->port = 80U;
+    } else {
+        index = 0;
+        while (https_prefix[index] != '\0' &&
+            text[index] == https_prefix[index]) {
+            index++;
+        }
+        if (https_prefix[index] != '\0') {
             return text[0] != '\0' ? arwill_http_unsupported :
                 arwill_http_invalid;
         }
-        index++;
+        url->scheme = arwill_http_scheme_https;
+        url->port = 443U;
     }
 
     size_t host_length = 0;
@@ -86,8 +100,6 @@ int arwill_http_parse_url(const char *text, struct arwill_http_url *url) {
         return arwill_http_invalid;
     }
     url->host[host_length] = '\0';
-    url->port = 80U;
-
     if (text[index] == ':') {
         index++;
         unsigned port = 0U;
@@ -157,7 +169,9 @@ int arwill_http_build_request(
         !append_text(output, capacity, &used, url->host)) {
         return arwill_http_too_large;
     }
-    if (url->port != 80U &&
+    const uint16_t default_port =
+        url->scheme == arwill_http_scheme_https ? 443U : 80U;
+    if (url->port != default_port &&
         (!append_byte(output, capacity, &used, (uint8_t)':') ||
             !append_decimal(output, capacity, &used, url->port))) {
         return arwill_http_too_large;

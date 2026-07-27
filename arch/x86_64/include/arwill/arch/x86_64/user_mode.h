@@ -5,8 +5,10 @@
 
 #include <arwill/kernel/memory.h>
 #include <arwill/kernel/clock.h>
+#include <arwill/kernel/entropy.h>
 #include <arwill/kernel/filesystem.h>
 #include <arwill/kernel/log.h>
+#include <arwill/kernel/realtime.h>
 #include <arwill/kernel/user.h>
 
 struct arwill_ipv4_stack;
@@ -46,6 +48,8 @@ const struct arwill_user_runtime *arwill_x86_64_user_mode_init(
     struct arwill_memory *memory,
     uint64_t hhdm_offset,
     const struct arwill_clock *clock,
+    const struct arwill_entropy *entropy,
+    const struct arwill_realtime *realtime,
     const struct arwill_filesystem *filesystem,
     struct arwill_ipv4_stack *ipv4,
     struct arwill_event_log *log

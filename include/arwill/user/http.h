@@ -21,10 +21,16 @@ enum arwill_http_method {
     arwill_http_method_post
 };
 
+enum arwill_http_scheme {
+    arwill_http_scheme_http,
+    arwill_http_scheme_https
+};
+
 struct arwill_http_url {
     char host[arwill_http_host_capacity];
     char path[arwill_http_path_capacity];
     uint16_t port;
+    enum arwill_http_scheme scheme;
 };
 
 int arwill_http_parse_url(const char *text, struct arwill_http_url *url);

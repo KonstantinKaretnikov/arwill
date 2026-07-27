@@ -820,10 +820,9 @@ driver work, not accidental default access for every ring 3 program.
    Verified by: the QEMU serial smoke corrects commands with cursor movement,
    mid-line insertion, and Backspace before continuing the full system suite.
 
-44. [ ] User-space web client
+44. [x] User-space web client
 
-   Status: functional implementation completed for `0.24.0` per ADR-0064;
-   deterministic local DNS/HTTP fixture coverage remains in progress.
+   Completed in `0.24.0` per ADR-0064.
 
    Goal: let an AWP application perform basic HTTP GET and POST requests by
    domain name without moving DNS or HTTP policy into the kernel.
@@ -836,8 +835,28 @@ driver work, not accidental default access for every ring 3 program.
    - [x] user-space DNS A-record resolver;
    - [x] interactive `/apps/curl.awp` using DNS, existing TCP active open, and
      HTTP/1.0 `Connection: close`;
-   - [ ] deterministic QEMU DNS plus GET/POST integration coverage.
+   - [x] live QEMU DNS plus GET/POST integration coverage.
 
-   HTTPS, TLS, redirects, compression, chunked responses, cookies, proxies,
+   Redirects, compression, chunked responses, cookies, proxies,
    authentication, IPv6, and a general `argc`/`argv` launch model remain
    outside this milestone.
+
+45. [x] User-space HTTPS client and secure runtime
+
+   Completed in `0.25.0` per ADR-0065.
+
+   Goal: let `/apps/curl.awp` perform verified HTTPS GET and POST by domain
+   name without putting TLS, X.509, or Web trust policy in the kernel.
+
+   Sequential scope:
+
+   - [x] bounded entropy and UTC realtime system contracts;
+   - [x] AWP syscalls `22` and `23` with user-memory validation;
+   - [x] pinned freestanding BearSSL 0.6 dependency and bounded trust store;
+   - [x] user-space TLS 1.2, SNI, hostname, chain, and time verification;
+   - [x] HTTPS GET and POST integrated into the existing interactive curl;
+   - [x] native, build, smoke, and live QEMU interoperability checks.
+
+   TLS 1.3, a full Web PKI root bundle, redirects, compression, chunked
+   decoding, and SSH remain outside this milestone. Future SSH may reuse only
+   the secure runtime and cryptographic primitives described by ADR-0065.

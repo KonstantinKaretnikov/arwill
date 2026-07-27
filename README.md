@@ -1,6 +1,6 @@
 # Arwill
 
-Arwill `0.24.0` is a small experimental x86-64 operating system for QEMU.
+Arwill `0.25.0` is a small experimental x86-64 operating system for QEMU.
 It is built around explicit, replaceable components and documented decisions.
 See [MANIFESTO.md](MANIFESTO.md).
 
@@ -18,8 +18,8 @@ Arwill is not a production OS.
 - Four-slot ring 3 AWP runtime with PIT preemption and fault containment.
 - A bounded nonblocking AWP networking ABI and `/apps/netserve.awp`, a real
   one-connection TCP service on guest port 23233.
-- A user-space DNS/HTTP stack and interactive `/apps/curl.awp` for basic
-  plaintext GET and POST requests by domain name.
+- A user-space DNS/HTTP/TLS stack and interactive `/apps/curl.awp` for
+  verified HTTP or HTTPS GET and POST requests by domain name.
 - Fixed-slot cooperative kernel tasks with saved x86-64 contexts and dedicated
   8 KiB stacks.
 - Long-lived `network-poll` and `remote-console` system tasks, distinct from
@@ -87,7 +87,7 @@ console window when the replacement starts.
 Boot output is intentionally minimal and identical on serial and framebuffer:
 
 ```text
-Arwill 0.24.0 ready
+Arwill 0.25.0 ready
 Arwill:/>
 ```
 
@@ -150,9 +150,9 @@ Paths may be absolute or relative to the session's current directory.
 Use `/apps/edit.awp` for interactive ASCII text creation and editing. Mutations
 persist in the ARFS region of the same bootable system disk.
 
-Limits: 24 entries, short paths, 8192 bytes per file, and contiguous
-allocation. ARFS has no append, rename, journal, atomic metadata update, or
-crash consistency.
+Limits: 24 entries, short paths, 8192 writable bytes per file, and contiguous
+allocation. Seeded executable images may be read up to 192 KiB. ARFS has no
+append, rename, journal, atomic metadata update, or crash consistency.
 
 ## Programs and multitasking
 
@@ -180,10 +180,12 @@ Included applications:
 - `edit.awp`: bounded 2048-byte ASCII editor. A file argument is required.
   Use arrows, Home/End, Enter, Backspace, and Delete; `Ctrl+S` saves,
   `Ctrl+Q` exits.
-- `curl.awp`: interactive basic HTTP/1.0 client. It resolves DNS A records and
-  performs bounded GET or POST requests over plaintext HTTP. Run `exec curl`,
-  then enter the method, URL, and optional POST body. HTTPS, redirects,
-  compression, and chunked responses are not supported.
+- `curl.awp`: interactive HTTP/1.0 client. It resolves DNS A records and
+  performs bounded GET or POST requests over HTTP or verified TLS 1.2 HTTPS.
+  Run `exec curl`, then enter the method, URL, and optional POST body.
+  The initial trust store covers `example.com` and `httpbin.org`; redirects,
+  TLS 1.3, a general Web root bundle, compression, and chunked decoding are
+  not supported.
 
 The runtime has four fixed AWP slots, but each shell session may own only one
 foreground AWP. Arwill currently exposes two interactive sessions: serial and

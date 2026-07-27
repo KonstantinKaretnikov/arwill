@@ -20,7 +20,7 @@ mkdir -p "$(dirname "$output")"
 rm -f "$temporary" "$payload_dir"/*
 mkdir -p "$payload_dir"
 
-dd if=/dev/zero of="$temporary" bs=512 count=96 >/dev/null 2>&1
+dd if=/dev/zero of="$temporary" bs=512 count=512 >/dev/null 2>&1
 printf 'ARWILL-BLOCK-DEVICE-TEST\n' |
     dd of="$temporary" bs=512 seek=1 conv=notrunc >/dev/null 2>&1
 printf 'lba=2\nsector-size=512\n' |
@@ -71,7 +71,7 @@ app_curl_size=$(wc -c < "$app_curl" | tr -d ' ')
 
 if [ "$app_hello_size" -gt 512 ] || [ "$app_calc_size" -gt 2048 ] ||
    [ "$app_edit_size" -gt 8192 ] || [ "$app_netserve_size" -gt 8192 ] ||
-   [ "$app_curl_size" -gt 8192 ]; then
+   [ "$app_curl_size" -gt 196608 ]; then
     echo "test application exceeds its ARFS slot" >&2
     exit 1
 fi

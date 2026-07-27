@@ -13,6 +13,7 @@ static void test_url_parse(void) {
     assert(strcmp(url.host, "example.com") == 0);
     assert(strcmp(url.path, "/api/items?q=one") == 0);
     assert(url.port == 80U);
+    assert(url.scheme == arwill_http_scheme_http);
 
     assert(arwill_http_parse_url(
         "http://service.local:8080", &url) == arwill_http_ok);
@@ -21,7 +22,9 @@ static void test_url_parse(void) {
     assert(url.port == 8080U);
 
     assert(arwill_http_parse_url(
-        "https://example.com/", &url) == arwill_http_unsupported);
+        "https://example.com/", &url) == arwill_http_ok);
+    assert(url.port == 443U);
+    assert(url.scheme == arwill_http_scheme_https);
     assert(arwill_http_parse_url("http:///missing", &url) ==
         arwill_http_invalid);
     assert(arwill_http_parse_url("http://example.com:0/", &url) ==
@@ -43,6 +46,14 @@ static void test_http_requests(void) {
         "Connection: close\r\n"
         "User-Agent: arwill-curl/0\r\n"
         "\r\n";
+    assert(length == sizeof(expected_get) - 1U);
+    assert(memcmp(request, expected_get, length) == 0);
+
+    assert(arwill_http_parse_url(
+        "https://example.com/status", &url) == arwill_http_ok);
+    assert(arwill_http_build_request(
+        arwill_http_method_get, &url, 0, 0U,
+        request, sizeof(request), &length) == arwill_http_ok);
     assert(length == sizeof(expected_get) - 1U);
     assert(memcmp(request, expected_get, length) == 0);
 
